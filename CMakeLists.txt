@@ -80,7 +80,7 @@ add_subdirectory(src/common)
 add_subdirectory(src/rediscluster)
 #add_subdirectory(src/rdngatesvr)
 #add_subdirectory(src/rdnurisvr)
-#add_subdirectory(src/zookafka)
+add_subdirectory(src/zookafka)
 #add_subdirectory(src/rdnsyncli)
 #add_subdirectory(src/rscsrv)
 
