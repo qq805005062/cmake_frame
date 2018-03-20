@@ -14,7 +14,7 @@
 #include "jansson/jansson.h"
 
 #define SHOW_DEBUG		1
-
+#define SHOW_ERROR		1
 #ifdef SHOW_DEBUG
 #define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt,__FILE__, \
 									__FUNCTION__, __LINE__, ## args)
@@ -22,8 +22,12 @@
 #define PDEBUG(fmt, args...)
 #endif
 
+#ifdef SHOW_ERROR
 #define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt,__FILE__, \
 									__FUNCTION__, __LINE__, ## args)
+#else
+#define PERROR(fmt, args...)
+#endif
 
 namespace ZOOKEEPERKAFKA
 {

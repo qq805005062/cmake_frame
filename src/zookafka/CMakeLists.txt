@@ -3,6 +3,7 @@
 
 
 set_source_files_properties(ZooKafkaPut.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
+set_source_files_properties(ZooKafkaGet.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
 set_source_files_properties(kfk_producer.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast")
 set(ZOOKAFKA_SRCS
   ZooKafkaGet.cpp

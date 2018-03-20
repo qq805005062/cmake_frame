@@ -135,6 +135,7 @@ ZooKafkaPut::ZooKafkaPut()
 
 ZooKafkaPut::~ZooKafkaPut()
 {
+	kfkDestroy();
 	PDEBUG("ZooKafkaPut exit\n");
 }
 
@@ -149,13 +150,21 @@ int ZooKafkaPut::zookInit(const std::string& zookeepers,
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
+	if(ret < 0)
+	{
+		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		return ret;
+	}
 	
 	zKeepers.clear();
 	zKeepers = zookeepers;
 	kfkBrokers.clear();
 	kfkBrokers.append(brokers);
-
 	ret = kfkInit(kfkBrokers,topicName,partition,maxMsgqueue);
+	if(ret < 0)
+	{
+		PERROR("kfkInit error :: %d\n",ret);
+	}
 	return ret;
 }
 
