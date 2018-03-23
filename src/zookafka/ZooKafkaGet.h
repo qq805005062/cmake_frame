@@ -45,7 +45,7 @@ public:
 			  const std::string& topic,
 			  const std::string& groupId,
 			  const std::vector<int>& partitions = { 0 },
-	          int64_t startOffset = static_cast<int64_t>(RD_KAFKA_OFFSET_STORED),
+	          int64_t startOffset = static_cast<int64_t>(RD_KAFKA_OFFSET_END),//static_cast<int64_t>(RD_KAFKA_OFFSET_STORED)
 	          size_t messageMaxSize = 4 * 1024 * 1024);
 
 	int kfkInit(const std::string& brokers,
@@ -55,7 +55,7 @@ public:
 	          int64_t startOffset = static_cast<int64_t>(RD_KAFKA_OFFSET_STORED),
 	          size_t messageMaxSize = 4 * 1024 * 1024);
 
-	int get(std::string& data, int64_t& offset,std::string* key = NULL);
+	int get(std::string& data, int64_t* offset,std::string* key = NULL);
 
 	void kfkDestroy();
 
@@ -65,7 +65,6 @@ private:
 
 	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
 
-	common::MutexLock kfkLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;

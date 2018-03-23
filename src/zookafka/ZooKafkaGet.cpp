@@ -97,8 +97,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 }
 
 ZooKafkaGet::ZooKafkaGet()
-	:kfkLock()
-	,zKeepers()
+	:zKeepers()
 	,zookeeph(nullptr)
 	,kfkBrokers()
 	,kfkt(nullptr)
@@ -172,7 +171,7 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 	{
 		if (RD_KAFKA_CONF_OK != rd_kafka_conf_set(kfkconft, "group.id", groupId.c_str(), errStr, sizeof errStr))
 		{
-			PERROR("set kafka config value failed, reason: %s", errStr);
+			PERROR("set kafka config value failed, reason: %s\n", errStr);
 			return -1;
 		}
 	}
@@ -197,7 +196,7 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 	rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "smallest", NULL, 0);
 	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
 	{
-		PERROR("set offset store method failed: %s", errStr);
+		PERROR("set offset store method failed: %s\n", errStr);
 		return -1;
 	}
 
@@ -205,13 +204,13 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 	kfkt = rd_kafka_new(RD_KAFKA_CONSUMER, kfkconft, errStr, sizeof errStr);
 	if (NULL == kfkt)
 	{
-		PERROR("Failed to create new consumer, reason: %s", errStr);
+		PERROR("Failed to create new consumer, reason: %s\n", errStr);
 		return -1;
 	}
 
 	if (rd_kafka_brokers_add(kfkt, brokers.c_str()) == 0)
 	{
-		PERROR("no valid brokers specified, brokers: %s", errStr);
+		PERROR("no valid brokers specified, brokers: %s\n", errStr);
 		return -1;
 	}
 
@@ -222,52 +221,56 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 
 	for (int i = 0; i < size; i++)
 	{
+		PDEBUG("rd_kafka_topic_partition_list_add :: %d\n",partitions[i]);
 		rd_kafka_topic_partition_list_add(topicpar, topic.c_str(), partitions[i]);
 	}
 
 	rd_kafka_resp_err_t err = rd_kafka_subscribe(kfkt, topicpar);
 	if (err)
 	{
-		PERROR("Failed to start consuming topics: %s", rd_kafka_err2str(err));
+		PERROR("Failed to start consuming topics: %s\n", rd_kafka_err2str(err));
 		return -1;
 	}
 	return 0;
 }
 
-int ZooKafkaGet::get(std::string& data, int64_t& offset,std::string* key)
+int ZooKafkaGet::get(std::string& data, int64_t* offset,std::string* key)
 {
-	common::MutexLockGuard lock(kfkLock);
-	rd_kafka_message_t* message = rd_kafka_consumer_poll(kfkt, 1000);
-	if (NULL == message)
+	rd_kafka_message_t* message = NULL;
+	while(1)
 	{
-		PERROR("time out, please again!");
-		return -1;
+		message = rd_kafka_consumer_poll(kfkt, 1000);
+		if(message == NULL)
+			continue;
+		else
+			break;
 	}
 
 	if (message->err != 0)
 	{
-		PERROR("get data error,reason: %s", rd_kafka_err2str(message->err));
+		PERROR("get data error,reason: %s\n", rd_kafka_err2str(message->err));
 		rd_kafka_message_destroy(message);
 		return -1;
 	}
 
 	if (static_cast<size_t>(message->len) > kMessageMaxSize)
 	{
-		PERROR("message size too large,discarded!");
+		PERROR("message size too large,discarded!\n");
 		rd_kafka_message_destroy(message);
 		return -1;
 	}
 	
 	// 取消息体
 	data.assign(const_cast<const char* >(static_cast<char* >(message->payload)), message->len);
-	offset = message->offset;
+	if(offset)
+		*offset = message->offset;
 	if (key)
 	{
 		
 		key->assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
 	}
 
-	PDEBUG("len: %zu, partition: %d, offset: %ld", message->len, message->partition, message->offset);
+	PDEBUG("len: %zu, partition: %d, offset: %ld\n", message->len, message->partition, message->offset);
 	rd_kafka_message_destroy(message);
 	return 0;
 }
@@ -277,7 +280,7 @@ void ZooKafkaGet::kfkDestroy()
 	rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
 	if (err)
 	{
-		PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
+		PERROR("failed to close consumer: %s\n", rd_kafka_err2str(err));
 	}
 
 	rd_kafka_topic_partition_list_destroy(topicpar);
@@ -288,7 +291,7 @@ void ZooKafkaGet::kfkDestroy()
 	int run = 5;
 	while (run-- > 0 && rd_kafka_wait_destroyed(1000) == -1)
 	{
-		PDEBUG("Waiting for librdkafka to decommission");
+		PDEBUG("Waiting for librdkafka to decommission\n");
 	}
 
 	if (run <= 0)
@@ -299,7 +302,6 @@ void ZooKafkaGet::kfkDestroy()
 
 void ZooKafkaGet::changeKafkaBrokers(const std::string& brokers)
 {
-	common::MutexLockGuard lock(kfkLock);
 	kfkBrokers.clear();
 	kfkBrokers = brokers;
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
