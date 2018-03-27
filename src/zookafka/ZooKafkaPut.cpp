@@ -105,7 +105,7 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 		// 这里可以写失败的处理
 		PERROR("%% Message delivery failed: %s\n", rd_kafka_err2str(message->err));
 		ZooKafkaPut *pKfkPut = static_cast<ZooKafkaPut *>(opaque);
-		pKfkPut->msgPushErrorCall(message->err,rd_kafka_err2str(message->err));
+		pKfkPut->msgPushErrorCall(const_cast<const char* >(static_cast<char* >(message->payload)),message->len,message->err,rd_kafka_err2str(message->err));
 	}
 	else
 	{
@@ -125,9 +125,7 @@ ZooKafkaPut::ZooKafkaPut()
 	,zookeeph(nullptr)
 	,kfkBrokers()
 	,kfkt(nullptr)
-	,kfkconft(nullptr)
 	,kfktopic(nullptr)
-	,kfktopiconft(nullptr)
 	,cb_(nullptr)
 {
 	PDEBUG("ZooKafkaPut struct\n");
@@ -168,19 +166,13 @@ int ZooKafkaPut::zookInit(const std::string& zookeepers,
 	return ret;
 }
 
-void ZooKafkaPut::msgPushErrorCall(int errorCode,const char* errorMsg)
-{
-	if(cb_)
-		cb_(errorCode,errorMsg);
-}
-
 int ZooKafkaPut::kfkInit(const std::string& brokers,
 			  const std::string& topicName,
 			  int partition,
 			  int maxMsgqueue)
 {
 	char tmp[64] = {0},errStr[512] = {0};
-	kfkconft = rd_kafka_conf_new();
+	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 	rd_kafka_conf_set_opaque(kfkconft,this);
 	rd_kafka_conf_set_dr_msg_cb(kfkconft, msgDelivered);
@@ -191,7 +183,7 @@ int ZooKafkaPut::kfkInit(const std::string& brokers,
 	rd_kafka_conf_set(kfkconft, "message.send.max.retries", "3", NULL, 0);
 	rd_kafka_conf_set(kfkconft, "retry.backoff.ms", "500", NULL, 0);
 
-	kfktopiconft = rd_kafka_topic_conf_new();
+	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
 	rd_kafka_topic_conf_set(kfktopiconft, "produce.offset.report", "true", errStr, sizeof(errStr));
 	rd_kafka_topic_conf_set(kfktopiconft, "request.required.acks", "1", errStr, sizeof(errStr));
 
@@ -254,12 +246,15 @@ int ZooKafkaPut::push(const std::string& data,
 	      data.size(),
 	      rd_kafka_topic_name(kfktopic),
 	      partition);
-	rd_kafka_poll(kfkt, 1000);
+	//rd_kafka_poll(kfkt, 1000);
+	rd_kafka_poll(kfkt, 0);
 	return 0;
 }
 
 void ZooKafkaPut::kfkDestroy()
 {
+	while (rd_kafka_outq_len(kfkt) > 0)
+		rd_kafka_poll(kfkt, 100);
 	rd_kafka_topic_destroy(kfktopic);
 	rd_kafka_destroy(kfkt);
 }

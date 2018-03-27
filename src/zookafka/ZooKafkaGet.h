@@ -5,8 +5,6 @@
 #include <string>
 #include <vector>
 
-#include <common/MutexLock.h>
-
 #include "librdkafka/rdkafka.h"
 
 #include "zookeeper/zookeeper.h"
@@ -70,10 +68,7 @@ private:
 	std::string kfkBrokers;
 
 	rd_kafka_t* kfkt;
-	rd_kafka_conf_t* kfkconft;
-	
-	//rd_kafka_topic_t* kfktopic;
-	rd_kafka_topic_conf_t* kfktopiconft;
+
 	rd_kafka_topic_partition_list_t* topicpar;
 
 	size_t kMessageMaxSize;

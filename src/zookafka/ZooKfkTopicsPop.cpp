@@ -103,8 +103,6 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 	,kfkBrokers()
 	,topics_()
 	,kfkt(nullptr)
-	,kfkconft(nullptr)
-	,kfktopiconft(nullptr)
 	,topicparlist(nullptr)
 	,kMessageMaxSize( 4 * 1024 * 1024)
 	,startOffset(static_cast<int64_t>(RD_KAFKA_OFFSET_END))
@@ -177,7 +175,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 {
 	char errStr[512] = { 0 },tmp[16] = { 0 };
 	int ret = 0;
-	kfkconft = rd_kafka_conf_new();
+	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 
 	snprintf(tmp, sizeof tmp, "%i", SIGIO);
@@ -204,7 +202,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	}
 
 
-	kfktopiconft = rd_kafka_topic_conf_new();
+	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
 	// rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.enable", "true", errStr, sizeof(errStr));
 	// rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.interval.ms", "2000", errStr, sizeof(errStr));
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.path", filePath.c_str(), errStr, sizeof(errStr));

@@ -14,7 +14,7 @@
 namespace ZOOKEEPERKAFKA
 {
 
-static const char KafkaBrokerPath[] = "/brokers/ids";
+static const char KafkaBrokerPath[] = "/brokers/ids",KfkConsumerGroup[] = "zookeeper";
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
 {
@@ -101,8 +101,6 @@ ZooKafkaGet::ZooKafkaGet()
 	,zookeeph(nullptr)
 	,kfkBrokers()
 	,kfkt(nullptr)
-	,kfkconft(nullptr)
-	,kfktopiconft(nullptr)
 	,topicpar(nullptr)
 	,kMessageMaxSize(0)
 	,partitions_()
@@ -128,7 +126,6 @@ int ZooKafkaGet::zookInit(const std::string& zookeepers,
 
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
-
 	if(ret < 0)
 	{
 		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
@@ -157,16 +154,14 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 	char errStr[512] = { 0 },tmp[16] = { 0 };
 	kMessageMaxSize = messageMaxSize;
 
-	kfkconft = rd_kafka_conf_new();
+	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 
 	snprintf(tmp, sizeof tmp, "%i", SIGIO);
 	rd_kafka_conf_set(kfkconft, "internal.termination.signal", tmp, NULL, 0);
-
 	rd_kafka_conf_set(kfkconft, "queued.min.messages", "1000000", NULL, 0);
 	rd_kafka_conf_set(kfkconft, "session.timeout.ms", "6000", NULL, 0);
-
 	if (groupId.empty() || groupId != "")
 	{
 		if (RD_KAFKA_CONF_OK != rd_kafka_conf_set(kfkconft, "group.id", groupId.c_str(), errStr, sizeof errStr))
@@ -176,22 +171,11 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 		}
 	}
 
-	kfktopiconft = rd_kafka_topic_conf_new();
-	
-	// std::stringstream stream;
-	// stream << "offset/" << topicName << "_" << 0 << ".txt";
-	// // stream << topicName << "_" << 0 << ".txt";
-	// std::string filePath = stream.str();
-	// LOG_DEBUG << "filePath = " << filePath;
-
+	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
 	// rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.enable", "true", errStr, sizeof(errStr));
-
 	// rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.interval.ms", "2000", errStr, sizeof(errStr));
-
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.path", filePath.c_str(), errStr, sizeof(errStr));
-
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "file", errStr, sizeof(errStr));
-
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.sync.interval.ms", "2000", errStr, sizeof(errStr));
 	rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "smallest", NULL, 0);
 	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
@@ -234,6 +218,7 @@ int ZooKafkaGet::kfkInit(const std::string& brokers,
 	return 0;
 }
 
+//rd_kafka_err2str(rd_kafka_errno2err(errno))
 int ZooKafkaGet::get(std::string& data, int64_t* offset,std::string* key)
 {
 	rd_kafka_message_t* message = NULL;
@@ -242,15 +227,12 @@ int ZooKafkaGet::get(std::string& data, int64_t* offset,std::string* key)
 		message = rd_kafka_consumer_poll(kfkt, 1000);
 		if(message == NULL)
 			continue;
-		else
+		else if(message->err)
+		{
+			PERROR("get data error,reason: %d -- %s\n", message->err, rd_kafka_err2str(message->err));
+			rd_kafka_message_destroy(message);
+		}else
 			break;
-	}
-
-	if (message->err != 0)
-	{
-		PERROR("get data error,reason: %s\n", rd_kafka_err2str(message->err));
-		rd_kafka_message_destroy(message);
-		return -1;
 	}
 
 	if (static_cast<size_t>(message->len) > kMessageMaxSize)
@@ -266,7 +248,6 @@ int ZooKafkaGet::get(std::string& data, int64_t* offset,std::string* key)
 		*offset = message->offset;
 	if (key)
 	{
-		
 		key->assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
 	}
 

@@ -38,37 +38,35 @@
 #define PERROR(fmt, args...)
 #endif
 
-typedef std::list<std::string> ListStringTopic;
-typedef ListStringTopic::iterator ListStringTopicIter;
+typedef std::map<std::string,rd_kafka_topic_t*> KfkTopicPtrMap;
+typedef KfkTopicPtrMap::iterator KfkTopicPtrMapIter;
 
 namespace ZOOKEEPERKAFKA
 {
 /*
- *kfk消费多个topic的情况，不可以选择分区，由kfk均衡读取
- *必须统一启始位置
- *可以对某一个topic开始或者停止
+ *kfk消费多个topic的情况，指定分区、指定起始位置
+ *可以定义分区，定义起始位置，获取指定topic，指定分区，必须先初始化。阻塞式的获取
+ *可以对某一个topic、分区开始、停止
  *统一分组
  */
-class ZooKfkTopicsPop
+class ZooKfkTopicsGet
 {
 public:
 	//构造函数
-	ZooKfkTopicsPop();
+	ZooKfkTopicsGet();
 	//析构函数
-	~ZooKfkTopicsPop();
+	~ZooKfkTopicsGet();
 
-	//仅仅传入zookeeper的地址信息，逗号分隔多个ip port；其后自己调用kfkInit
+	//仅仅传入zookeeper的地址信息，逗号分隔多个ip port，内部直接调用kfkInit
 	int zookInit(const std::string& zookeepers);
-	//传入zookeeper地址信息，逗号分隔多个ip port，传入多个topic，逗号分隔，不可以有多余的符号，内部调用kfkInit
-	int zookInit(const std::string& zookeepers, const std::string& topic);
-	//kfk初始化，brokers可以传入，也可以传空，则使用zookeeper获取的，逗号分隔多个ip port。多个topic，逗号分隔
-	int kfkInit(const std::string& brokers, const std::string& topic);
-	//启动某一个topic读，必须存在初始化的topic中，否则报错
-	int kfkTopicConsumeStart(const std::string& topic);	
-	//获取kfk一个消息，并可以获取对应的topic，偏移量，key
-	int pop(std::string& topic, std::string& data, int64_t* offset = NULL, std::string* key = NULL);
-	//停止某一个topic读，必须存在初始化的topic
-	int kfkTopicConsumeStop(const std::string& topic);
+	//kfk初始化，非用zookeeper初始化
+	int kfkInit(const std::string& brokers);
+	//启动某一个topic读，指定分区，指定偏移量、多个topic，多次调用
+	int kfkTopicConsumeStart(const std::string& topic, int partition = 0, int64_t offset = RD_KAFKA_OFFSET_END);	
+	//获取kfk消息，获取指定topic的消息，返回数据，偏移量和key，阻塞式，一直到有数据为止
+	int get(std::string& topic, std::string& data, int64_t* offset = NULL, int partition = 0, std::string* key = NULL);
+	//停止某一个topic读，指定分区，每次只能传入一个topic，多个topic，多次调用
+	int kfkTopicConsumeStop(const std::string& topic, int partition = RD_KAFKA_PARTITION_UA);
 	//销毁资源信息
 	void kfkDestroy();
 	//zookeeper发现brokers变化修正brokers
@@ -82,15 +80,11 @@ private:
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
-	ListStringTopic topics_;
 	
 	rd_kafka_t* kfkt;
+	KfkTopicPtrMap topicPtrMap;
 	
-	rd_kafka_topic_partition_list_t* topicparlist;
-
 	size_t kMessageMaxSize;
-	int64_t startOffset;
-	int32_t partition;
 };
 
 }

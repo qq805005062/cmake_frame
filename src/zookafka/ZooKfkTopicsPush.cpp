@@ -173,7 +173,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 	int ret = 0;
 	char brokers[1024] = {0};
 	/////////////////////////
-	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
+	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
 	if(ret < 0)
@@ -308,12 +308,12 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		rd_kafka_poll(kfkt, 0);
 		return ret;
 	}
-
+/*
 	PDEBUG("*** Push %lu bytes to topic:%s partition: %i***\n",
 	      data.size(),
 	      topic.c_str(),
 	      partition);
-	//rd_kafka_poll(kfkt, 1000);
+	//rd_kafka_poll(kfkt, 1000);*/
 	rd_kafka_poll(kfkt, 0);
 	return 0;
 }

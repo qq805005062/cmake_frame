@@ -40,7 +40,7 @@ class ZooKafkaPut
 {
 
 public:
-	typedef std::function<void(int errorCode,const char* errorMsg)> MsgPushErrorCallBack;
+	typedef std::function<void(const char *msg,int msgLen, int errorCode, const char* errorMsg)> MsgPushErrorCallBack;
 	
 	ZooKafkaPut();
 
@@ -51,7 +51,11 @@ public:
 			  int partition = RD_KAFKA_PARTITION_UA,
 			  int maxMsgqueue = 2 * 1024 * 1024);
 
-	void msgPushErrorCall(int errorCode,const char* errorMsg);
+	void msgPushErrorCall(const char *msg,int msgLen, int errorCode, const char* errorMsg)
+	{
+		if(cb_)
+			cb_(msg,msgLen,errorCode,errorMsg);
+	}
 
 	int kfkInit(const std::string& brokers,
 			  const std::string& topicName,
@@ -81,10 +85,8 @@ private:
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
 	rd_kafka_t* kfkt;
-	rd_kafka_conf_t* kfkconft;
 	
 	rd_kafka_topic_t* kfktopic;
-	rd_kafka_topic_conf_t* kfktopiconft;
 	MsgPushErrorCallBack cb_;
 };
 
