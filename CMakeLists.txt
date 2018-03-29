@@ -70,6 +70,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/src)
 #include_directories(${PROJECT_SOURCE_DIR}/src/proto)
 include_directories(${PROJECT_SOURCE_DIR}/include)
+include_directories(${PROJECT_SOURCE_DIR}/include/libevent)
 
 link_directories(${PROJECT_SOURCE_DIR}/lib)
 
@@ -81,6 +82,7 @@ add_subdirectory(src/rediscluster)
 #add_subdirectory(src/rdngatesvr)
 #add_subdirectory(src/rdnurisvr)
 add_subdirectory(src/zookafka)
+add_subdirectory(src/redislibevent)
 #add_subdirectory(src/rdnsyncli)
 #add_subdirectory(src/rscsrv)
 
