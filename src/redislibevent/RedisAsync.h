@@ -30,14 +30,131 @@
 
 namespace ASYNCREDIS
 {
+
 typedef std::map<std::string, std::string> HashMap;
+typedef HashMap::const_iterator HashMapConstIter;
+typedef HashMap::iterator HashMapIter;
 
-typedef std::function<void(std::string& rStr,void *privdata)> CmdStrValueCallBack;
-typedef std::function<void(int ret,void *privdata)> CmdResultCallBack;
-typedef std::function<void(const char *errMsg,int bConn)> RedisOnConnCallBack;
+typedef std::vector<std::string> StrVector;
+typedef StrVector::iterator StrVectorIter;
 
-typedef std::vector<const redisAsyncContext *> ConstRedisAsyncConn;
+typedef std::function<void(int64_t ret, void *privdata, const std::string& err)> CmdResultCallBack;
+typedef std::function<void(const std::string& rStr, void *privdata, const std::string& err)> CmdStrValueCallBack;
+typedef std::function<void(const StrVector& strV, void *privdata, const std::string& err)> CmdStrVectorCallBack;
+
+//typedef std::function<void(const char *errMsg,int bConn)> RedisOnConnCallBack;
+
+typedef std::vector<redisAsyncContext *> ConstRedisAsyncConn;
 typedef ConstRedisAsyncConn::iterator ConstRedisAsyncConnIter;
+
+class RedisRequest
+{
+public:
+	RedisRequest()
+		:priv(nullptr)
+		,retCb_(nullptr)
+		,strCb_(nullptr)
+		,strVCb_(nullptr)
+	{
+	}
+	
+	~RedisRequest()
+	{
+	}
+
+	RedisRequest(RedisRequest& that)
+	{
+		this->priv = that.priv;
+		this->retCb_ = that.retCb_;
+		this->strCb_ = that.strCb_;
+		this->strVCb_ = that.strVCb_;
+	}
+
+	RedisRequest(void* opaque, const CmdResultCallBack& cb)
+	{
+		priv = opaque;
+		retCb_ = cb;
+	}
+
+	RedisRequest(void* opaque, const CmdStrValueCallBack& cb)
+	{
+		priv = opaque;
+		strCb_ = cb;
+	}
+
+	RedisRequest(void* opaque, const CmdStrVectorCallBack& cb)
+	{
+		priv = opaque;
+		strVCb_ = cb;
+	}
+
+	void SetRedisRequest(void *opaque, const CmdResultCallBack& cb)
+	{
+		priv = opaque;
+		retCb_ = cb;
+	}
+
+	void SetRedisRequest(void *opaque, const CmdStrValueCallBack& cb)
+	{
+		priv = opaque;
+		strCb_ = cb;
+	}
+
+	void SetRedisRequest(void *opaque, const CmdStrVectorCallBack& cb)
+	{
+		priv = opaque;
+		strVCb_ = cb;
+	}
+
+	bool IsResultCallBack()
+	{
+		if(retCb_)
+			return true;
+		else
+			return false;
+	}
+
+	bool IsStrValueCallBack()
+	{
+		if(strCb_)
+			return true;
+		else
+			return false;
+	}
+
+	bool IsStrVectorCallBack()
+	{
+		if(strVCb_)
+			return true;
+		else
+			return false;
+	}
+	
+	void RespondCallBack(int64_t ret, const std::string& err)
+	{
+		if(retCb_)
+			retCb_(ret,priv,err);
+	}
+
+	void RespondCallBack(const std::string &strValue, const std::string& err)
+	{
+		if(retCb_)
+			strCb_(strValue,priv,err);
+	}
+
+	void RespondCallBack(const StrVector &strVector, const std::string& err)
+	{
+		if(strVCb_)
+			strVCb_(strVector,priv,err);
+	}
+	
+private:
+	
+	void *priv;
+	CmdResultCallBack retCb_;
+	CmdStrValueCallBack strCb_;
+	CmdStrVectorCallBack strVCb_;
+};
 
 class RedisAsync
 {
@@ -55,20 +172,19 @@ public:
 
 	void RedisBlockClear();
 
-	int set(const std::string& key, const std::string& value, const CmdResultCallBack& retCb);
+	int set(const std::string& key, const std::string& value, const CmdResultCallBack& retCb, void *priv);
 	
-	int get(const std::string& key, CmdStrValueCallBack strCb);
+	int get(const std::string& key, CmdStrValueCallBack strCb, void *priv);
 	
-	int hmset(const std::string& key, const HashMap& hashMap, const CmdResultCallBack& retCb);
+	int hmset(const std::string& key, const HashMap& hashMap, const CmdResultCallBack& retCb, void *priv);
 
-	
 private:
 	common::MutexLock IterLock;
-	int status;
+	int asyStatus;
 	struct event_base *libevent;
 
 	int conInitNum;
-	int conSuccNum;
+	volatile int conSuccNum;
 	int lastIndex;
 
 	std::string host_;
