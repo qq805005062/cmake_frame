@@ -36,7 +36,7 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 	{
 		case REDIS_REPLY_STRING:
 			{
-				PDEBUG("respondCallback REDIS_REPLY_STRING type :: %s -- %d -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
+				PDEBUG("respondCallback REDIS_REPLY_STRING type :: %s -- %lu -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
 				if(pRedisRequest->IsResultCallBack())
 				{
 					if(reply->str && reply->len && strcasecmp(reply->str, "OK") == 0)
@@ -70,7 +70,7 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 			break;
 		case REDIS_REPLY_ARRAY:
 			{
-				PDEBUG("respondCallback REDIS_REPLY_ARRAY type :: %s -- %d -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
+				PDEBUG("respondCallback REDIS_REPLY_ARRAY type :: %s -- %lu -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
 				if(pRedisRequest->IsResultCallBack())
 				{
 					int64_t ret = 0;
@@ -99,7 +99,7 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 			break;
 		case REDIS_REPLY_INTEGER:
 			{
-				PDEBUG("respondCallback REDIS_REPLY_INTEGER type :: %s -- %d -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
+				PDEBUG("respondCallback REDIS_REPLY_INTEGER type :: %s -- %lu -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
 				if(pRedisRequest->IsResultCallBack())
 				{
 					int64_t ret = reply->integer;
@@ -124,7 +124,7 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 			break;
 		case REDIS_REPLY_STATUS:
 			{
-				PDEBUG("respondCallback REDIS_REPLY_STATUS type :: %s -- %d -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
+				PDEBUG("respondCallback REDIS_REPLY_STATUS type :: %s -- %lu -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
 				if(pRedisRequest->IsResultCallBack())
 				{
 					int64_t ret = 0;
@@ -149,7 +149,7 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 			break;
 		case REDIS_REPLY_NIL:
 			{
-				PDEBUG("respondCallback REDIS_REPLY_NIL type :: %s -- %d -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
+				PDEBUG("respondCallback REDIS_REPLY_NIL type :: %s -- %lu -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
 				if(pRedisRequest->IsResultCallBack())
 				{
 					int64_t ret = 0;
@@ -174,7 +174,7 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 			break;
 		case REDIS_REPLY_ERROR:
 			{
-				PDEBUG("respondCallback REDIS_REPLY_ERROR type :: %s -- %d -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
+				PDEBUG("respondCallback REDIS_REPLY_ERROR type :: %s -- %lu -- %lld -- %lu\n",reply->str,reply->len,reply->integer,reply->elements);
 				if(pRedisRequest->IsResultCallBack())
 				{
 					int64_t ret = -1;
@@ -276,7 +276,7 @@ int RedisAsync::ResetConnect(const std::string host,int port)
 		redisAsyncContext *c = redisAsyncConnect(host.c_str(), port);
 		if (c->err)
 		{
-			PERROR("");
+			PERROR("redisAsyncConnect error :: %s -- %d\n",c->errstr,i);
 			return -2;
 		}
 		redisLibeventAttach(c,libevent);
@@ -333,6 +333,7 @@ void RedisAsync::RedisLoop()
 {
 	if(libevent)
 		event_base_dispatch(libevent);
+	PERROR("Redis no event loop may be disconnect\n");
 }
 
 void RedisAsync::RedisBlockClear()
@@ -401,7 +402,7 @@ int RedisAsync::hmset(const std::string& key, const HashMap& hashMap, const CmdR
 		usleep(100);
 	if(key.empty() || hashMap.empty())
 	{
-		PERROR();
+		PERROR("hmset paramter empty\n");
 		return -1;
 	}
 	
@@ -423,6 +424,7 @@ int RedisAsync::hmset(const std::string& key, const HashMap& hashMap, const CmdR
 	{
 		argv[i] = it->c_str();
 		argvlen[i] = it->size();
+		//PDEBUG("hmset cmd :: %s len :: %ld\n", argv[i], argvlen[i]);
 	}
 	
 	int ret = 0;

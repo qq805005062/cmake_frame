@@ -1,6 +1,6 @@
 
-set_source_files_properties(RedisAsync.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-unused-function")
-set_source_files_properties(redislibevent.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-unused-function")
+set_source_files_properties(RedisAsync.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-unused-function -Wno-conversion")
+set_source_files_properties(redislibevent.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-unused-function -Wno-conversion")
 
 set(REDISASYNC_SRCS
   RedisAsync.cpp
