@@ -5,6 +5,7 @@ set_source_files_properties(ZooKfkTopicsPop.cpp PROPERTIES COMPILE_FLAGS "-Wno-o
 
 set_source_files_properties(ZooKafkaPut.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
 set_source_files_properties(ZooKfkTopicsPush.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
+set_source_files_properties(ZooKfkProducer.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
 
 set_source_files_properties(kfk_producer.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast")
 set_source_files_properties(kfk_consumer.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast")
@@ -15,6 +16,7 @@ set(ZOOKAFKA_SRCS
   ZooKafkaPut.cpp
   ZooKfkTopicsPush.cpp
   ZookeepKafka.cpp
+  ZooKfkProducer.cpp
 )
 
 add_library(zookafka ${ZOOKAFKA_SRCS})

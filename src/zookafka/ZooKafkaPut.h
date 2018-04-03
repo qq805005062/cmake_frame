@@ -1,3 +1,5 @@
+#ifndef __ZOO_KFK_TOPIC_PUT__
+#define __ZOO_KFK_TOPIC_PUT__
 
 #include <stdio.h>
 #include <string.h>
@@ -91,3 +93,5 @@ private:
 };
 
 }
+
+#endif

@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 		sleep(10);
 		pop.kfkTopicConsumeStart("zookeeper22");
 		sleep(10);
-		pop.kfkTopicConsumeStart("zookeeper11");
+		pop.kfkTopicConsumeStart("zookeeper11");
 #else
 		std::string topic,kfkdata;
 		int64_t off;

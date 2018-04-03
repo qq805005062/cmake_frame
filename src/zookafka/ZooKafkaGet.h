@@ -1,3 +1,5 @@
+#ifndef __ZOO_KFK_TOPIC_GET__
+#define __ZOO_KFK_TOPIC_GET__
 
 #include <stdio.h>
 #include <string.h>
@@ -77,3 +79,5 @@ private:
 };
 
 }
+
+#endif
