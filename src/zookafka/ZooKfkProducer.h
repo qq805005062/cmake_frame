@@ -11,31 +11,17 @@
 
 #include <getopt.h>
 
+#include <vector>
+
+#include <common/Atomic.h>
 #include "librdkafka/rdkafkacpp.h"
 
 #include "zookeeper/zookeeper.h"
 #include "zookeeper/zookeeper.jute.h"
 #include "jansson/jansson.h"
 
-#define SHOW_DEBUG		1
-#define SHOW_ERROR		1
-#ifdef SHOW_DEBUG
-#define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
-#else
-#define PDEBUG(fmt, args...)
-#endif
-
-#ifdef SHOW_ERROR
-#define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
-#else
-#define PERROR(fmt, args...)
-#endif
-
 /*
  π”√£∫
-
 class KfkSendError : public ZOOKEEPERKAFKA::MsgDeliveryError
 {
 	public:
@@ -46,6 +32,7 @@ class KfkSendError : public ZOOKEEPERKAFKA::MsgDeliveryError
 	}
 };
 
+int main(int argc, char* argv[])
 {
 	std::string broker = "192.169.3.165:9092";
 	std::string topic = "test2";
@@ -58,7 +45,7 @@ class KfkSendError : public ZOOKEEPERKAFKA::MsgDeliveryError
 	for (std::string line; run && std::getline(std::cin, line);)
 	{
 		if (line == "quit")
-		break;
+			break;
 		std::string msg = line;
 		std::string errmsg;
 		pro.send(msg, errmsg);
@@ -67,11 +54,12 @@ class KfkSendError : public ZOOKEEPERKAFKA::MsgDeliveryError
 	getchar();
 	return 0;
 }
-
 */
 
 namespace ZOOKEEPERKAFKA
 {
+
+typedef common::AtomicIntegerT<uint32_t> AtomicUInt32;
 
 enum enum_err
 {
@@ -151,42 +139,49 @@ class ZooKfkProducer
 {
 public:
 	ZooKfkProducer()
-		:m_conf(nullptr)
-		,m_tconf(nullptr)
-		,m_producer(nullptr)
-		,m_topic(nullptr)
+		:kfkProducerVect()
+		,kfkTopicVevt()
 		,m_cb()
 		,zKeepers()
 		,zookeeph(nullptr)
 		,kfkBrokers()
 		,topic_()
+		,producerSize(0)
+		,lastIndex()
+		,isBroChang(0)
+		,pushNow(0)
 	{	
 	}
 
 	~ZooKfkProducer()
 	{
-		if (m_producer)
+		for(int i = 0;i < producerSize;i++)
 		{
-			delete m_producer;
-			m_producer = NULL;
+			delete kfkProducerVect[i];
+			kfkProducerVect[i] = NULL;
 		}
 
-		if (m_topic)
+		for(int i = 0;i < producerSize;i++)
 		{
-			delete m_topic;
-			m_topic = NULL;
+			delete kfkTopicVevt[i];
+			kfkTopicVevt[i] = NULL;
 		}
+
+		std::vector<RdKafka::Producer*> ().swap(kfkProducerVect);
+		std::vector<RdKafka::Topic*> ().swap(kfkTopicVevt);
 	}
 
 	int zookInit(const std::string& zookeepers);
 
 	int zookInit(const std::string& zookeepers,
 		const std::string& topics,
+		int pNum,
 		MsgDeliveryError* errCb = nullptr,
 		MsgDelivery* cb = nullptr);
 	
 	int kfkInit(const std::string brokers,
 		const std::string topic,
+		int pNum,
 		MsgDeliveryError* errCb = nullptr,
 		MsgDelivery* cb = nullptr);
 
@@ -198,18 +193,11 @@ public:
 		int send_timeout_times = 5,
 		int send_wnd_size = 100);
 
-	int set(const std::string& attr,
-		const std::string& sValue,
-		std::string& errstr);
-
 	void changeKafkaBrokers(const std::string& brokers);
 protected:
-	RdKafka::Conf *m_conf;
-	RdKafka::Conf *m_tconf;
-
-	RdKafka::Producer* m_producer;
-	RdKafka::Topic* m_topic;
-
+	
+	std::vector<RdKafka::Producer*> kfkProducerVect;
+	std::vector<RdKafka::Topic*> kfkTopicVevt;
 	MsgDeliveryCallback m_cb;
 private:
 	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
@@ -218,6 +206,10 @@ private:
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
 	std::string topic_;
+	int producerSize;
+	AtomicUInt32 lastIndex;
+	volatile int isBroChang;
+	volatile int pushNow;
 	
 };
 

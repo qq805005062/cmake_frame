@@ -1,7 +1,6 @@
 
-#include <signal.h>
-
-#include "ZooKfkTopicsPush.h"
+#include "../ZooKfkCommon.h"
+#include "../ZooKafkaPut.h"
 
 #define KFK_LOG_EMERG   0
 #define KFK_LOG_ALERT   1
@@ -89,8 +88,8 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 		if( ret > 0 )
 		{
 			PDEBUG("Found brokers:: %s\n",brokers);
-			ZooKfkTopicsPush *pZooKafkaPush = static_cast<ZooKfkTopicsPush *>(watcherCtx);
-			pZooKafkaPush->changeKafkaBrokers(brokers);
+			ZooKafkaPut *pZooKafkaPut = static_cast<ZooKafkaPut *>(watcherCtx);
+			pZooKafkaPut->changeKafkaBrokers(brokers);
 			//rd_kafka_brokers_add(rk, brokers);
 			//rd_kafka_poll(rk, 10);
 		}
@@ -103,17 +102,9 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 	if (message->err)
 	{
 		// 这里可以写失败的处理
-		PUSHERRORMSG msg;
-		msg.topic = rd_kafka_topic_name(message->rkt);
-		msg.msg = const_cast<const char* >(static_cast<char* >(message->payload));
-		msg.msgLen = message->len;
-		msg.key = const_cast<const char* >(static_cast<char* >(message->key));
-		msg.keyLen = message->key_len;
-		msg.errorCode = message->err;
-		msg.errMsg = rd_kafka_err2str(message->err);
 		PERROR("%% Message delivery failed: %s\n", rd_kafka_err2str(message->err));
-		ZooKfkTopicsPush *pKfkPush = static_cast<ZooKfkTopicsPush *>(opaque);
-		pKfkPush->msgPushErrorCall(&msg);
+		ZooKafkaPut *pKfkPut = static_cast<ZooKafkaPut *>(opaque);
+		pKfkPut->msgPushErrorCall(const_cast<const char* >(static_cast<char* >(message->payload)),message->len,message->err,rd_kafka_err2str(message->err));
 	}
 	else
 	{
@@ -127,24 +118,28 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 	}
 }
 
-ZooKfkTopicsPush::ZooKfkTopicsPush()
-	:zKeepers()
+ZooKafkaPut::ZooKafkaPut()
+	:kfkLock()
+	,zKeepers()
 	,zookeeph(nullptr)
 	,kfkBrokers()
 	,kfkt(nullptr)
-	,topicPtrMap()
+	,kfktopic(nullptr)
 	,cb_(nullptr)
 {
-	PDEBUG("ZooKfkTopicsPush struct\n");
+	PDEBUG("ZooKafkaPut struct\n");
 }
 
-ZooKfkTopicsPush::~ZooKfkTopicsPush()
+ZooKafkaPut::~ZooKafkaPut()
 {
 	kfkDestroy();
-	PDEBUG("ZooKfkTopicsPush exit\n");
+	PDEBUG("ZooKafkaPut exit\n");
 }
 
-int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
+int ZooKafkaPut::zookInit(const std::string& zookeepers,
+			  const std::string& topicName,
+			  int partition,
+			  int maxMsgqueue)
 {
 	int ret = 0;
 	char brokers[1024] = {0};
@@ -158,35 +153,9 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 		return ret;
 	}
 	
-	zKeepers.clear();
-	zKeepers = zookeepers;
-	kfkBrokers.clear();
-	kfkBrokers.append(brokers);
-	ret = 0;
-	return ret;
-}
-
-int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
-			  const std::string& topics,
-			  int maxMsgqueue)
-{
-	int ret = 0;
-	char brokers[1024] = {0};
-	/////////////////////////
-	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
-	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
-	////////////////////////////////////////////////
-	if(ret < 0)
-	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
-		return ret;
-	}
-	
-	zKeepers.clear();
-	zKeepers = zookeepers;
-	kfkBrokers.clear();
-	kfkBrokers.append(brokers);
-	ret = kfkInit(kfkBrokers,topics,maxMsgqueue);
+	zKeepers.assign(zookeepers);
+	kfkBrokers.assign(brokers,strlen(brokers));
+	ret = kfkInit(kfkBrokers,topicName,partition,maxMsgqueue);
 	if(ret < 0)
 	{
 		PERROR("kfkInit error :: %d\n",ret);
@@ -194,12 +163,12 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 	return ret;
 }
 
-int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
-			  const std::string& topics,
+int ZooKafkaPut::kfkInit(const std::string& brokers,
+			  const std::string& topicName,
+			  int partition,
 			  int maxMsgqueue)
 {
 	char tmp[64] = {0},errStr[512] = {0};
-	int ret = 0;
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 	rd_kafka_conf_set_opaque(kfkconft,this);
@@ -211,6 +180,10 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	rd_kafka_conf_set(kfkconft, "message.send.max.retries", "3", NULL, 0);
 	rd_kafka_conf_set(kfkconft, "retry.backoff.ms", "500", NULL, 0);
 
+	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
+	rd_kafka_topic_conf_set(kfktopiconft, "produce.offset.report", "true", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(kfktopiconft, "request.required.acks", "1", errStr, sizeof(errStr));
+
 	kfkt = rd_kafka_new(RD_KAFKA_PRODUCER, kfkconft, errStr, sizeof errStr);
 	if(!kfkt)
 	{
@@ -219,77 +192,35 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	}
 	rd_kafka_set_log_level(kfkt, KFK_LOG_DEBUG);
 
-	if(brokers.empty())
-	{
-		ret = rd_kafka_brokers_add(kfkt, kfkBrokers.c_str());
-	}else{
-		ret = rd_kafka_brokers_add(kfkt, brokers.c_str());
-		if(kfkBrokers.empty())
-			kfkBrokers = brokers;
-	}
-	if (ret == 0)
+	if (rd_kafka_brokers_add(kfkt, brokers.c_str()) == 0)
 	{
 		PERROR("*** No valid brokers specified: %s ***\n", brokers.c_str());
 		return -1;
 	}
-	
-	std::vector<std::string> topics_;
-	str2Vec(topics.c_str(), topics_, ",");
-	if(topics_.size() < 1)
-	{
-		PERROR("topics ERROR :: %s\n",topics.c_str());
-		return -1;
-	}
-	int size = static_cast<int>(topics_.size());
-	for(int i = 0;i < size;i++)
-	{
-		rd_kafka_topic_conf_t *pTopiConf = rd_kafka_topic_conf_new();
-		if(!pTopiConf)
-		{
-			PERROR("rd_kafka_topic_conf_new ERROR\n");
-			return -1;
-		}
-		rd_kafka_topic_conf_set(pTopiConf, "produce.offset.report", "true", errStr, sizeof(errStr));
-		rd_kafka_topic_conf_set(pTopiConf, "request.required.acks", "1", errStr, sizeof(errStr));
 
-		rd_kafka_topic_t *pTopic = rd_kafka_topic_new(kfkt, topics_[i].c_str(), pTopiConf);
-		if(!pTopic)
-		{
-			PERROR("rd_kafka_topic_new ERROR\n");
-			return -1;
-		}
+	kfktopic = rd_kafka_topic_new(kfkt, topicName.c_str(), kfktopiconft);
+	if(kfkBrokers.empty())
+		kfkBrokers = brokers;
 
-		topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
-	}
-	
 	return 0;
 }
 
-int ZooKfkTopicsPush::push(const std::string& topic,
-			 const std::string& data,
+int ZooKafkaPut::push(const std::string& data,
 	         std::string* key,
 	         int partition,
 	         int msgFlags)
 {
-	if(data.empty() || topic.empty())
+	int ret = -1;
+	common::MutexLockGuard lock(kfkLock);
+	if (data.empty())
 	{
-		PERROR();
-		return -1;
+		PERROR("push value is null\n");
+		return ret;
 	}
 
-	if(topicPtrMap.empty())
-	{
-		PERROR();
-		return -1;
-	}
-
-	KfkTopicPtrMapIter iter = topicPtrMap.find(topic);
-	if(iter == topicPtrMap.end())
-	{
-		PERROR();
-		return -1;
-	}
-	int ret = rd_kafka_produce(iter->second,
+	// 如果入队的消息数目超过了配置的"queue.buffering.max.messages"设置的数目
+	// 则rd_kafka_produce()函数将返回-1并将errno设置为ENOBUFS
+	ret = rd_kafka_produce(kfktopic,
 	                       partition,
 	                       msgFlags,
 	                       reinterpret_cast<void* >(const_cast<char* >(data.c_str())),
@@ -297,53 +228,44 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	                       key == NULL ? NULL : reinterpret_cast<const void* >(key->c_str()),
 	                       key == NULL ? 0 : key->size(),
 	                       key == NULL ? NULL : reinterpret_cast<void* >(const_cast<char* >(key->c_str())));
-
 	if (ret == -1)
 	{
 		PERROR("*** Failed to produce to topic %s partition %d: %s ***\n",
-		      topic.c_str(),
+		      rd_kafka_topic_name(kfktopic),
 		      partition,
 		      rd_kafka_err2str(rd_kafka_last_error()));
 
 		rd_kafka_poll(kfkt, 0);
 		return ret;
 	}
-/*
+
 	PDEBUG("*** Push %lu bytes to topic:%s partition: %i***\n",
 	      data.size(),
-	      topic.c_str(),
+	      rd_kafka_topic_name(kfktopic),
 	      partition);
-	//rd_kafka_poll(kfkt, 1000);*/
+	//rd_kafka_poll(kfkt, 1000);
 	rd_kafka_poll(kfkt, 0);
 	return 0;
 }
 
-void ZooKfkTopicsPush::kfkDestroy()
+void ZooKafkaPut::kfkDestroy()
 {
-	while(rd_kafka_outq_len(kfkt) > 0)
-	{
+	while (rd_kafka_outq_len(kfkt) > 0)
 		rd_kafka_poll(kfkt, 100);
-	}
-
-	for(KfkTopicPtrMapIter iter = topicPtrMap.begin();iter != topicPtrMap.end();iter++)
-	{
-		rd_kafka_topic_destroy(iter->second);
-	}
-
-	KfkTopicPtrMap ().swap(topicPtrMap);
+	rd_kafka_topic_destroy(kfktopic);
 	rd_kafka_destroy(kfkt);
 }
 
-void ZooKfkTopicsPush::changeKafkaBrokers(const std::string& brokers)
+void ZooKafkaPut::changeKafkaBrokers(const std::string& brokers)
 {
-	kfkBrokers.clear();
-	kfkBrokers = brokers;
+	common::MutexLockGuard lock(kfkLock);
+	kfkBrokers.assign(brokers);
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
 	rd_kafka_poll(kfkt, 10);
 	return;
 }
 
-zhandle_t* ZooKfkTopicsPush::initialize_zookeeper(const char * zookeeper, const int debug)
+zhandle_t* ZooKafkaPut::initialize_zookeeper(const char * zookeeper, const int debug)
 {
 	zhandle_t *zh = NULL;
 	if (debug)
@@ -361,24 +283,6 @@ zhandle_t* ZooKfkTopicsPush::initialize_zookeeper(const char * zookeeper, const 
 	}
 	return zh;
 }
-
-bool ZooKfkTopicsPush::str2Vec(const char* src, std::vector<std::string>& dest, const char* delim)
-{
-	if (NULL == src || delim == NULL)
-	{
-		return false;
-	}
-
-	char* tmp  = const_cast<char* >(src);
-	char* curr = strtok(tmp, delim);
-	while (curr)
-	{
-		PDEBUG("str2Vec :: curr :: %s\n",curr);
-		dest.push_back(curr);
-		curr = strtok(NULL, delim);
-	}
-	return true;
-}
-
+	
 }
 

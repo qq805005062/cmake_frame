@@ -1,6 +1,6 @@
 
-#include <signal.h>
-#include "ZooKafkaGet.h"
+#include "../ZooKfkCommon.h"
+#include "../ZooKafkaGet.h"
 
 #define KFK_LOG_EMERG   0
 #define KFK_LOG_ALERT   1
@@ -132,10 +132,8 @@ int ZooKafkaGet::zookInit(const std::string& zookeepers,
 		return ret;
 	}
 
-	zKeepers.clear();
-	zKeepers = zookeepers;
-	kfkBrokers.clear();
-	kfkBrokers.append(brokers);
+	zKeepers.assign(zookeepers);
+	kfkBrokers.assign(brokers,strlen(brokers));
 	ret = kfkInit(kfkBrokers,topic,groupId,partitions,startOffset,messageMaxSize);
 	if(ret < 0)
 	{
@@ -283,8 +281,7 @@ void ZooKafkaGet::kfkDestroy()
 
 void ZooKafkaGet::changeKafkaBrokers(const std::string& brokers)
 {
-	kfkBrokers.clear();
-	kfkBrokers = brokers;
+	kfkBrokers.assign(brokers);
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
 	rd_kafka_poll(kfkt, 10);
 	return;

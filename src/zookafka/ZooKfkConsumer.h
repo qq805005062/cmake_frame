@@ -1,15 +1,15 @@
 
 #ifndef __ZOO_KFK_CONSUMER__
 #define __ZOO_KFK_CONSUMER__
-#include <iostream>
-#include <string>
-#include <cstdlib>
-#include <cstdio>
-#include <csignal>
-#include <cstring>
 
-#include <memory>
-#include <thread>
+#include <errno.h> 
+#include <stdio.h>
+#include <string.h>
+#include <string>
+#include <unistd.h>
+#include <functional>
+
+#include <getopt.h>
 
 #include "librdkafka/rdkafkacpp.h"
 
@@ -17,55 +17,13 @@
 #include "zookeeper/zookeeper.jute.h"
 #include "jansson/jansson.h"
 
-#define SHOW_DEBUG		1
-#define SHOW_ERROR		1
-#ifdef SHOW_DEBUG
-#define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
-#else
-#define PDEBUG(fmt, args...)
-#endif
-
-#ifdef SHOW_ERROR
-#define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
-#else
-#define PERROR(fmt, args...)
-#endif
-
-/*
-使用：
-
-class consumer_proc : public KFK::consumer_interface
-{
-	public:
-	void on_consumer(const int err_code, const std::string& err_msg,
-		const std::string& msg, const int64_t offset)
-	{
-		if (-191 != err_code)
-			std::cout << offset << "=" << msg << std::endl;
-	}
-};
-
-
-int main (int argc, char **argv)
-{
-	std::string broker = "192.169.3.165:9092";
-	std::string topic = "test2";
-	KFK::consumer consumer;
-	consumer.init(broker, topic);
-
-	consumer_proc callback;
-	consumer.start(0, 70, (KFK::consumer_interface*)&callback);
-
-	getchar();
-	return 0;
-}
-
-*/
 
 namespace ZOOKEEPERKAFKA
 {
+
+typedef std::function<void(const char *msg, size_t msgLen, const char *key, size_t keyLen, int64_t offset)> MsgConsumerCallback;
+
+typedef std::function<void(int errCode,const std::string& errMsg)> MsgErrorCallback;
 
 enum enum_err
 {
@@ -83,90 +41,80 @@ enum enum_err
 	enum_err_send_err = -10,
 };
 
-class consumer_interface
-{
-public:
-	virtual void on_consumer(const int err_code, const std::string& err_msg,
-		const std::string& msg, const int64_t offset) = 0;
-};
-
-class consumer_callback 
-		: public RdKafka::ConsumeCb
-		, public RdKafka::EventCb
-{
-public:
-	consumer_callback() : m_callback(NULL) {}
-	void set_callback(consumer_interface* cb)
-	{
-		m_callback = cb;
-	}
-	void consume_cb(RdKafka::Message &msg, void *opaque)
-	{
-		if (m_callback)
-			m_callback->on_consumer(msg.err(), msg.errstr(),
-				std::string(static_cast<const char *>(msg.payload()),
-					static_cast<int>(msg.len())), msg.offset());
-		// msg_consume_proc(&msg, opaque);
-	}
-
-	void event_cb(RdKafka::Event &event)
-	{}
-
-protected:
-	consumer_interface* m_callback;
-};
-
 class ZooKfkConsumer
 {
 public:
 	ZooKfkConsumer()
-		:m_conf(NULL)
-		,m_rk(NULL)
-		,m_topic_conf(NULL)
-		,m_rkqu(NULL)
-		,m_topics(NULL)
-		,m_bRun(false)
-		,m_thread_spr(nullptr)
-		,m_cb_consumer()
+		:m_consumer(NULL)
+		,m_topic(NULL)
+		,broChange(false)
+		,run(false)
+		,zKeepers()
+		,zookeeph(nullptr)
+		,kfkBrokers()
+		,topic_()
+		,partition_(-1)
+		,offset_(-1)
+		,MCb_(nullptr)
+		,ECb_(nullptr)
 	{
 	}
 
 	~ZooKfkConsumer()
 	{
+		if (m_consumer)
+		{
+			delete m_consumer;
+			m_consumer = NULL;
+		}
+
+		if (m_topic)
+		{
+			delete m_topic;
+			m_topic = NULL;
+		}
 	}
 
-	int init(const std::string brokers, const std::string topic);
+	int zookInit(const std::string& zookeepers);
+
+	int zookInit(const std::string& zookeepers,
+		const std::string& topic,
+		MsgConsumerCallback ccb = nullptr,
+		MsgErrorCallback ecb = nullptr,
+		int32_t partition = 0,
+		int64_t start_offset = -1);
+
+	int kfkInit(const std::string& brokers,
+		const std::string& topic,
+		MsgConsumerCallback ccb = nullptr,
+		MsgErrorCallback ecb = nullptr,
+		int32_t partition = -1,
+		int64_t start_offset = -1);
+
+	//block never return until stop
+	int start();
 
 	int stop();
 
-	/*
-	功能： 接收通道消息
-	partition: 文件
-	start_offset: 偏移
-	返回： 
-	*/
-	int start(std::string group, int64_t start_offset, consumer_interface* ex_consume_cb);
-
-	/*
-	功能： 设置producer或者topic的属性
-	*/
-	int set(const std::string attr, const std::string sValue, std::string& errstr);
-
-
+	void changeKafkaBrokers(const std::string& brokers);
 protected:
-	rd_kafka_conf_t* m_conf;
-	rd_kafka_t* m_rk;
-	rd_kafka_topic_conf_t* m_topic_conf;
-	rd_kafka_queue_t* m_rkqu;
-	rd_kafka_topic_partition_list_t* m_topics;
+	RdKafka::Consumer* m_consumer;
+	RdKafka::Topic* m_topic;
 
-	std::string m_brokers;
-	std::string m_group;
+private:
+	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
 
-	bool m_bRun;
-	std::shared_ptr<std::thread> m_thread_spr;
-	consumer_callback m_cb_consumer;
+	bool broChange;
+	bool run;
+	std::string zKeepers;
+	zhandle_t *zookeeph;
+	std::string kfkBrokers;
+	std::string topic_;
+	int32_t partition_;
+	int32_t offset_;
 
+	MsgConsumerCallback MCb_;
+	MsgErrorCallback ECb_;
 };
 
 }

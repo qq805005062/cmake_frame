@@ -1,5 +1,6 @@
 
-#include "ZooKfkProducer.h"
+#include "../ZooKfkCommon.h"
+#include "../ZooKfkProducer.h"
 
 namespace ZOOKEEPERKAFKA
 {
@@ -86,7 +87,7 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers)
 	int ret = 0;
 	char brokers[1024] = {0};
 	/////////////////////////
-	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
+	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
 	if(ret < 0)
@@ -95,16 +96,18 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers)
 		return ret;
 	}
 	
-	zKeepers.clear();
-	zKeepers = zookeepers;
-	kfkBrokers.clear();
-	kfkBrokers.append(brokers);
+	//zKeepers.clear();
+	zKeepers.assign(zookeepers);
+	//kfkBrokers.clear();
+	//kfkBrokers.append(brokers);
+	kfkBrokers.assign(brokers,strlen(brokers));
 	ret = 0;
 	return ret;
 }
 
 int ZooKfkProducer::zookInit(const std::string& zookeepers,
 		const std::string& topics,
+		int pNum,
 		MsgDeliveryError* errCb,
 		MsgDelivery* cb)
 {
@@ -121,7 +124,7 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers,
 	}
 	
 	zKeepers = zookeepers;
-	ret = kfkInit(brokers,topics,errCb,cb);
+	ret = kfkInit(brokers,topics,pNum,errCb,cb);
 	if(ret < 0)
 	{
 		PERROR("kfkInit error :: %d\n",ret);
@@ -132,89 +135,93 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers,
 
 int ZooKfkProducer::kfkInit(const std::string brokers,
 		const std::string topic,
+		int pNum,
 		MsgDeliveryError* errCb,
 		MsgDelivery* cb)
 {
-	m_conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
-	m_tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
-
+	RdKafka::Conf *m_conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+	RdKafka::Conf *m_tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
 	if (!m_conf || !m_tconf)
 	{
-		std::cout << "conf, t_conf init err" << std::endl;
+		PERROR("conf, t_conf init err\n");
 		return enum_err_init_err;
 	}
+	
 	if (topic.empty() && topic_.empty())
 	{
-		std::cout << "topic cant be null" << std::endl;
+		PERROR("topic can't be null\n");
 		return enum_err_topic_empty;
 	}
-
 	if (brokers.empty() && kfkBrokers.empty())
 	{
-		std::cout << "brokers cant be null" << std::endl;
+		PERROR("brokers can't be null\n");
 		return enum_err_broker_empty;
 	}
 	
 	std::string errstr;
-	HashPartitionerCb hash_partitioner;
-
-	// Create configuration objects
-	RdKafka::Conf*& conf = m_conf;
-	RdKafka::Conf*& tconf = m_tconf;
-
+	//HashPartitionerCb hash_partitioner;
 	// Set configuration properties
 	if(brokers.empty())
 	{
-		conf->set("metadata.broker.list", kfkBrokers, errstr);
+		m_conf->set("metadata.broker.list", kfkBrokers, errstr);
 	}else{
-		conf->set("metadata.broker.list", brokers, errstr);
+		m_conf->set("metadata.broker.list", brokers, errstr);
 		kfkBrokers = brokers;
 	}
+	
 	if(errCb)
 		m_cb.setDeliveryError(errCb);
-
 	if(cb)
 		m_cb.setDelivery(cb);
 
 	// 事件回调
-	conf->set("event_cb", static_cast<RdKafka::EventCb *>(&m_cb), errstr);
-
+	m_conf->set("event_cb", static_cast<RdKafka::EventCb *>(&m_cb), errstr);
 	/* Set delivery report callback */
-	conf->set("dr_cb", static_cast<RdKafka::DeliveryReportCb *>(&m_cb), errstr);
+	m_conf->set("dr_cb", static_cast<RdKafka::DeliveryReportCb *>(&m_cb), errstr);
 
 	// Create producer using accumulated global configuration.
-	if (!m_producer)
+	for(int i = 0;i < pNum;i++)
 	{
-		m_producer = RdKafka::Producer::create(conf, errstr);
+		RdKafka::Producer* m_producer = RdKafka::Producer::create(m_conf, errstr);
 		if (!m_producer)
 		{
-			std::cout << "Failed to create producer: " << errstr.c_str() << std::endl;
+			PERROR("Failed to create producer: %s\n",errstr.c_str());
 			return enum_err_create_producer;
 		}
-		std::cout << "% Created producer " << m_producer->name() << std::endl;
+		kfkProducerVect.push_back(m_producer);
+		PDEBUG("Created producer %s\n",m_producer->name().c_str());
 	}
 	
 	// Create topic handle.
-	if (!m_topic)
+	
+	if(topic.empty())
 	{
-		if(topic.empty())
+		for(int i = 0;i < pNum;i++)
 		{
-			m_topic = RdKafka::Topic::create(m_producer, topic_, tconf, errstr);
+			RdKafka::Topic* m_topic = RdKafka::Topic::create(kfkProducerVect[i], topic_, m_tconf, errstr);
 			if (!m_topic) 
 			{
-				std::cout << "Failed to create topic: " << errstr.c_str() << std::endl;
+				PERROR("Failed to create topic: %s\n",errstr.c_str());
 				return enum_err_create_toppic;
 			}
-		}else{
-			m_topic = RdKafka::Topic::create(m_producer, topic, tconf, errstr);
-			if (!m_topic) 
-			{
-				std::cout << "Failed to create topic: " << errstr.c_str() << std::endl;
-				return enum_err_create_toppic;
-			}
-			topic_ = topic;
+			kfkTopicVevt.push_back(m_topic);
+			PDEBUG("Created Topic %s\n",topic_.c_str());
 		}
+	}else{
+		for(int i = 0;i < pNum;i++)
+		{
+			RdKafka::Topic* m_topic = RdKafka::Topic::create(kfkProducerVect[i], topic, m_tconf, errstr);
+			if (!m_topic) 
+			{
+				PERROR("Failed to create topic: %s\n",errstr.c_str());
+				return enum_err_create_toppic;
+			}
+			kfkTopicVevt.push_back(m_topic);
+			PDEBUG("Created Topic %s\n",topic.c_str());
+		}
+		topic_ = topic;
 	}
+	producerSize = pNum;
 
 	return 0;
 }
@@ -227,66 +234,72 @@ int ZooKfkProducer::send(const std::string& msg,
 		int send_timeout_times,
 		int send_wnd_size)
 {
-	if (!m_topic || !m_producer)
+	while(isBroChang)
 	{
-		std::cout << "m_topic, m_producer init err" << std::endl;
+		usleep(100);
+	}
+	pushNow++;
+	int index = lastIndex.incrementAndGet() % producerSize;
+	if(!kfkProducerVect[index] || !kfkTopicVevt[index])
+	{
+		PERROR("RdKafka::Producer RdKafka::Topic empty\n");
 		return enum_err_init_err;
 	}
 
 	// int32_t partition = RdKafka::Topic::PARTITION_UA;
 	// Produce message
-	RdKafka::ErrorCode resp = m_producer->produce(m_topic, partition,
+	RdKafka::ErrorCode resp = kfkProducerVect[index]->produce(kfkTopicVevt[index], partition,
 		RdKafka::Producer::RK_MSG_COPY /* Copy payload */,
 		const_cast<char *>(msg.c_str()), msg.size(),
 		key, msgOpaque);
-	m_producer->poll(0); // void queue full, trigger callback
+	kfkProducerVect[index]->poll(0); // void queue full, trigger callback
 	if (resp != RdKafka::ERR_NO_ERROR)
 	{
 		strerr = RdKafka::err2str(resp);
-		std::cout << "send failed: " << strerr.c_str() << std::endl;
+		PERROR("send failed : %s\n",strerr.c_str());
 		return enum_err_send_err;
 	}
 
 	// 短暂等待
 	int MAC_CNT = send_timeout_times;// 5;
 	int cnt = MAC_CNT;
-	while (cnt && m_producer->outq_len() > send_wnd_size)//0) 
+	while (cnt && kfkProducerVect[index]->outq_len() > send_wnd_size)//0) 
 	{
 		cnt--;
-		std::cerr << "Waiting for " << m_producer->outq_len() << std::endl;
-		m_producer->poll(10 * (MAC_CNT - cnt));
+		PDEBUG("Waiting for : %d\n",kfkProducerVect[index]->outq_len());
+		kfkProducerVect[index]->poll(10 * (MAC_CNT - cnt));
 	}
 
 	// 窗口满了
-	if (m_producer->outq_len() > send_wnd_size)
+	if (kfkProducerVect[index]->outq_len() > send_wnd_size)
 		return -100;
+	pushNow--;
 	return 0;
-}
-
-int ZooKfkProducer::set(const std::string& attr, const std::string& sValue, std::string& errstr)
-{
-	if (!m_conf)
-		return enum_err_set_INVALID;
-
-	return m_conf->set(attr.c_str(), sValue.c_str(), errstr);
 }
 
 void ZooKfkProducer::changeKafkaBrokers(const std::string& brokers)
 {
-	if (m_producer)
+	isBroChang = 1;
+	while(pushNow)
 	{
-		delete m_producer;
-		m_producer = NULL;
+		usleep(100);
+	}
+	for(int i = 0;i < producerSize;i++)
+	{
+		delete kfkProducerVect[i];
+		kfkProducerVect[i] = NULL;
 	}
 
-	if (m_topic)
+	for(int i = 0;i < producerSize;i++)
 	{
-		delete m_topic;
-		m_topic = NULL;
+		delete kfkTopicVevt[i];
+		kfkTopicVevt[i] = NULL;
 	}
 
-	std::string top;
-	kfkInit(brokers,top);
+	std::vector<RdKafka::Producer*> ().swap(kfkProducerVect);
+	std::vector<RdKafka::Topic*> ().swap(kfkTopicVevt);
+	kfkInit(brokers,topic_,producerSize);
+	isBroChang = 0;
 	return;
 }
 

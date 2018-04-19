@@ -1,0 +1,22 @@
+ 通过zookeeper连接kafka使用kafka库，主要分为生产者、消费者两种模式
+
+ 两种模式使用分别采用多种实现方式。
+ 通过zookeeper便于当kfk集群发生变化时感知集群变化，而不用重启程序
+
+ 根目录为使用的头文件。最终会提供头文件和库文件使用
+
+ZooKafkaGet.h	消费者 单个topic消费，C语言接口
+
+ZooKafkaPut.h	生产者 单个topic生成者，C语言接口
+
+ZookeepKafka.h	预期是实现消费者，增加、回写接口功能，暂时未实现
+
+ZooKfkConsumer.h 消费者
+
+ZooKfkProducer.h 生成者，生产者模式，C++接口，不支持多topic
+
+ZooKfkTopicsGet.h 消费者 支持多个topic，随时可以停止启动某一个topic读写
+
+ZooKfkTopicsPop.h 消费者
+
+ZooKfkTopicsPush.h 消费者

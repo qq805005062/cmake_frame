@@ -21,23 +21,6 @@
 #include "jansson/jansson.h"
 
 
-#define SHOW_DEBUG		1
-#define SHOW_ERROR		1
-
-#ifdef SHOW_DEBUG
-#define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
-#else
-#define PDEBUG(fmt, args...)
-#endif
-
-#ifdef SHOW_ERROR
-#define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
-#else
-#define PERROR(fmt, args...)
-#endif
-
 typedef std::list<std::string> ListStringTopic;
 typedef ListStringTopic::iterator ListStringTopicIter;
 
@@ -60,23 +43,35 @@ public:
 	//仅仅传入zookeeper的地址信息，逗号分隔多个ip port；其后自己调用kfkInit
 	int zookInit(const std::string& zookeepers);
 	//传入zookeeper地址信息，逗号分隔多个ip port，传入多个topic，逗号分隔，不可以有多余的符号，内部调用kfkInit
-	int zookInit(const std::string& zookeepers, const std::string& topic);
+	int zookInit(const std::string& zookeepers, const std::string& topic, const std::string groupName);
 	//kfk初始化，brokers可以传入，也可以传空，则使用zookeeper获取的，逗号分隔多个ip port。多个topic，逗号分隔
-	int kfkInit(const std::string& brokers, const std::string& topic);
+	int kfkInit(const std::string& brokers, const std::string& topic, const std::string groupName);
 	//启动某一个topic读，必须存在初始化的topic中，否则报错
 	int kfkTopicConsumeStart(const std::string& topic);	
-	//获取kfk一个消息，并可以获取对应的topic，偏移量，key
+	//获取kfk一个消息，并可以获取对应的topic，偏移量，key；
 	int pop(std::string& topic, std::string& data, int64_t* offset = NULL, std::string* key = NULL);
+	//获取kfk一个消息，timeout_ms超时时间，返回-1表示有错误，返回0表示正常，返回1表示超时
+	int tryPop(std::string& topic, std::string& data, int timeout_ms, int64_t* offset = NULL, std::string* key = NULL);
+	
 	//停止某一个topic读，必须存在初始化的topic
 	int kfkTopicConsumeStop(const std::string& topic);
 	//销毁资源信息
 	void kfkDestroy();
+
+	int getLastErrorMsg(std::string& msg)
+	{
+		msg.assign(kfkErrorMsg);
+		return static_cast<int>(kfkErrorCode);
+	}
+	
 	//zookeeper发现brokers变化修正brokers
 	void changeKafkaBrokers(const std::string& brokers);
 private:
 	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
 
-	bool str2Vec(const char* src, std::vector<std::string>& dest, const char* delim);
+	bool str2Vec(const char* src, std::vector<std::string>& dest, const char delim);
+
+	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
 
 	common::MutexLock listLock;
 	std::string zKeepers;
@@ -91,6 +86,9 @@ private:
 	size_t kMessageMaxSize;
 	int64_t startOffset;
 	int32_t partition;
+
+	rd_kafka_resp_err_t kfkErrorCode;
+	std::string kfkErrorMsg;
 };
 
 }

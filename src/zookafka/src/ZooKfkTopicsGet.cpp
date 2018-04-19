@@ -1,7 +1,6 @@
 
-#include <signal.h>
-
-#include "ZooKfkTopicsGet.h"
+#include "../ZooKfkCommon.h"
+#include "../ZooKfkTopicsGet.h"
 
 #define KFK_LOG_EMERG   0
 #define KFK_LOG_ALERT   1
@@ -296,8 +295,8 @@ int ZooKfkTopicsGet::kfkTopicConsumeStop(const std::string& topic, int partition
 
 void ZooKfkTopicsGet::changeKafkaBrokers(const std::string& brokers)
 {
-	kfkBrokers.clear();
-	kfkBrokers = brokers;
+	//kfkBrokers.clear();
+	kfkBrokers.assign(brokers);
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
 	rd_kafka_poll(kfkt, 10);
 	return;

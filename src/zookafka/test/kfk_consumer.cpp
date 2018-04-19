@@ -2,11 +2,7 @@
 #include "stdio.h"
 #include <unistd.h>
 
-//#define ZOOKEEPER_KAFKA_TOPIC		1
-//#define ZOOKEEPER_KAFKA_TOPICS_POP	1
-#define ZOOKEEPER_KAFKA_TOPICS_GET	1
-
-#ifdef ZOOKEEPER_KAFKA_TOPIC
+#if 0
 #include "ZooKafkaGet.h"
 
 int main(int argc, char* argv[])
@@ -25,7 +21,7 @@ int main(int argc, char* argv[])
 
 #endif
 
-#ifdef ZOOKEEPER_KAFKA_TOPICS
+#if 0
 #include "ZooKfkTopicsPop.h"
 
 int main(int argc, char* argv[])
@@ -59,7 +55,7 @@ int main(int argc, char* argv[])
 }
 #endif
 
-#ifdef ZOOKEEPER_KAFKA_TOPICS_GET
+#if 0
 
 #include "ZooKfkTopicsGet.h"
 
@@ -108,5 +104,38 @@ int main(int argc, char* argv[])
 }
 #endif
 
+#if 1
+
+#include "ZooKfkConsumer.h"
+
+void msgConsumerInfo(const char *msg, size_t msgLen, const char *key, size_t keyLen, int64_t offset)
+{
+	PDEBUG("msg :: %s len :: %ld offset :: %ld\n",msg,msgLen,offset);
+	return;
+}
+
+void msgConsumerError(int errCode,const std::string& errMsg)
+{
+	PDEBUG("errCode :: %d errMsg :: %s\n",errCode,errMsg.c_str());
+	return;
+}
+
+int main(int argc, char* argv[])
+{
+	ZOOKEEPERKAFKA::ZooKfkConsumer consumer;
+
+	int ret = consumer.zookInit("192.169.0.61:2181,192.169.0.62:2181,192.169.0.63:2181"
+		,"zookeeper"
+		,std::bind(msgConsumerInfo,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3,std::placeholders::_4,std::placeholders::_5)
+		,std::bind(msgConsumerError,std::placeholders::_1,std::placeholders::_2));
+
+	if(ret < 0)
+		return ret;
+	ret = consumer.start();
+	return ret;
+	
+}
+
+#endif
 
 

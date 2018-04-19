@@ -1,5 +1,6 @@
 
-#include "ZookeepKafka.h"
+#include "../ZooKfkCommon.h"
+#include "../ZookeepKafka.h"
 
 namespace ZOOKEEPERKAFKA
 {
