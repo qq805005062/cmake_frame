@@ -340,9 +340,10 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, int64_t* offset,
 		else if(message->err)
 		{
 			PERROR("get data error,topic %s  ;err reason: %s\n", rd_kafka_topic_name(message->rkt),rd_kafka_err2str(message->err));
-			rd_kafka_message_destroy(message);
 			setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
+			rd_kafka_message_destroy(message);
 			ret = -1;
+			return ret;
 		}else
 			break;
 	}
@@ -397,8 +398,8 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			PERROR("message get from kafka no topic name\n");
 		}
 		PERROR("get data error,topic %s  ;err reason: %s\n", rd_kafka_topic_name(message->rkt),rd_kafka_err2str(message->err));
-		rd_kafka_message_destroy(message);
 		setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
+		rd_kafka_message_destroy(message);
 		ret = -1;
 		return ret;
 	}
@@ -426,7 +427,7 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 		PDEBUG("len: %zu, partition: %d, offset: %ld\n", message->len, message->partition, message->offset);
 	}
 	rd_kafka_message_destroy(message);
-	return 0;
+	return ret;
 }
 
 

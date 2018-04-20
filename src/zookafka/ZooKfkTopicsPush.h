@@ -17,7 +17,7 @@
 #include "zookeeper/zookeeper.jute.h"
 #include "jansson/jansson.h"
 
-typedef struct pushErrorMsg
+typedef struct callBackMsg
 {
 	const char *topic;
 	const char *msg;
@@ -26,12 +26,14 @@ typedef struct pushErrorMsg
 	int msgLen;
 	int keyLen;
 	int errorCode;
-}PUSHERRORMSG;
+}CALLBACKMSG;
 
 namespace ZOOKEEPERKAFKA
 {
 
-typedef std::function<void(PUSHERRORMSG *msgInfo)> MsgPushErrorCallBack;
+typedef std::function<void(CALLBACKMSG *msgInfo)> MsgPushErrorCallBack;
+
+typedef std::function<void(CALLBACKMSG *msgInfo)> MsgPushCallBack;
 
 typedef std::map<std::string,rd_kafka_topic_t*> KfkTopicPtrMap;
 typedef KfkTopicPtrMap::iterator KfkTopicPtrMapIter;
@@ -58,10 +60,16 @@ public:
 			  int queueBuffMaxMess = 2 * 1024 * 1024);
 
 	//内部使用的回调函数，使用者不用关心
-	void msgPushErrorCall(PUSHERRORMSG *msgInfo)
+	void msgPushErrorCall(CALLBACKMSG *msgInfo)
 	{
 		if(cb_)
 			cb_(msgInfo);
+	}
+
+	void msgPushWriteCall(CALLBACKMSG *msgInfo)
+	{
+		if(wcb_)
+			wcb_(msgInfo);
 	}
 
 	//设置错误回调函数，一旦写入kafka发送错误，调用此回调
@@ -112,6 +120,7 @@ private:
 
 	KfkTopicPtrMap topicPtrMap;
 	MsgPushErrorCallBack cb_;
+	MsgPushCallBack wcb_;
 
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;

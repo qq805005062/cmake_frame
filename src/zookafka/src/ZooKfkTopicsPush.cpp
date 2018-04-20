@@ -99,30 +99,34 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void *opaque)
 {
 	PDEBUG("deliver: %s: offset %ld\n", rd_kafka_err2str(message->err), message->offset);
+	ZooKfkTopicsPush *pKfkPush = static_cast<ZooKfkTopicsPush *>(opaque);
+	CALLBACKMSG msg;
+	msg.topic = rd_kafka_topic_name(message->rkt);
+	msg.msg = const_cast<const char* >(static_cast<char* >(message->payload));
+	msg.msgLen = message->len;
+	msg.key = const_cast<const char* >(static_cast<char* >(message->key));
+	msg.keyLen = message->key_len;
+	msg.errorCode = message->err;
+	msg.errMsg = rd_kafka_err2str(message->err);
+	pKfkPush->msgPushWriteCall(&msg);
 	if (message->err)
 	{
 		// 这里可以写失败的处理
-		PUSHERRORMSG msg;
-		msg.topic = rd_kafka_topic_name(message->rkt);
-		msg.msg = const_cast<const char* >(static_cast<char* >(message->payload));
-		msg.msgLen = message->len;
-		msg.key = const_cast<const char* >(static_cast<char* >(message->key));
-		msg.keyLen = message->key_len;
-		msg.errorCode = message->err;
-		msg.errMsg = rd_kafka_err2str(message->err);
 		PERROR("%% Message delivery failed: %s\n", rd_kafka_err2str(message->err));
-		ZooKfkTopicsPush *pKfkPush = static_cast<ZooKfkTopicsPush *>(opaque);
 		pKfkPush->msgPushErrorCall(&msg);
 	}
 	else
 	{
+		#ifdef SHOW_DEBUG_MESSAGE
 		// 发送成功处理，这里只是示范，一般可以不处理成功的，只处理失败的就OK
 		std::string data, key;
 		data.assign(const_cast<const char* >(static_cast<char* >(message->payload)), message->len);
 		key.assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
-
 		PDEBUG("%% success callback (%zd bytes, offset %ld, partition %d) msg: %s, key:%s\n",
 		      message->len, message->offset, message->partition, data.c_str(), key.c_str());
+		#else
+		return;
+		#endif
 	}
 }
 
@@ -133,6 +137,7 @@ ZooKfkTopicsPush::ZooKfkTopicsPush()
 	,kfkt(nullptr)
 	,topicPtrMap()
 	,cb_(nullptr)
+	,wcb_(nullptr)
 	,kfkErrorCode(RD_KAFKA_RESP_ERR_NO_ERROR)
 	,kfkErrorMsg()
 {
