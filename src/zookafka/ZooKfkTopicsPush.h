@@ -31,9 +31,9 @@ typedef struct callBackMsg
 namespace ZOOKEEPERKAFKA
 {
 
-typedef std::function<void(CALLBACKMSG *msgInfo)> MsgPushErrorCallBack;
+//typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushErrorCallBack;
 
-typedef std::function<void(CALLBACKMSG *msgInfo)> MsgPushCallBack;
+typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushCallBack;
 
 typedef std::map<std::string,rd_kafka_topic_t*> KfkTopicPtrMap;
 typedef KfkTopicPtrMap::iterator KfkTopicPtrMapIter;
@@ -60,22 +60,27 @@ public:
 			  int queueBuffMaxMess = 2 * 1024 * 1024);
 
 	//内部使用的回调函数，使用者不用关心
-	void msgPushErrorCall(CALLBACKMSG *msgInfo)
+	void msgPushErrorCall(void *msgPri, CALLBACKMSG *msgInfo)
 	{
 		if(cb_)
-			cb_(msgInfo);
+			cb_(msgPri, msgInfo);
 	}
 
-	void msgPushWriteCall(CALLBACKMSG *msgInfo)
+	void msgPushWriteCall(void *msgPri, CALLBACKMSG *msgInfo)
 	{
 		if(wcb_)
-			wcb_(msgInfo);
+			wcb_(msgPri, msgInfo);
 	}
 
 	//设置错误回调函数，一旦写入kafka发送错误，调用此回调
-	void setMsgPushErrorCall(const MsgPushErrorCallBack& cb)
+	void setMsgPushErrorCall(const MsgPushCallBack& cb)
 	{
 		cb_ = cb;
+	}
+
+	void setMsgPushCallBack(const MsgPushCallBack& cb)
+	{
+		wcb_ = cb;
 	}
 
 	//kfk初始化，可以自己设置brokers，如果已经设置了zookeeper，brokers可以为空。topics可以是多个，逗号分开，不要任何多余的符号
@@ -87,6 +92,7 @@ public:
 	//往kfk生成数据，指定topic,如果topic不存在的话，则返回错误，必须在初始化的时候初始化
 	int push(const std::string& topic,
 			 const std::string& data,
+			 void *msgPri = NULL,
 	         std::string* key = NULL,
 	         int partition = RD_KAFKA_PARTITION_UA,
 	         int msgFlags = RD_KAFKA_MSG_F_COPY);
@@ -119,7 +125,7 @@ private:
 	rd_kafka_t* kfkt;
 
 	KfkTopicPtrMap topicPtrMap;
-	MsgPushErrorCallBack cb_;
+	MsgPushCallBack cb_;
 	MsgPushCallBack wcb_;
 
 	rd_kafka_resp_err_t kfkErrorCode;

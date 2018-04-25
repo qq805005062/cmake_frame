@@ -108,12 +108,12 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 	msg.keyLen = message->key_len;
 	msg.errorCode = message->err;
 	msg.errMsg = rd_kafka_err2str(message->err);
-	pKfkPush->msgPushWriteCall(&msg);
+	pKfkPush->msgPushWriteCall(message->_private, &msg);
 	if (message->err)
 	{
 		// 这里可以写失败的处理
 		PERROR("%% Message delivery failed: %s\n", rd_kafka_err2str(message->err));
-		pKfkPush->msgPushErrorCall(&msg);
+		pKfkPush->msgPushErrorCall(message->_private, &msg);
 	}
 	else
 	{
@@ -283,6 +283,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 
 int ZooKfkTopicsPush::push(const std::string& topic,
 			 const std::string& data,
+			 void *msgPri,
 	         std::string* key,
 	         int partition,
 	         int msgFlags)
@@ -316,7 +317,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	                       data.size(),
 	                       key == NULL ? NULL : reinterpret_cast<const void* >(key->c_str()),
 	                       key == NULL ? 0 : key->size(),
-	                       key == NULL ? NULL : reinterpret_cast<void* >(const_cast<char* >(key->c_str())));
+	                       msgPri);
 
 	if (ret == -1)
 	{
