@@ -143,7 +143,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
 	return ret;
 }
 
-int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& topic, const std::string groupName)
+int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& topic, const std::string& groupName)
 {
 	int ret = 0;
 	char brokers[1024] = {0};
@@ -172,7 +172,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& 
 	return ret;
 }
 
-int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topic, const std::string groupName)
+int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topic, const std::string& groupName)
 {
 	char errStr[512] = { 0 },tmp[16] = { 0 };
 	int ret = 0;
@@ -342,8 +342,14 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, int64_t* offset,
 			PERROR("get data error,topic %s  ;err reason: %s\n", rd_kafka_topic_name(message->rkt),rd_kafka_err2str(message->err));
 			setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
 			rd_kafka_message_destroy(message);
-			ret = -1;
-			return ret;
+			if(RD_KAFKA_RESP_ERR__PARTITION_EOF == message->err)
+			{
+				continue;
+			}
+			else{
+				ret = -1;
+				return ret;
+			}
 		}else
 			break;
 	}

@@ -28,9 +28,10 @@ namespace ZOOKEEPERKAFKA
 {
 /*
  *kfk消费多个topic的情况，不可以选择分区，由kfk均衡读取
- *必须统一启始位置
- *可以对某一个topic开始或者停止
- *统一分组
+ *必须统一启始位置(初始化构造函数可以修改，默认是队尾）
+ *可以对某一个topic开始或者停止（初始化的topic已经默认开始了，不需要重复调用kfkTopicConsumeStart
+ *统一分组，分组名可以传递空字符串，这样就不分组
+ *所有方法返回大于等于0 表示成功，否则表示有错误
  */
 class ZooKfkTopicsPop
 {
@@ -43,21 +44,28 @@ public:
 	//仅仅传入zookeeper的地址信息，逗号分隔多个ip port；其后自己调用kfkInit
 	int zookInit(const std::string& zookeepers);
 	//传入zookeeper地址信息，逗号分隔多个ip port，传入多个topic，逗号分隔，不可以有多余的符号，内部调用kfkInit
-	int zookInit(const std::string& zookeepers, const std::string& topic, const std::string groupName);
-	//kfk初始化，brokers可以传入，也可以传空，则使用zookeeper获取的，逗号分隔多个ip port。多个topic，逗号分隔
-	int kfkInit(const std::string& brokers, const std::string& topic, const std::string groupName);
-	//启动某一个topic读，必须存在初始化的topic中，否则报错
+	//不需要自己再次调用kfkInit
+	int zookInit(const std::string& zookeepers, const std::string& topic, const std::string& groupName);
+	//kfk初始化，如果前面调用了zookInit；brokers可以传入空，brokers可以从zookeeper中获取，
+	//brokers也可以不传入空，如果前面没有调用zookInit。多个topic，逗号分隔
+	//初始化的topic默认调用了kfkTopicConsumeStart
+	//groupName如果为空字符串则不分组
+	int kfkInit(const std::string& brokers, const std::string& topic, const std::string& groupName);
+	//增加某一个topic读，每次只能传入一个topic，多个分多次调用
 	int kfkTopicConsumeStart(const std::string& topic);	
 	//获取kfk一个消息，并可以获取对应的topic，偏移量，key；
+	//-1表示有错，内部过滤了-191（读到队尾的错误)
 	int pop(std::string& topic, std::string& data, int64_t* offset = NULL, std::string* key = NULL);
-	//获取kfk一个消息，timeout_ms超时时间，返回-1表示有错误，返回0表示正常，返回1表示超时
+	//获取kfk一个消息，timeout_ms超时时间，
+	//内部无法过滤-191的错误，需要外部过滤-191的错误
 	int tryPop(std::string& topic, std::string& data, int timeout_ms, int64_t* offset = NULL, std::string* key = NULL);
 	
-	//停止某一个topic读，必须存在初始化的topic
+	//停止某一个topic读，必须存在已经读的topic
 	int kfkTopicConsumeStop(const std::string& topic);
 	//销毁资源信息
 	void kfkDestroy();
 
+	//获取最后一次错误信息，当有错误的时候应该调用这个方法，打印错误日志
 	int getLastErrorMsg(std::string& msg)
 	{
 		msg.assign(kfkErrorMsg);
