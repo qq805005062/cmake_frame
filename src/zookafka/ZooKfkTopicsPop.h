@@ -12,7 +12,7 @@
 #include <map>
 #include <memory>
 
-#include <common/MutexLock.h>
+#include <mutex>
 
 #include "librdkafka/rdkafka.h"
 
@@ -81,7 +81,7 @@ private:
 
 	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
 
-	common::MutexLock listLock;
+	std::mutex listLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
@@ -97,6 +97,8 @@ private:
 
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;
+	int destroy;
+	int popNum;
 };
 
 }

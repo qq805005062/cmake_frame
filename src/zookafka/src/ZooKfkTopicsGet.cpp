@@ -192,7 +192,7 @@ int ZooKfkTopicsGet::kfkInit(const std::string& brokers)
 int ZooKfkTopicsGet::kfkTopicConsumeStart(const std::string& topic, int partition, int64_t offset)
 {
 	char topicKeyBuf[64] = {0};
-	common::MutexLockGuard lock(listLock);
+	std::lock_guard<std::mutex> lock(listLock);
 	sprintf(topicKeyBuf,"%s,%d",topic.c_str(),partition);
 	std::string topicKeyStr(topicKeyBuf);
 	PDEBUG("kfkTopicConsumeStart topicKeyStr :: %s\n",topicKeyStr.c_str());
@@ -233,7 +233,7 @@ int ZooKfkTopicsGet::get(std::string& topic, std::string& data, int64_t* offset,
 	rd_kafka_message_t *rkmessage = NULL;
 	char topicKeyBuf[64] = {0};
 	{
-		common::MutexLockGuard lock(listLock);
+		std::lock_guard<std::mutex> lock(listLock);
 		sprintf(topicKeyBuf,"%s,%d",topic.c_str(),partition);
 		std::string topicKeyStr(topicKeyBuf);
 		PDEBUG("kfkTopicConsumeStart topicKeyStr :: %s\n",topicKeyStr.c_str());
@@ -278,7 +278,7 @@ int ZooKfkTopicsGet::kfkTopicConsumeStop(const std::string& topic, int partition
 {
 
 	char topicKeyBuf[64] = {0};
-	common::MutexLockGuard lock(listLock);
+	std::lock_guard<std::mutex> lock(listLock);
 	sprintf(topicKeyBuf,"%s,%d",topic.c_str(),partition);
 	std::string topicKeyStr(topicKeyBuf);
 	KfkTopicPtrMapIter iter = topicPtrMap.find(topicKeyStr);
@@ -304,7 +304,7 @@ void ZooKfkTopicsGet::changeKafkaBrokers(const std::string& brokers)
 
 void ZooKfkTopicsGet::kfkDestroy()
 {
-	common::MutexLockGuard lock(listLock);
+	std::lock_guard<std::mutex> lock(listLock);
 	for(KfkTopicPtrMapIter iter = topicPtrMap.begin(); iter != topicPtrMap.end(); iter++)
 	{
 		const char *pChar = strchr(iter->first.c_str(),',');

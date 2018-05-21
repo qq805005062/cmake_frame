@@ -12,7 +12,7 @@
 #include <map>
 #include <memory>
 
-#include <common/MutexLock.h>
+#include <mutex>
 
 #include "librdkafka/rdkafka.h"
 
@@ -59,7 +59,7 @@ private:
 
 	bool str2Vec(const char* src, std::vector<std::string>& dest, const char* delim);
 
-	common::MutexLock listLock;
+	std::mutex listLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;

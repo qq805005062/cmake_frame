@@ -7,7 +7,7 @@
 #include <functional>
 #include <string>
 
-#include <common/MutexLock.h>
+#include <mutex>
 
 #include "librdkafka/rdkafka.h"
 
@@ -66,7 +66,7 @@ private:
 
 	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
 
-	common::MutexLock kfkLock;
+	std::mutex kfkLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;

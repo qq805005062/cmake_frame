@@ -208,6 +208,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 {
 	char tmp[64] = {0},errStr[512] = {0};
 	int ret = 0;
+	PDEBUG("librdkafka version:: %s\n",rd_kafka_version_str());
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 	rd_kafka_conf_set_opaque(kfkconft,this);

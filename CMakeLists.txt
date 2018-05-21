@@ -79,12 +79,8 @@ message(STATUS "CXX_FLAGS = " ${CMAKE_CXX_FLAGS} " " ${CMAKE_CXX_FLAGS_${BUILD_T
 
 add_subdirectory(src/common)
 add_subdirectory(src/rediscluster)
-#add_subdirectory(src/rdngatesvr)
-#add_subdirectory(src/rdnurisvr)
 add_subdirectory(src/zookafka)
 add_subdirectory(src/redislibevent)
-#add_subdirectory(src/rdnsyncli)
-#add_subdirectory(src/rscsrv)
 
 if(NOT CMAKE_BUILD_NO_EXAMPLES)
   add_subdirectory(examples)

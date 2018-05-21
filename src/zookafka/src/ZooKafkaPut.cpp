@@ -211,7 +211,7 @@ int ZooKafkaPut::push(const std::string& data,
 	         int msgFlags)
 {
 	int ret = -1;
-	common::MutexLockGuard lock(kfkLock);
+	std::lock_guard<std::mutex> lock(kfkLock);
 	if (data.empty())
 	{
 		PERROR("push value is null\n");
@@ -258,7 +258,7 @@ void ZooKafkaPut::kfkDestroy()
 
 void ZooKafkaPut::changeKafkaBrokers(const std::string& brokers)
 {
-	common::MutexLockGuard lock(kfkLock);
+	std::lock_guard<std::mutex> lock(kfkLock);
 	kfkBrokers.assign(brokers);
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
 	rd_kafka_poll(kfkt, 10);
