@@ -57,12 +57,12 @@ public:
 	//-1表示有错，内部过滤了-191（读到队尾的错误)
 	int pop(std::string& topic, std::string& data, int64_t* offset = NULL, std::string* key = NULL);
 	//获取kfk一个消息，timeout_ms超时时间，
-	//内部无法过滤-191的错误，需要外部过滤-191的错误
+	//内部已经过滤-191的错误，不需要外部过滤-191的错误
 	int tryPop(std::string& topic, std::string& data, int timeout_ms, int64_t* offset = NULL, std::string* key = NULL);
 	
 	//停止某一个topic读，必须存在已经读的topic
 	int kfkTopicConsumeStop(const std::string& topic);
-	//销毁资源信息
+	//销毁资源信息、异步退出，清除资源使用
 	void kfkDestroy();
 
 	//获取最后一次错误信息，当有错误的时候应该调用这个方法，打印错误日志

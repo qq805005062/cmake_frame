@@ -85,6 +85,9 @@ public:
 	//data是要生成的数据，msgPri私有数据，回调的时候会回调回来
 	//key是对于消费者每个消息时的，可以为空
 	//partition分区默认分片
+	//-1 参数错误，无法正确处理
+	//-2 topic未被初始化
+	//-3 已经调用了kfkDestroy
 	int push(const std::string& topic,
 			 const std::string& data,
 			 void *msgPri = NULL,
@@ -96,7 +99,7 @@ public:
 	//上层应用可以对本地队列进行刷新操作，当本地队列小于queueSize值的时候才会返回，阻塞
 	int bolckFlush(int queueSize);
 
-	//资源释放，释放所有的资源
+	//资源释放，释放所有的资源、异步退出，清除资源使用
 	void kfkDestroy();
 
 	//获取最后一次错误信息，当有错误的时候应该调用这个方法，打印错误日志
@@ -141,6 +144,8 @@ private:
 
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;
+	int destroy;
+	int pushNum;
 };
 
 }

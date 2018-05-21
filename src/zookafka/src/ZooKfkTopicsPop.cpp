@@ -418,13 +418,16 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			if(top)
 			{
 				topic.assign(top, strlen(top));
+				PERROR("get data error,topic %s  ;err reason: %s\n", top,rd_kafka_err2str(message->err));
 			}else{
-				PERROR("message get from kafka no topic name\n");
+				PERROR("get data error,err reason: %s\n", rd_kafka_err2str(message->err));
 			}
-			PERROR("get data error,topic %s  ;err reason: %s\n", rd_kafka_topic_name(message->rkt),rd_kafka_err2str(message->err));
-			setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
-			rd_kafka_message_destroy(message);
-			ret = -1;
+			if(message->err != RD_KAFKA_RESP_ERR__PARTITION_EOF)
+			{
+				setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
+				rd_kafka_message_destroy(message);
+				ret = -1;
+			}
 		}else
 		{
 			const char *top = rd_kafka_topic_name(message->rkt);

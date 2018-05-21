@@ -140,6 +140,8 @@ ZooKfkTopicsPush::ZooKfkTopicsPush()
 	,wcb_(nullptr)
 	,kfkErrorCode(RD_KAFKA_RESP_ERR_NO_ERROR)
 	,kfkErrorMsg()
+	,destroy(0)
+	,pushNum(0)
 {
 	PDEBUG("ZooKfkTopicsPush struct\n");
 }
@@ -290,27 +292,27 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	         int msgFlags)
 {
 	int ret = 0;
-	if(data.empty() || topic.empty())
+	if(data.empty() || topic.empty() || topicPtrMap.empty())
 	{
 		PERROR("push parameter no enought\n");
 		ret = -1;
 		return ret;
 	}
 
-	if(topicPtrMap.empty())
+	KfkTopicPtrMapIter iter = topicPtrMap.find(topic);
+	if(iter == topicPtrMap.end())
 	{
-		PERROR("no any topic had been init and can't push any data\n");
+		PERROR("target topic had't been init any way and can't push any data\n");
 		ret = -2;
 		return ret;
 	}
 
-	KfkTopicPtrMapIter iter = topicPtrMap.find(topic);
-	if(iter == topicPtrMap.end())
+	if(destroy)
 	{
-		PERROR("target topic had't been init any way and can't push any data");
-		ret = -2;
+		ret = -3;
 		return ret;
 	}
+	pushNum++;
 	ret = rd_kafka_produce(iter->second,
 	                       partition,
 	                       msgFlags,
@@ -320,19 +322,18 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	                       key == NULL ? 0 : key->size(),
 	                       msgPri);
 
-	if (ret == -1)
+	if (ret < 0)
 	{
-		PERROR("*** Failed to produce to topic %s partition %d: %s ***\n",
+		PERROR("*** Failed to produce to topic %s partition %d: %s *** %d\n",
 		      topic.c_str(),
 		      partition,
-		      rd_kafka_err2str(rd_kafka_last_error()));
+		      rd_kafka_err2str(rd_kafka_last_error()), ret);
 		setKfkErrorMessage(rd_kafka_last_error(),rd_kafka_err2str(rd_kafka_last_error()));
-		rd_kafka_poll(kfkt, 0);
-		return ret;
+	}else{
+		ret = rd_kafka_outq_len(kfkt);
 	}
-
 	rd_kafka_poll(kfkt, 0);
-	ret = rd_kafka_outq_len(kfkt);
+	pushNum--;
 	return ret;
 }
 
@@ -345,6 +346,9 @@ int ZooKfkTopicsPush::bolckFlush(int queueSize)
 
 void ZooKfkTopicsPush::kfkDestroy()
 {
+	destroy = 1;
+	while(pushNum)
+		usleep(500);
 	while(rd_kafka_outq_len(kfkt) > 0)
 	{
 		rd_kafka_poll(kfkt, 100);
