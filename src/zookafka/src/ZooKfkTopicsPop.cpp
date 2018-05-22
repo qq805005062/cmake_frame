@@ -116,7 +116,6 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 
 ZooKfkTopicsPop::~ZooKfkTopicsPop()
 {
-	kfkDestroy();
 	PDEBUG("ZooKfkTopicsPop exit\n");
 }
 

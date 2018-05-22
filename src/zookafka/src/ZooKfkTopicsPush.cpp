@@ -148,7 +148,6 @@ ZooKfkTopicsPush::ZooKfkTopicsPush()
 
 ZooKfkTopicsPush::~ZooKfkTopicsPush()
 {
-	kfkDestroy();
 	PDEBUG("ZooKfkTopicsPush exit\n");
 }
 
@@ -361,6 +360,19 @@ void ZooKfkTopicsPush::kfkDestroy()
 
 	KfkTopicPtrMap ().swap(topicPtrMap);
 	rd_kafka_destroy(kfkt);
+	
+	//rd_kafka_wait_destroyed(2000);
+	zookeeper_close(zookeeph);
+	zookeeph = NULL;
+
+	KfkTopicPtrMap ().swap(topicPtrMap);
+	if(cb_)
+		cb_ = nullptr;
+	if(wcb_)
+		wcb_ = nullptr;
+
+	std::string ().swap(zKeepers);
+	std::string ().swap(kfkBrokers);
 }
 
 void ZooKfkTopicsPush::changeKafkaBrokers(const std::string& brokers)
