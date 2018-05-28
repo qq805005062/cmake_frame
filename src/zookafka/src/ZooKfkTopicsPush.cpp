@@ -101,6 +101,7 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 	PDEBUG("deliver: %s: offset %ld\n", rd_kafka_err2str(message->err), message->offset);
 	ZooKfkTopicsPush *pKfkPush = static_cast<ZooKfkTopicsPush *>(opaque);
 	CALLBACKMSG msg;
+	msg.offset = message->offset;
 	msg.topic = rd_kafka_topic_name(message->rkt);
 	msg.msg = const_cast<const char* >(static_cast<char* >(message->payload));
 	msg.msgLen = message->len;
@@ -285,8 +286,8 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 
 int ZooKfkTopicsPush::push(const std::string& topic,
 			 const std::string& data,
+			 std::string* key,
 			 void *msgPri,
-	         std::string* key,
 	         int partition,
 	         int msgFlags)
 {

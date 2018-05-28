@@ -331,7 +331,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	return 0;
 }
 
-int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, int64_t* offset, std::string* key)
+int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key, int64_t* offset)
 {
 	int ret = 0;
 	if(destroy)
@@ -401,7 +401,7 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, int64_t* offset,
 	return ret;
 }
 
-int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_ms, int64_t* offset, std::string* key)
+int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_ms, std::string* key, int64_t* offset)
 {
 	int ret = 0;
 	if(destroy)

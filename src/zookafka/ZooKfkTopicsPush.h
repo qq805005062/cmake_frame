@@ -23,6 +23,7 @@ typedef struct callBackMsg
 	const char *msg;
 	const char *key;
 	const char *errMsg;
+	int64_t offset;
 	int msgLen;
 	int keyLen;
 	int errorCode;
@@ -90,8 +91,8 @@ public:
 	//-3 已经调用了kfkDestroy
 	int push(const std::string& topic,
 			 const std::string& data,
+			 std::string* key = NULL,
 			 void *msgPri = NULL,
-	         std::string* key = NULL,
 	         int partition = RD_KAFKA_PARTITION_UA,
 	         int msgFlags = RD_KAFKA_MSG_F_COPY);
 

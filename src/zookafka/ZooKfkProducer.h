@@ -120,7 +120,7 @@ public:
 				, msg.offset(), msg.key(), msg.msg_opaque());
 		}
 
-		if(errCb_ && msg.err())// ERROR callback
+		if(msg.err() && errCb_)// ERROR callback
 		{
 			errCb_->onDeliveryError(msg.err(), msg.errstr(), std::string(static_cast<const char *>(msg.payload()),static_cast<int>(msg.len()))
 				, msg.key(), msg.msg_opaque());
