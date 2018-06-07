@@ -15,7 +15,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 		struct String_vector brokerlist;
 		if (zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist) != ZOK)
 		{
-			PERROR("No brokers found on path %s\n", KafkaBrokerPath);
+			PERROR("No brokers found on path %s", KafkaBrokerPath);
 			return ret;
 		}
 
@@ -25,7 +25,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 		{
 			char path[255] = {0}, cfg[1024] = {0};
 			sprintf(path, "/brokers/ids/%s", brokerlist.data[i]);
-			PDEBUG("brokerlist path :: %s\n",path);
+			PDEBUG("brokerlist path :: %s",path);
 			int len = sizeof(cfg);
 			zoo_get(zzh, path, 0, cfg, &len, NULL);
 
@@ -45,7 +45,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 						const int   port = json_integer_value(jport);
 						ret++;
 						sprintf(brokerptr, "%s:%d", host, port);
-						PDEBUG("brokerptr value :: %s\n",brokerptr);
+						PDEBUG("brokerptr value :: %s",brokerptr);
 						
 						brokerptr += strlen(brokerptr);
 						if (i < brokerlist.count - 1)
@@ -58,7 +58,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 			}
 		}
 		deallocate_String_vector(&brokerlist);
-		PDEBUG("Found brokers:: %s\n",brokers);
+		PDEBUG("Found brokers:: %s",brokers);
 	}
 	
 	return ret;
@@ -73,7 +73,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 		ret = set_brokerlist_from_zookeeper(zh, brokers);
 		if( ret > 0 )
 		{
-			PDEBUG("Found brokers:: %s\n",brokers);
+			PDEBUG("Found brokers:: %s",brokers);
 			ZooKfkProducer *pZooKfkProducer = static_cast<ZooKfkProducer *>(watcherCtx);
 			pZooKfkProducer->changeKafkaBrokers(brokers);
 			//rd_kafka_brokers_add(rk, brokers);
@@ -92,7 +92,7 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers)
 	////////////////////////////////////////////////
 	if(ret < 0)
 	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return ret;
 	}
 	
@@ -119,7 +119,7 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers,
 	////////////////////////////////////////////////
 	if(ret < 0)
 	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return ret;
 	}
 	
@@ -127,7 +127,7 @@ int ZooKfkProducer::zookInit(const std::string& zookeepers,
 	ret = kfkInit(brokers,topics,pNum,errCb,cb);
 	if(ret < 0)
 	{
-		PERROR("kfkInit error :: %d\n",ret);
+		PERROR("kfkInit error :: %d",ret);
 	}
 	return ret;
 }
@@ -143,18 +143,18 @@ int ZooKfkProducer::kfkInit(const std::string brokers,
 	RdKafka::Conf *m_tconf = RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC);
 	if (!m_conf || !m_tconf)
 	{
-		PERROR("conf, t_conf init err\n");
+		PERROR("conf, t_conf init err");
 		return enum_err_init_err;
 	}
 	
 	if (topic.empty() && topic_.empty())
 	{
-		PERROR("topic can't be null\n");
+		PERROR("topic can't be null");
 		return enum_err_topic_empty;
 	}
 	if (brokers.empty() && kfkBrokers.empty())
 	{
-		PERROR("brokers can't be null\n");
+		PERROR("brokers can't be null");
 		return enum_err_broker_empty;
 	}
 	
@@ -185,11 +185,11 @@ int ZooKfkProducer::kfkInit(const std::string brokers,
 		RdKafka::Producer* m_producer = RdKafka::Producer::create(m_conf, errstr);
 		if (!m_producer)
 		{
-			PERROR("Failed to create producer: %s\n",errstr.c_str());
+			PERROR("Failed to create producer: %s",errstr.c_str());
 			return enum_err_create_producer;
 		}
 		kfkProducerVect.push_back(m_producer);
-		PDEBUG("Created producer %s\n",m_producer->name().c_str());
+		PDEBUG("Created producer %s",m_producer->name().c_str());
 	}
 	
 	// Create topic handle.
@@ -201,11 +201,11 @@ int ZooKfkProducer::kfkInit(const std::string brokers,
 			RdKafka::Topic* m_topic = RdKafka::Topic::create(kfkProducerVect[i], topic_, m_tconf, errstr);
 			if (!m_topic) 
 			{
-				PERROR("Failed to create topic: %s\n",errstr.c_str());
+				PERROR("Failed to create topic: %s",errstr.c_str());
 				return enum_err_create_toppic;
 			}
 			kfkTopicVevt.push_back(m_topic);
-			PDEBUG("Created Topic %s\n",topic_.c_str());
+			PDEBUG("Created Topic %s",topic_.c_str());
 		}
 	}else{
 		for(int i = 0;i < pNum;i++)
@@ -213,11 +213,11 @@ int ZooKfkProducer::kfkInit(const std::string brokers,
 			RdKafka::Topic* m_topic = RdKafka::Topic::create(kfkProducerVect[i], topic, m_tconf, errstr);
 			if (!m_topic) 
 			{
-				PERROR("Failed to create topic: %s\n",errstr.c_str());
+				PERROR("Failed to create topic: %s",errstr.c_str());
 				return enum_err_create_toppic;
 			}
 			kfkTopicVevt.push_back(m_topic);
-			PDEBUG("Created Topic %s\n",topic.c_str());
+			PDEBUG("Created Topic %s",topic.c_str());
 		}
 		topic_ = topic;
 	}
@@ -242,7 +242,7 @@ int ZooKfkProducer::send(const std::string& msg,
 	int index = lastIndex.incrementAndGet() % producerSize;
 	if(!kfkProducerVect[index] || !kfkTopicVevt[index])
 	{
-		PERROR("RdKafka::Producer RdKafka::Topic empty\n");
+		PERROR("RdKafka::Producer RdKafka::Topic empty");
 		return enum_err_init_err;
 	}
 
@@ -256,7 +256,7 @@ int ZooKfkProducer::send(const std::string& msg,
 	if (resp != RdKafka::ERR_NO_ERROR)
 	{
 		strerr = RdKafka::err2str(resp);
-		PERROR("send failed : %s\n",strerr.c_str());
+		PERROR("send failed : %s",strerr.c_str());
 		return enum_err_send_err;
 	}
 
@@ -266,7 +266,7 @@ int ZooKfkProducer::send(const std::string& msg,
 	while (cnt && kfkProducerVect[index]->outq_len() > send_wnd_size)//0) 
 	{
 		cnt--;
-		PDEBUG("Waiting for : %d\n",kfkProducerVect[index]->outq_len());
+		PDEBUG("Waiting for : %d",kfkProducerVect[index]->outq_len());
 		kfkProducerVect[index]->poll(10 * (MAC_CNT - cnt));
 	}
 
@@ -316,7 +316,7 @@ zhandle_t* ZooKfkProducer::initialize_zookeeper(const char * zookeeper, const in
 		10000, NULL, this, 0);
 	if (zh == NULL)
 	{
-		PERROR("Zookeeper connection not established.\n");
+		PERROR("Zookeeper connection not established");
 		return NULL;
 	}
 	return zh;

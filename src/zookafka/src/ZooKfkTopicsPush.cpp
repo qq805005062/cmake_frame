@@ -18,7 +18,7 @@ static const char KafkaBrokerPath[] = "/brokers/ids";
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
 {
-	PDEBUG("rdkafka-%d-%s: %s: %s\n", level, fac, rdk ? rd_kafka_name(rdk) : NULL, buf);
+	PDEBUG("rdkafka-%d-%s: %s: %s", level, fac, rdk ? rd_kafka_name(rdk) : NULL, buf);
 }
 
 static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
@@ -29,7 +29,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 		struct String_vector brokerlist;
 		if (zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist) != ZOK)
 		{
-			PERROR("No brokers found on path %s\n", KafkaBrokerPath);
+			PERROR("Zookeeper No brokers found on path %s", KafkaBrokerPath);
 			return ret;
 		}
 
@@ -39,7 +39,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 		{
 			char path[255] = {0}, cfg[1024] = {0};
 			sprintf(path, "/brokers/ids/%s", brokerlist.data[i]);
-			PDEBUG("brokerlist path :: %s\n",path);
+			PDEBUG("Zookeeper brokerlist path :: %s",path);
 			int len = sizeof(cfg);
 			zoo_get(zzh, path, 0, cfg, &len, NULL);
 
@@ -59,7 +59,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 						const int   port = json_integer_value(jport);
 						ret++;
 						sprintf(brokerptr, "%s:%d", host, port);
-						PDEBUG("brokerptr value :: %s\n",brokerptr);
+						PDEBUG("Zookeeper brokerptr value :: %s",brokerptr);
 						
 						brokerptr += strlen(brokerptr);
 						if (i < brokerlist.count - 1)
@@ -72,7 +72,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 			}
 		}
 		deallocate_String_vector(&brokerlist);
-		PDEBUG("Found brokers:: %s\n",brokers);
+		PDEBUG("Zookeeper Found brokers:: %s",brokers);
 	}
 	
 	return ret;
@@ -87,7 +87,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 		ret = set_brokerlist_from_zookeeper(zh, brokers);
 		if( ret > 0 )
 		{
-			PDEBUG("Found brokers:: %s\n",brokers);
+			PDEBUG("Zookeeper Found brokers:: %s",brokers);
 			ZooKfkTopicsPush *pZooKafkaPush = static_cast<ZooKfkTopicsPush *>(watcherCtx);
 			pZooKafkaPush->changeKafkaBrokers(brokers);
 			//rd_kafka_brokers_add(rk, brokers);
@@ -98,7 +98,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 
 static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void *opaque)
 {
-	PDEBUG("deliver: %s: offset %ld\n", rd_kafka_err2str(message->err), message->offset);
+	PDEBUG("deliver: %s: offset %ld", rd_kafka_err2str(message->err), message->offset);
 	ZooKfkTopicsPush *pKfkPush = static_cast<ZooKfkTopicsPush *>(opaque);
 	CALLBACKMSG msg;
 	msg.offset = message->offset;
@@ -113,7 +113,7 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 	if (message->err)
 	{
 		// 这里可以写失败的处理
-		PERROR("%% Message delivery failed: %s\n", rd_kafka_err2str(message->err));
+		PERROR("%% Message delivery failed error msg: %s", rd_kafka_err2str(message->err));
 		pKfkPush->msgPushErrorCall(message->_private, &msg);
 	}
 	else
@@ -123,7 +123,7 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 		std::string data, key;
 		data.assign(const_cast<const char* >(static_cast<char* >(message->payload)), message->len);
 		key.assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
-		PDEBUG("%% success callback (%zd bytes, offset %ld, partition %d) msg: %s, key:%s\n",
+		PDEBUG("%% success callback (%zd bytes, offset %ld, partition %d) msg: %s, key:%s",
 		      message->len, message->offset, message->partition, data.c_str(), key.c_str());
 		#else
 		return;
@@ -144,12 +144,12 @@ ZooKfkTopicsPush::ZooKfkTopicsPush()
 	,destroy(0)
 	,pushNum(0)
 {
-	PDEBUG("ZooKfkTopicsPush struct\n");
+	PDEBUG("ZooKfkTopicsPush init");
 }
 
 ZooKfkTopicsPush::~ZooKfkTopicsPush()
 {
-	PDEBUG("ZooKfkTopicsPush exit\n");
+	PDEBUG("~ZooKfkTopicsPush exit");
 }
 
 int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
@@ -162,7 +162,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 	////////////////////////////////////////////////
 	if(ret < 0)
 	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return ret;
 	}
 	
@@ -187,7 +187,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 	////////////////////////////////////////////////
 	if(ret < 0)
 	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return ret;
 	}
 	
@@ -198,7 +198,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 	ret = kfkInit(kfkBrokers, topics, queueBuffMaxMs, queueBuffMaxMess);
 	if(ret < 0)
 	{
-		PERROR("kfkInit error :: %d\n",ret);
+		PERROR("kfkInit error :: %d",ret);
 	}
 	return ret;
 }
@@ -210,7 +210,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 {
 	char tmp[64] = {0},errStr[512] = {0};
 	int ret = 0;
-	PDEBUG("librdkafka version:: %s\n",rd_kafka_version_str());
+	PDEBUG("librdkafka version:: %s",rd_kafka_version_str());
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 	rd_kafka_conf_set_opaque(kfkconft,this);
@@ -233,7 +233,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	kfkt = rd_kafka_new(RD_KAFKA_PRODUCER, kfkconft, errStr, sizeof errStr);
 	if(!kfkt)
 	{
-		PERROR("***Failed to create new producer: %s***\n", errStr);
+		PERROR("***Failed to create new producer: %s***", errStr);
 		return -1;
 	}
 	rd_kafka_set_log_level(kfkt, KFK_LOG_DEBUG);
@@ -248,7 +248,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	}
 	if (ret == 0)
 	{
-		PERROR("*** No valid brokers specified: %s ***\n", brokers.c_str());
+		PERROR("*** No valid brokers specified: %s ***", brokers.c_str());
 		return -1;
 	}
 	
@@ -256,7 +256,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	str2Vec(topics.c_str(), topics_, ',');
 	if(topics_.size() < 1)
 	{
-		PERROR("topics ERROR :: %s\n",topics.c_str());
+		PERROR("topics ERROR :: %s",topics.c_str());
 		return -1;
 	}
 	int size = static_cast<int>(topics_.size());
@@ -265,7 +265,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 		rd_kafka_topic_conf_t *pTopiConf = rd_kafka_topic_conf_new();
 		if(!pTopiConf)
 		{
-			PERROR("rd_kafka_topic_conf_new ERROR\n");
+			PERROR("rd_kafka_topic_conf_new ERROR");
 			return -1;
 		}
 		rd_kafka_topic_conf_set(pTopiConf, "produce.offset.report", "true", errStr, sizeof(errStr));
@@ -274,7 +274,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 		rd_kafka_topic_t *pTopic = rd_kafka_topic_new(kfkt, topics_[i].c_str(), pTopiConf);
 		if(!pTopic)
 		{
-			PERROR("rd_kafka_topic_new ERROR\n");
+			PERROR("rd_kafka_topic_new ERROR");
 			return -1;
 		}
 
@@ -294,7 +294,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	int ret = 0;
 	if(data.empty() || topic.empty() || topicPtrMap.empty())
 	{
-		PERROR("push parameter no enought\n");
+		PERROR("push parameter no enought");
 		ret = -1;
 		return ret;
 	}
@@ -302,7 +302,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	KfkTopicPtrMapIter iter = topicPtrMap.find(topic);
 	if(iter == topicPtrMap.end())
 	{
-		PERROR("target topic had't been init any way and can't push any data\n");
+		PERROR("target topic had't been init any way and can't push any data");
 		ret = -2;
 		return ret;
 	}
@@ -324,7 +324,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 
 	if (ret < 0)
 	{
-		PERROR("*** Failed to produce to topic %s partition %d: %s *** %d\n",
+		PERROR("*** Failed to produce to topic %s partition %d: %s *** %d",
 		      topic.c_str(),
 		      partition,
 		      rd_kafka_err2str(rd_kafka_last_error()), ret);
@@ -332,7 +332,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	}else{
 		ret = rd_kafka_outq_len(kfkt);
 	}
-	rd_kafka_poll(kfkt, 0);
+	rd_kafka_poll(kfkt, 100);
 	pushNum--;
 	return ret;
 }
@@ -398,7 +398,7 @@ zhandle_t* ZooKfkTopicsPush::initialize_zookeeper(const char * zookeeper, const 
 		10000, NULL, this, 0);
 	if (zh == NULL)
 	{
-		PERROR("Zookeeper connection not established.\n");
+		PERROR("Zookeeper connection not established");
 		return NULL;
 	}
 	return zh;
@@ -421,13 +421,13 @@ bool ZooKfkTopicsPush::str2Vec(const char* src, std::vector<std::string>& dest, 
 	char *pChar = pSrc, *qChar = utilFristConstchar(pChar,delim);
 	while(qChar)
 	{
-		PDEBUG("str2Vec :: curr :: %s\n",pChar);
+		PDEBUG("str2Vec :: curr :: %s",pChar);
 		*qChar = 0;
 		dest.push_back(pChar);
 		pChar = ++qChar;
 		qChar = utilFristConstchar(pChar,delim);
 	}
-	PDEBUG("str2Vec :: curr :: %s\n",pChar);
+	PDEBUG("str2Vec :: curr :: %s",pChar);
 	dest.push_back(pChar);
 	delete[] pSrc;
 	return true;

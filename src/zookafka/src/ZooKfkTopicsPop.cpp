@@ -17,7 +17,7 @@ static const char KafkaBrokerPath[] = "/brokers/ids";
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
 {
-	PDEBUG("rdkafka-%d-%s: %s: %s\n", level, fac, rdk ? rd_kafka_name(rdk) : NULL, buf);
+	PDEBUG("rdkafka-%d-%s: %s: %s", level, fac, rdk ? rd_kafka_name(rdk) : NULL, buf);
 }
 
 static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
@@ -28,7 +28,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 		struct String_vector brokerlist;
 		if (zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist) != ZOK)
 		{
-			PERROR("No brokers found on path %s\n", KafkaBrokerPath);
+			PERROR("No brokers found on path %s", KafkaBrokerPath);
 			return ret;
 		}
 
@@ -38,7 +38,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 		{
 			char path[255] = {0}, cfg[1024] = {0};
 			sprintf(path, "/brokers/ids/%s", brokerlist.data[i]);
-			PDEBUG("brokerlist path :: %s\n",path);
+			PDEBUG("brokerlist path :: %s",path);
 			int len = sizeof(cfg);
 			zoo_get(zzh, path, 0, cfg, &len, NULL);
 
@@ -58,7 +58,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 						const int   port = json_integer_value(jport);
 						ret++;
 						sprintf(brokerptr, "%s:%d", host, port);
-						PDEBUG("brokerptr value :: %s\n",brokerptr);
+						PDEBUG("brokerptr value :: %s",brokerptr);
 						
 						brokerptr += strlen(brokerptr);
 						if (i < brokerlist.count - 1)
@@ -71,7 +71,7 @@ static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 			}
 		}
 		deallocate_String_vector(&brokerlist);
-		PDEBUG("Found brokers:: %s\n",brokers);
+		PDEBUG("Found brokers:: %s",brokers);
 	}
 	
 	return ret;
@@ -86,7 +86,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 		ret = set_brokerlist_from_zookeeper(zh, brokers);
 		if( ret > 0 )
 		{
-			PDEBUG("Found brokers:: %s\n",brokers);
+			PDEBUG("Found brokers:: %s",brokers);
 			ZooKfkTopicsPop *pZooKafkaPop = static_cast<ZooKfkTopicsPop *>(watcherCtx);
 			pZooKafkaPop->changeKafkaBrokers(brokers);
 			//rd_kafka_brokers_add(rk, brokers);
@@ -111,12 +111,12 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 	,destroy(0)
 	,popNum(0)
 {
-	PDEBUG("ZooKfkTopicsPop struct\n");
+	PDEBUG("ZooKfkTopicsPop struct");
 }
 
 ZooKfkTopicsPop::~ZooKfkTopicsPop()
 {
-	PDEBUG("ZooKfkTopicsPop exit\n");
+	PDEBUG("ZooKfkTopicsPop exit");
 }
 
 int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
@@ -126,7 +126,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
 	
 	if(zookeeph)
 	{
-		PERROR("zookeeper already init\n");
+		PERROR("zookeeper already init");
 		return -1;
 	}
 	
@@ -134,7 +134,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	if(ret < 0)
 	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return ret;
 	}
 
@@ -151,7 +151,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& 
 
 	if(zookeeph)
 	{
-		PERROR("zookeeper already init\n");
+		PERROR("zookeeper already init");
 		return -1;
 	}
 	
@@ -159,7 +159,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& 
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	if(ret < 0)
 	{
-		PERROR("set_brokerlist_from_zookeeper error :: %d\n",ret);
+		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return ret;
 	}
 
@@ -168,7 +168,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& 
 	ret = kfkInit(kfkBrokers, topic, groupName);
 	if(ret < 0)
 	{
-		PERROR("kfkInit error :: %d\n",ret);
+		PERROR("kfkInit error :: %d",ret);
 	}
 	return ret;
 }
@@ -177,7 +177,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 {
 	char errStr[512] = { 0 },tmp[16] = { 0 };
 	int ret = 0;
-	PDEBUG("librdkafka version:: %s\n",rd_kafka_version_str());
+	PDEBUG("librdkafka version:: %s",rd_kafka_version_str());
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 
@@ -247,20 +247,20 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		str2Vec(topic.c_str(), topics, ',');
 		if(topics.size() < 1)
 		{
-			PERROR("topics ERROR :: %s\n",topic.c_str());
+			PERROR("topics ERROR :: %s",topic.c_str());
 			return -1;
 		}
 		int size = static_cast<int>(topics.size());
 		topicparlist = rd_kafka_topic_partition_list_new(size);
 		if(!topicparlist)
 		{
-			PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr\n");
+			PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
 			return -1;
 		}
 
 		for (int i = 0; i < size; i++)
 		{
-			PDEBUG("rd_kafka_topic_partition_list_add topic :: %s\n",topics[i].c_str());
+			PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",topics[i].c_str());
 			rd_kafka_topic_partition_list_add(topicparlist, topics[i].c_str(), partition);
 			rd_kafka_topic_partition_list_set_offset(topicparlist, topics[i].c_str(), partition,startOffset);
 			topics_.push_back(topics[i]);
@@ -284,7 +284,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 		int ret = iter->compare(topic);
 		if(ret == 0)
 		{
-			PDEBUG("kfkTopicConsumeStart topic alread in there\n");
+			PDEBUG("kfkTopicConsumeStart topic alread in there");
 			return 0;
 		}
 	}
@@ -294,16 +294,16 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	rd_kafka_topic_partition_list_t *pList = rd_kafka_topic_partition_list_new(size);
 	if(!pList)
 	{
-		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr\n");
+		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
 		return -1;
 	}
 	for(ListStringTopicIter iter = topics_.begin();iter != topics_.end();iter++)
 	{
-		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s\n",iter->c_str());
+		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",iter->c_str());
 		rd_kafka_topic_partition_list_add(pList, iter->c_str(), partition);
 		rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
 	}
-	PDEBUG("rd_kafka_topic_partition_list_add topic :: %s\n",topic.c_str());
+	PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",topic.c_str());
 	rd_kafka_topic_partition_list_add(pList, topic.c_str(), partition);
 	rd_kafka_topic_partition_list_set_offset(pList, topic.c_str(), partition,startOffset);
 	if(size > 1)
@@ -357,14 +357,6 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 	{
 		if(message->err)
 		{
-			const char *top = rd_kafka_topic_name(message->rkt);
-			if(top)
-			{
-				topic.assign(top, strlen(top));
-				PERROR("get data error,topic %s  ;err reason: %s\n", top,rd_kafka_err2str(message->err));
-			}else{
-				PERROR("get data error,err reason: %s\n", rd_kafka_err2str(message->err));
-			}
 			setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
 			rd_kafka_message_destroy(message);
 			ret = -1;
@@ -374,7 +366,7 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			{
 				topic.assign(top, strlen(top));
 			}else{
-				PERROR("message get from kafka no topic name\n");
+				PERROR("message get from kafka no topic name");
 			}
 			data.assign(const_cast<const char* >(static_cast<char* >(message->payload)), message->len);
 			
@@ -390,9 +382,9 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			
 			if(top)
 			{
-				PDEBUG("len: %zu,topic :: %s partition: %d, offset: %ld\n", message->len, top, message->partition, message->offset);
+				PDEBUG("len: %zu,topic :: %s partition: %d, offset: %ld", message->len, top, message->partition, message->offset);
 			}else{
-				PDEBUG("len: %zu, partition: %d, offset: %ld\n", message->len, message->partition, message->offset);
+				PDEBUG("len: %zu, partition: %d, offset: %ld", message->len, message->partition, message->offset);
 			}
 			rd_kafka_message_destroy(message);
 		}
@@ -413,14 +405,6 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 	{
 		if(message->err)
 		{
-			const char *top = rd_kafka_topic_name(message->rkt);
-			if(top)
-			{
-				topic.assign(top, strlen(top));
-				PERROR("get data error,topic %s  ;err reason: %s\n", top,rd_kafka_err2str(message->err));
-			}else{
-				PERROR("get data error,err reason: %s\n", rd_kafka_err2str(message->err));
-			}
 			if(message->err != RD_KAFKA_RESP_ERR__PARTITION_EOF)
 			{
 				setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
@@ -434,7 +418,7 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			{
 				topic.assign(top, strlen(top));
 			}else{
-				PERROR("message get from kafka no topic name\n");
+				PERROR("message get from kafka no topic name");
 			}
 			data.assign(const_cast<const char* >(static_cast<char* >(message->payload)), message->len);
 			if(offset)
@@ -447,9 +431,9 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			}
 			if(top)
 			{
-				PDEBUG("len: %zu,topic :: %s partition: %d, offset: %ld\n", message->len, top, message->partition, message->offset);
+				PDEBUG("len: %zu,topic :: %s partition: %d, offset: %ld", message->len, top, message->partition, message->offset);
 			}else{
-				PDEBUG("len: %zu, partition: %d, offset: %ld\n", message->len, message->partition, message->offset);
+				PDEBUG("len: %zu, partition: %d, offset: %ld", message->len, message->partition, message->offset);
 			}
 			rd_kafka_message_destroy(message);
 		}
@@ -500,13 +484,13 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	rd_kafka_topic_partition_list_t *pList = rd_kafka_topic_partition_list_new(size);
 	if(pList == NULL)
 	{
-		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr\n");
+		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
 		topics_.push_back(topic);
 		return -1;
 	}
 	for(iter = topics_.begin();iter != topics_.end();iter++)
 	{
-		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s\n",iter->c_str());
+		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",iter->c_str());
 		rd_kafka_topic_partition_list_add(pList, iter->c_str(), partition);
 		rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
 	}
@@ -552,8 +536,11 @@ void ZooKfkTopicsPop::kfkDestroy()
 		PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
 	}
 
-	rd_kafka_topic_partition_list_destroy(topicparlist);
-	topicparlist = NULL;
+	if(topicparlist)
+	{
+		rd_kafka_topic_partition_list_destroy(topicparlist);
+		topicparlist = NULL;
+	}
 	
 	rd_kafka_destroy(kfkt);
 	kfkt = NULL;
@@ -583,7 +570,7 @@ zhandle_t* ZooKfkTopicsPop::initialize_zookeeper(const char * zookeeper, const i
 		10000, NULL, this, 0);
 	if (zh == NULL)
 	{
-		PERROR("Zookeeper connection not established.\n");
+		PERROR("Zookeeper connection not established.");
 		return NULL;
 	}
 	return zh;
@@ -606,13 +593,13 @@ bool ZooKfkTopicsPop::str2Vec(const char* src, std::vector<std::string>& dest, c
 	char *pChar = pSrc, *qChar = utilFristConstchar(pChar,delim);
 	while(qChar)
 	{
-		PDEBUG("str2Vec :: curr :: %s\n",pChar);
+		PDEBUG("str2Vec :: curr :: %s",pChar);
 		*qChar = 0;
 		dest.push_back(pChar);
 		pChar = ++qChar;
 		qChar = utilFristConstchar(pChar,delim);
 	}
-	PDEBUG("str2Vec :: curr :: %s\n",pChar);
+	PDEBUG("str2Vec :: curr :: %s",pChar);
 	dest.push_back(pChar);
 	delete[] pSrc;
 	return true;

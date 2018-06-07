@@ -10,15 +10,13 @@
 #include <errno.h>
 
 #ifdef SHOW_DEBUG_MESSAGE
-#define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
+#define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #else
 #define PDEBUG(fmt, args...)
 #endif
 
 #ifdef SHOW_ERROR_MESSAGE
-#define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt,__FILE__, \
-									__FUNCTION__, __LINE__, ## args)
+#define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #else
 #define PERROR(fmt, args...)
 #endif
