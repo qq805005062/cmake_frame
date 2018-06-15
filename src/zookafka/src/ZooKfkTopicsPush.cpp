@@ -160,10 +160,10 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
-	if(ret < 0)
+	if(ret <= 0)
 	{
 		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
-		return ret;
+		return NO_KAFKA_BROKERS_FOUND;
 	}
 	
 	zKeepers.clear();
@@ -185,10 +185,10 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
-	if(ret < 0)
+	if(ret <= 0)
 	{
 		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
-		return ret;
+		return NO_KAFKA_BROKERS_FOUND;
 	}
 	
 	//zKeepers.clear();
@@ -234,7 +234,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	if(!kfkt)
 	{
 		PERROR("***Failed to create new producer: %s***", errStr);
-		return -1;
+		return KAFKA_MODULE_NEW_ERROR;
 	}
 	rd_kafka_set_log_level(kfkt, KFK_LOG_DEBUG);
 
@@ -249,7 +249,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	if (ret == 0)
 	{
 		PERROR("*** No valid brokers specified: %s ***", brokers.c_str());
-		return -1;
+		return KAFKA_BROKERS_ADD_ERROR;
 	}
 	
 	std::vector<std::string> topics_;
@@ -257,7 +257,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	if(topics_.size() < 1)
 	{
 		PERROR("topics ERROR :: %s",topics.c_str());
-		return -1;
+		return KAFKA_NO_TOPIC_NAME_INIT;
 	}
 	int size = static_cast<int>(topics_.size());
 	for(int i = 0;i < size;i++)
@@ -266,7 +266,7 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 		if(!pTopiConf)
 		{
 			PERROR("rd_kafka_topic_conf_new ERROR");
-			return -1;
+			return KAFKA_TOPIC_CONF_NEW_ERROR;
 		}
 		rd_kafka_topic_conf_set(pTopiConf, "produce.offset.report", "true", errStr, sizeof(errStr));
 		rd_kafka_topic_conf_set(pTopiConf, "request.required.acks", "1", errStr, sizeof(errStr));
@@ -275,13 +275,13 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 		if(!pTopic)
 		{
 			PERROR("rd_kafka_topic_new ERROR");
-			return -1;
+			return KAFKA_TOPIC_NEW_ERROR;
 		}
 
 		topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
 	}
-	
-	return 0;
+	ret = 0;
+	return ret;
 }
 
 int ZooKfkTopicsPush::push(const std::string& topic,
@@ -295,7 +295,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	if(data.empty() || topic.empty() || topicPtrMap.empty())
 	{
 		PERROR("push parameter no enought");
-		ret = -1;
+		ret = TRANSMIT_PARAMTER_ERROR;
 		return ret;
 	}
 
@@ -303,13 +303,13 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	if(iter == topicPtrMap.end())
 	{
 		PERROR("target topic had't been init any way and can't push any data");
-		ret = -2;
+		ret = PUSH_TOPIC_NAME_NOINIT;
 		return ret;
 	}
 
 	if(destroy)
 	{
-		ret = -3;
+		ret = MODULE_RECV_EXIT_COMMND;
 		return ret;
 	}
 	pushNum++;
@@ -332,13 +332,23 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	}else{
 		ret = rd_kafka_outq_len(kfkt);
 	}
-	rd_kafka_poll(kfkt, 100);
+	//rd_kafka_poll(kfkt, 100);
 	pushNum--;
 	return ret;
 }
 
 int ZooKfkTopicsPush::bolckFlush(int queueSize)
 {
+	if(queueSize <= 0)
+	{
+		int queueLen = rd_kafka_outq_len(kfkt);
+		if(queueLen > 0)
+		{
+			queueSize = queueLen / 2;
+		}else{
+			queueSize = 0;
+		}
+	}
 	while(rd_kafka_outq_len(kfkt) > queueSize)
 		rd_kafka_poll(kfkt, 50);
 	return 0;

@@ -541,9 +541,11 @@ void ZooKfkTopicsPop::kfkDestroy()
 		rd_kafka_topic_partition_list_destroy(topicparlist);
 		topicparlist = NULL;
 	}
-	
-	rd_kafka_destroy(kfkt);
-	kfkt = NULL;
+	if(kfkt)
+	{
+		rd_kafka_destroy(kfkt);
+		kfkt = NULL;
+	}
 
 	//rd_kafka_wait_destroyed(2000);
 	zookeeper_close(zookeeph);

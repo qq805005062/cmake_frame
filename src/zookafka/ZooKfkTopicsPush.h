@@ -29,6 +29,16 @@ typedef struct callBackMsg
 	int errorCode;
 }CALLBACKMSG;
 
+#define NO_KAFKA_BROKERS_FOUND				-10000
+#define TRANSMIT_PARAMTER_ERROR				-10001
+#define PUSH_TOPIC_NAME_NOINIT				-10002
+#define MODULE_RECV_EXIT_COMMND				-10003
+
+#define KAFKA_MODULE_NEW_ERROR				-10004
+#define KAFKA_BROKERS_ADD_ERROR				-10005
+#define KAFKA_NO_TOPIC_NAME_INIT			-10006
+#define KAFKA_TOPIC_CONF_NEW_ERROR			-10007
+#define KAFKA_TOPIC_NEW_ERROR				-10008
 namespace ZOOKEEPERKAFKA
 {
 
@@ -98,7 +108,8 @@ public:
 
 
 	//上层应用可以对本地队列进行刷新操作，当本地队列小于queueSize值的时候才会返回，阻塞
-	int bolckFlush(int queueSize);
+	//当push返回错误的时候，getLastErrorMsg == -184的时候，必须要调用这个方法，参数可以不传，有默认值
+	int bolckFlush(int queueSize = 0);
 
 	//资源释放，释放所有的资源、异步退出，清除资源使用,此方法是阻塞的，退出之后就表示所有数据已经清理干净
 	void kfkDestroy();
