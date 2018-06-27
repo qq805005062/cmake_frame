@@ -110,6 +110,7 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 	,kfkErrorMsg()
 	,destroy(0)
 	,popNum(0)
+	,initFlag(0)
 {
 	PDEBUG("ZooKfkTopicsPop struct");
 }
@@ -126,16 +127,20 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
 	
 	if(zookeeph)
 	{
-		PERROR("zookeeper already init");
-		return -1;
+		PERROR("initialize_zookeeper init already");
+		return KAFKA_INIT_ALREADY;
 	}
-	
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
+	if(zookeeph == NULL)
+	{
+		PERROR("initialize_zookeeper new error");
+		return KAFKA_MODULE_NEW_ERROR;
+	}
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
-	if(ret < 0)
+	if(ret <= 0)
 	{
 		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
-		return ret;
+		return NO_KAFKA_BROKERS_FOUND;
 	}
 
 	zKeepers = zookeepers;
@@ -151,16 +156,20 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& 
 
 	if(zookeeph)
 	{
-		PERROR("zookeeper already init");
-		return -1;
+		PERROR("initialize_zookeeper init already");
+		return KAFKA_INIT_ALREADY;
 	}
-	
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
+	if(zookeeph == NULL)
+	{
+		PERROR("initialize_zookeeper new error");
+		return KAFKA_MODULE_NEW_ERROR;
+	}
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
-	if(ret < 0)
+	if(ret <= 0)
 	{
 		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
-		return ret;
+		return NO_KAFKA_BROKERS_FOUND;
 	}
 
 	zKeepers = zookeepers;
@@ -178,7 +187,15 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	char errStr[512] = { 0 },tmp[16] = { 0 };
 	int ret = 0;
 	PDEBUG("librdkafka version:: %s",rd_kafka_version_str());
+	if(initFlag)
+		return KAFKA_INIT_ALREADY;
+	initFlag = 1;
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
+	if(kfkconft == NULL)
+	{
+		PERROR("rd_kafka_conf_new NULL");
+		return KAFKA_MODULE_NEW_ERROR;
+	}
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 
 	snprintf(tmp, sizeof tmp, "%i", SIGIO);
@@ -196,15 +213,16 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (ret)
 	{
 		PERROR("rd_kafka_conf_set error: %s", errStr);
-		return -2;
+		return KAFKA_CONSUMER_CONFSET_ERROR;
 	}
 	if(!groupName.empty())
 	{
+		PERROR("kfkInit groupName: %s", groupName.c_str());
 		ret = rd_kafka_conf_set(kfkconft, "group.id", groupName.c_str(), errStr, sizeof errStr);
 		if(ret != RD_KAFKA_CONF_OK)
 		{
 			PERROR("set kafka config value failed, reason: %s", errStr);
-			return -2;
+			return KAFKA_CONSUMER_CONFSET_ERROR;
 		}
 	}
 	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
@@ -217,7 +235,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
 	{
 		PERROR("set offset store method failed: %s", errStr);
-		return -1;
+		return KAFKA_CONSUMER_CONFSET_ERROR;
 	}
 	rd_kafka_conf_set_default_topic_conf(kfkconft, kfktopiconft);
 	
@@ -225,7 +243,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (NULL == kfkt)
 	{
 		PERROR("Failed to create new consumer, reason: %s", errStr);
-		return -1;
+		return KAFKA_MODULE_NEW_ERROR;
 	}
 	
 	if(brokers.empty() || brokers.length() == 0)
@@ -237,7 +255,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (ret == 0)
 	{
 		PERROR("no valid brokers specified, brokers: %s", errStr);
-		return -1;
+		return KAFKA_BROKERS_ADD_ERROR;
 	}
 	rd_kafka_poll_set_consumer(kfkt);
 
@@ -248,14 +266,14 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		if(topics.size() < 1)
 		{
 			PERROR("topics ERROR :: %s",topic.c_str());
-			return -1;
+			return TRANSMIT_PARAMTER_ERROR;
 		}
 		int size = static_cast<int>(topics.size());
 		topicparlist = rd_kafka_topic_partition_list_new(size);
 		if(!topicparlist)
 		{
 			PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
-			return -1;
+			return KAFKA_TOPIC_CONF_NEW_ERROR;
 		}
 
 		for (int i = 0; i < size; i++)
@@ -270,10 +288,11 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		if (err)
 		{
 			PERROR("Failed to start consuming topics: %s", rd_kafka_err2str(err));
-			return -1;
+			return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 		}
 	}
-	return 0;
+	ret = 0;
+	return ret;
 }
 
 int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
@@ -295,7 +314,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	if(!pList)
 	{
 		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
-		return -1;
+		return KAFKA_TOPIC_CONF_NEW_ERROR;
 	}
 	for(ListStringTopicIter iter = topics_.begin();iter != topics_.end();iter++)
 	{
@@ -312,7 +331,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 		if(err)
 		{
 			PERROR("Failed rd_kafka_unsubscribe topics: %s", rd_kafka_err2str(err));
-			return -2;
+			return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 		}
 	}
 	if(topicparlist)
@@ -324,7 +343,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 		PERROR("Failed rd_kafka_subscribe topics: %s", rd_kafka_err2str(err));
 		topics_.clear();
 		topicparlist = NULL;
-		return -3;
+		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 	}
 	topics_.push_back(topic);
 	topicparlist = pList;
@@ -335,7 +354,7 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 {
 	int ret = 0;
 	if(destroy)
-		return ret;
+		return MODULE_RECV_EXIT_COMMND;
 	popNum++;
 	rd_kafka_message_t* message = NULL;
 	while(1)
@@ -359,7 +378,7 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 		{
 			setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
 			rd_kafka_message_destroy(message);
-			ret = -1;
+			ret = message->err;
 		}else{
 			const char *top = rd_kafka_topic_name(message->rkt);
 			if(top)
@@ -397,7 +416,7 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 {
 	int ret = 0;
 	if(destroy)
-		return ret;
+		return MODULE_RECV_EXIT_COMMND;
 	popNum++;
 	rd_kafka_message_t* message = NULL;
 	message = rd_kafka_consumer_poll(kfkt, 500);
@@ -408,11 +427,12 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			if(message->err != RD_KAFKA_RESP_ERR__PARTITION_EOF)
 			{
 				setKfkErrorMessage(message->err,rd_kafka_err2str(message->err));
-				rd_kafka_message_destroy(message);
-				ret = -1;
+				ret = message->err;
 			}
+			rd_kafka_message_destroy(message);
 		}else
 		{
+			ret++;
 			const char *top = rd_kafka_topic_name(message->rkt);
 			if(top)
 			{
@@ -449,7 +469,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	if(size == 0)
 	{
 		PDEBUG("kfkTopicConsumeStop already stop");
-		return -1;
+		return 0;
 	}
 	std::lock_guard<std::mutex> lock(listLock);
 	ListStringTopicIter iter = topics_.begin();
@@ -464,7 +484,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	if(size)
 	{
 		PERROR("There is no found topic in reading topic");
-		return -1;
+		return TRANSMIT_PARAMTER_ERROR;
 	}
 	topics_.erase(iter);
 	size = static_cast<int>(topics_.size());
@@ -475,7 +495,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 		{
 			PERROR("Failed rd_kafka_unsubscribe topics: %s", rd_kafka_err2str(err));
 			topics_.push_back(topic);
-			return -2;
+			return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 		}
 		rd_kafka_topic_partition_list_destroy(topicparlist);
 		topicparlist = NULL;
@@ -486,7 +506,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	{
 		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
 		topics_.push_back(topic);
-		return -1;
+		return KAFKA_MODULE_NEW_ERROR;
 	}
 	for(iter = topics_.begin();iter != topics_.end();iter++)
 	{
@@ -500,7 +520,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	{
 		PERROR("Failed rd_kafka_unsubscribe topics: %s", rd_kafka_err2str(err));
 		topics_.push_back(topic);
-		return -2;
+		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 	}
 	rd_kafka_topic_partition_list_destroy(topicparlist);
 	err = rd_kafka_subscribe(kfkt, pList);
@@ -509,7 +529,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 		PERROR("Failed rd_kafka_subscribe topics: %s", rd_kafka_err2str(err));
 		topics_.clear();
 		topicparlist = NULL;
-		return -3;
+		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 	}
 
 	topicparlist = pList;
@@ -612,6 +632,102 @@ void ZooKfkTopicsPop::setKfkErrorMessage(rd_kafka_resp_err_t code,const char *ms
 	kfkErrorCode = code;
 	kfkErrorMsg.assign(msg);
 }
+
+int ZooKfkConsumers::zooKfkConsumerInit(int consumerNum, const std::string& zookStr, const std::string& topicStr,  const std::string& groupName)
+{
+	int ret = 0;
+	if(kfkConsumerNum)
+		return KAFKA_INIT_ALREADY;
+	kfkConsumerNum = consumerNum;
+	for(int i = 0; i < kfkConsumerNum; i++)
+	{
+		ZooKfkConsumerPtr consumer(new ZOOKEEPERKAFKA::ZooKfkTopicsPop());
+		if(!consumer)
+		{
+			PERROR("New ZooKfkConsumerPtr point error");
+			ret = KAFKA_MODULE_NEW_ERROR;
+			return ret;
+		}
+		ret = consumer->zookInit(zookStr, topicStr, groupName);
+		if(ret < 0)
+		{
+			PERROR("producer->zookInit error ret : %d", ret);
+			return ret;
+		}
+		ZooKfkConsumerPtrVec.push_back(consumer);
+	}
+	
+	return ret;
+}
+
+void ZooKfkConsumers::zooKfkConsumerDestroy()
+{
+	for(int i = 0; i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec[i])
+			ZooKfkConsumerPtrVec[i]->kfkDestroy();
+	}
+}
+
+int ZooKfkConsumers::zooKfkConsumerStart(const std::string& topic)
+{
+	int ret = 0;
+	for(int i = 0;i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec[i])
+			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStart(topic);
+		else
+			ret = KAFKA_UNHAPPEN_ERRPR;
+	}
+	return ret;
+}
+
+int ZooKfkConsumers::zooKfkConsumerStop(const std::string& topic)
+{
+	int ret = 0;
+	for(int i = 0;i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec[i])
+			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStop(topic);
+		else
+			ret = KAFKA_UNHAPPEN_ERRPR;
+	}
+	return ret;
+}
+
+int ZooKfkConsumers::consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key, int64_t* offset)
+{
+	int ret = 0;
+	if(index >= kfkConsumerNum)
+		return KAFKA_NO_INIT_ALREADY;
+	if(ZooKfkConsumerPtrVec[index])
+	{
+		ret = ZooKfkConsumerPtrVec[index]->pop(topic, data, key, offset);
+		if(ret < 0)
+			ret = ZooKfkConsumerPtrVec[index]->getLastErrorMsg(errorMsg);
+	}
+	else
+		ret = KAFKA_UNHAPPEN_ERRPR;
+		
+	return ret;
+}
+
+int ZooKfkConsumers::tryConsume(int index, std::string& topic, std::string& data, int timeout_ms, std::string& errorMsg, std::string* key, int64_t* offset)
+{
+	int ret = 0;
+	if(index >= kfkConsumerNum)
+		return KAFKA_NO_INIT_ALREADY;
+	if(ZooKfkConsumerPtrVec[index])
+	{
+		ret = ZooKfkConsumerPtrVec[index]->tryPop(topic, data, timeout_ms, key, offset);
+		if(ret < 0)
+			ret = ZooKfkConsumerPtrVec[index]->getLastErrorMsg(errorMsg);
+	}
+	else
+		ret = KAFKA_UNHAPPEN_ERRPR;
+	return ret;
+}
+
 
 }
 

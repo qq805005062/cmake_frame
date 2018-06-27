@@ -4,12 +4,15 @@
 
 #include <stdio.h>
 #include <string.h>
-
+#include <vector>
+#include <memory>
 #include <functional>
 #include <string>
 #include <map>
 #include <vector>
-//#include <common/MutexLock.h>
+
+#include "Singleton.h"
+#include "noncopyable.h"
 
 #include "librdkafka/rdkafka.h"
 
@@ -29,19 +32,6 @@ typedef struct callBackMsg
 	int errorCode;
 }CALLBACKMSG;
 
-#define NO_KAFKA_BROKERS_FOUND				-10000
-#define TRANSMIT_PARAMTER_ERROR				-10001
-#define PUSH_TOPIC_NAME_NOINIT				-10002
-#define MODULE_RECV_EXIT_COMMND				-10003
-
-#define KAFKA_MODULE_NEW_ERROR				-10004
-#define KAFKA_BROKERS_ADD_ERROR				-10005
-#define KAFKA_NO_TOPIC_NAME_INIT			-10006
-#define KAFKA_TOPIC_CONF_NEW_ERROR			-10007
-#define KAFKA_TOPIC_NEW_ERROR				-10008
-namespace ZOOKEEPERKAFKA
-{
-
 //typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushErrorCallBack;
 
 typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushCallBack;
@@ -49,12 +39,16 @@ typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushCallBack;
 typedef std::map<std::string,rd_kafka_topic_t*> KfkTopicPtrMap;
 typedef KfkTopicPtrMap::iterator KfkTopicPtrMapIter;
 
+namespace ZOOKEEPERKAFKA
+{
+
 /*
  *kafka往多个topic生成数据
  *topic初始化的时候以逗号分开，不可以有多余的符号
  *所有的topic必须在初始化里面初始化好，否则真正生产数据的时候会出
  *所有的topic最大消息大小保持一致
  *所有方法返回大于等于0表示成功，否则有错误
+ *返回错误码参考 头文件ZooKfkCommon.h
  */
 class ZooKfkTopicsPush
 {
@@ -93,6 +87,7 @@ public:
 			  int queueBuffMaxMess = 2 * 1024 * 1024);
 
 	//往kfk生成数据，指定topic,如果topic不存在的话，则返回错误，必须在初始化的时候初始化
+	//内部处理队列满的错误，外面不需要处理 -184
 	//data是要生成的数据，msgPri私有数据，回调的时候会回调回来
 	//key是对于消费者每个消息时的，可以为空
 	//partition分区默认分片
@@ -158,6 +153,59 @@ private:
 	std::string kfkErrorMsg;
 	int destroy;
 	int pushNum;
+};
+
+typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPush> ZooKfkProducerPtr;
+
+/*
+ *多个生产者单实例模式，多个生产者所有的配置参数都是一样的
+ *可以直接包含头文件单实例使用，可以直接指定初始化多个生产者，提高并发量
+ *返回错误码参考 头文件ZooKfkCommon.h
+ */
+class ZooKfkProducers : public noncopyable
+{
+public:
+	ZooKfkProducers()
+		:lastIndex(0)
+		,kfkProducerNum(0)
+		,ZooKfkProducerPtrVec()
+	{
+	}
+
+	~ZooKfkProducers()
+	{
+		for(int i = 0; i < kfkProducerNum; i++)
+		{
+			if(ZooKfkProducerPtrVec[i])
+				ZooKfkProducerPtrVec[i].reset();
+		}
+
+		std::vector<ZooKfkProducerPtr> ().swap(ZooKfkProducerPtrVec);
+	}
+
+	//单实例接口
+	static ZooKfkProducers& instance() { return ZOOKEEPERKAFKA::Singleton<ZooKfkProducers>::instance(); }
+
+	//初始化接口，生产者个数、zookeeper地址信息、需要生产的topic，必须一次性初始化完，后续不能增加
+	int zooKfkProducersInit(int produceNum, const std::string& zookStr, const std::string& topicStr);
+
+	//进程退出之前调用接口，保证不会丢数据，数据全部持久化完
+	void zooKfkProducersDestroy();
+	
+	//设置错误回调接口
+	int setMsgPushErrorCall(const MsgPushCallBack& cb);
+
+	//设置每天消息回调接口，会包括错误回调
+	int setMsgPushCallBack(const MsgPushCallBack& cb);
+
+	//写消息，topic名称，消息内容，如果有错误，返回错误信息，key，默认空
+	int psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key = NULL);
+
+private:
+	//volatile unsigned int lastIndex;
+	unsigned int lastIndex;//每次写的下标，均衡写
+	int kfkProducerNum;//生产者个数
+	std::vector<ZooKfkProducerPtr> ZooKfkProducerPtrVec;
 };
 
 }

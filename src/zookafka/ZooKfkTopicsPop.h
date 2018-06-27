@@ -14,6 +14,9 @@
 
 #include <mutex>
 
+#include "Singleton.h"
+#include "noncopyable.h"
+
 #include "librdkafka/rdkafka.h"
 
 #include "zookeeper/zookeeper.h"
@@ -32,6 +35,7 @@ namespace ZOOKEEPERKAFKA
  *可以对某一个topic开始或者停止（初始化的topic已经默认开始了，不需要重复调用kfkTopicConsumeStart
  *统一分组，分组名可以传递空字符串，这样就不分组
  *所有方法返回大于等于0 表示成功，否则表示有错误
+ *返回错误码参考 头文件ZooKfkCommon.h
  */
 class ZooKfkTopicsPop
 {
@@ -99,6 +103,63 @@ private:
 	std::string kfkErrorMsg;
 	int destroy;
 	int popNum;
+	int initFlag;
+};
+
+typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPop> ZooKfkConsumerPtr;
+
+/*
+ *多个消费者单实例模式，多个消费者所有的配置参数都是一样的
+ *可以直接包含头文件单实例使用，可以直接指定初始化多个消费者，提高并发量
+ *返回错误码参考 头文件ZooKfkCommon.h
+ */
+class ZooKfkConsumers : public noncopyable
+{
+public:
+	ZooKfkConsumers()
+		:lastIndex(0)
+		,kfkConsumerNum(0)
+		,ZooKfkConsumerPtrVec()
+	{
+	}
+
+	~ZooKfkConsumers()
+	{
+		for(int i = 0;i < kfkConsumerNum; i++)
+		{
+			if(ZooKfkConsumerPtrVec[i])
+				ZooKfkConsumerPtrVec[i].reset();
+		}
+
+		std::vector<ZooKfkConsumerPtr> ().swap(ZooKfkConsumerPtrVec);
+	}
+
+	//单实例接口哦
+	static ZooKfkConsumers& instance() { return ZOOKEEPERKAFKA::Singleton<ZooKfkConsumers>::instance(); }
+
+	//初始化接口，消费者个数，zookeeper地址，订阅topic名称，组名称
+	int zooKfkConsumerInit(int consumerNum, const std::string& zookStr, const std::string& topicStr,  const std::string& groupName);
+
+	//消费者退出接口，保证消息不丢失，进程退出调用接口
+	void zooKfkConsumerDestroy();
+
+	//开启一个topic的读，单次只能配置一个
+	int zooKfkConsumerStart(const std::string& topic);
+
+	//关闭一个topic的读，单词只能配置一个
+	int zooKfkConsumerStop(const std::string& topic);
+
+	//消费一条消息，如果有错误，会返回错误消息，自动过滤了队尾的错误，下标表示用的下标，不能大于等于初始化的个数
+	int consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key = NULL, int64_t* offset = NULL);
+
+	//超时消费一条消息，如果超时，无消息也会返回，返回1就是有消息，0是超时，错误小于0，下标不能呢个大于等于初始化个数，内部过滤到队尾的错误，不可以当定时器用
+	int tryConsume(int index, std::string& topic, std::string& data, int timeout_ms, std::string& errorMsg, std::string* key = NULL, int64_t* offset = NULL);
+	
+private:
+	//volatile unsigned int lastIndex;
+	unsigned int lastIndex;
+	int kfkConsumerNum;
+	std::vector<ZooKfkConsumerPtr> ZooKfkConsumerPtrVec;
 };
 
 }

@@ -157,7 +157,17 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 	int ret = 0;
 	char brokers[1024] = {0};
 	/////////////////////////
+	if(zookeeph)
+	{
+		PERROR("initialize_zookeeper init already");
+		return KAFKA_INIT_ALREADY;
+	}
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
+	if(zookeeph == NULL)
+	{
+		PERROR("initialize_zookeeper new error");
+		return KAFKA_MODULE_NEW_ERROR;
+	}
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
 	if(ret <= 0)
@@ -182,7 +192,17 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 	int ret = 0;
 	char brokers[1024] = {0};
 	/////////////////////////
+	if(zookeeph)
+	{
+		PERROR("initialize_zookeeper init already");
+		return KAFKA_INIT_ALREADY;
+	}
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 0);
+	if(zookeeph == NULL)
+	{
+		PERROR("initialize_zookeeper new error");
+		return KAFKA_MODULE_NEW_ERROR;
+	}
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
 	if(ret <= 0)
@@ -211,6 +231,11 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	char tmp[64] = {0},errStr[512] = {0};
 	int ret = 0;
 	PDEBUG("librdkafka version:: %s",rd_kafka_version_str());
+	if(topicPtrMap.empty() == false)
+	{
+		PERROR("initialize_zookeeper init already");
+		return KAFKA_INIT_ALREADY;
+	}
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 	rd_kafka_conf_set_opaque(kfkconft,this);
@@ -228,7 +253,9 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	rd_kafka_conf_set(kfkconft, "queue.buffering.max.ms", tmp, NULL, 0);
 	
 	rd_kafka_conf_set(kfkconft, "message.send.max.retries", "3", NULL, 0);
-	rd_kafka_conf_set(kfkconft, "retry.backoff.ms", "500", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "retry.backoff.ms", "100", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "socket.blocking.max.ms", "50", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "queue.buffering.max.kbytes", "4096", NULL, 0);
 
 	kfkt = rd_kafka_new(RD_KAFKA_PRODUCER, kfkconft, errStr, sizeof errStr);
 	if(!kfkt)
@@ -313,27 +340,46 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		return ret;
 	}
 	pushNum++;
-	ret = rd_kafka_produce(iter->second,
-	                       partition,
-	                       msgFlags,
-	                       reinterpret_cast<void* >(const_cast<char* >(data.c_str())),
-	                       data.size(),
-	                       key == NULL ? NULL : reinterpret_cast<const void* >(key->c_str()),
-	                       key == NULL ? 0 : key->size(),
-	                       msgPri);
-
-	if (ret < 0)
+	while(1)
 	{
-		PERROR("*** Failed to produce to topic %s partition %d: %s *** %d",
-		      topic.c_str(),
-		      partition,
-		      rd_kafka_err2str(rd_kafka_last_error()), ret);
-		setKfkErrorMessage(rd_kafka_last_error(),rd_kafka_err2str(rd_kafka_last_error()));
-	}else{
-		ret = rd_kafka_outq_len(kfkt);
+		ret = rd_kafka_produce(iter->second,
+		                       partition,
+		                       msgFlags,
+		                       reinterpret_cast<void* >(const_cast<char* >(data.c_str())),
+		                       data.size(),
+		                       key == NULL ? NULL : reinterpret_cast<const void* >(key->c_str()),
+		                       key == NULL ? 0 : key->size(),
+		                       msgPri);
+
+		if (ret < 0)
+		{
+			PERROR("*** Failed to produce to topic %s partition %d: %s *** %d",
+			      topic.c_str(),
+			      partition,
+			      rd_kafka_err2str(rd_kafka_last_error()), ret);
+			if(RD_KAFKA_RESP_ERR__QUEUE_FULL == rd_kafka_last_error())
+			{
+				bolckFlush();
+			}else{
+				setKfkErrorMessage(rd_kafka_last_error(),rd_kafka_err2str(rd_kafka_last_error()));
+				break;
+			}
+		}else
+		{
+			break;
+		}
 	}
 	//rd_kafka_poll(kfkt, 100);
+	int waitTimer = 0;
+	while(rd_kafka_outq_len(kfkt) > 50)
+	{
+		rd_kafka_poll(kfkt, 1);
+		waitTimer++;
+		if(waitTimer >= 3)
+			break;
+	}
 	pushNum--;
+	ret = rd_kafka_outq_len(kfkt);
 	return ret;
 }
 
@@ -448,6 +494,96 @@ void ZooKfkTopicsPush::setKfkErrorMessage(rd_kafka_resp_err_t code,const char *m
 	kfkErrorCode = code;
 	kfkErrorMsg.assign(msg);
 }
+
+int ZooKfkProducers::zooKfkProducersInit(int produceNum, const std::string& zookStr, const std::string& topicStr)
+{
+	int ret = 0;
+	if(kfkProducerNum)
+		return KAFKA_INIT_ALREADY;
+	kfkProducerNum = produceNum;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		ZooKfkProducerPtr producer(new ZOOKEEPERKAFKA::ZooKfkTopicsPush());
+		if(!producer)
+		{
+			PERROR("New ZooKfkProducerPtr point error");
+			ret = KAFKA_MODULE_NEW_ERROR;
+			return ret;
+		}
+
+		ret = producer->zookInit(zookStr, topicStr);
+		if(ret < 0)
+		{
+			PERROR("producer->zookInit error ret : %d", ret);
+			return ret;
+		}
+		ZooKfkProducerPtrVec.push_back(producer);
+	}
+	return ret;
+}
+
+void ZooKfkProducers::zooKfkProducersDestroy()
+{
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec[i])
+			ZooKfkProducerPtrVec[i]->kfkDestroy();
+	}
+}
+
+int ZooKfkProducers::setMsgPushErrorCall(const MsgPushCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ZooKfkProducerPtrVec[i]->setMsgPushErrorCall(cb);
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkProducers::setMsgPushCallBack(const MsgPushCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ZooKfkProducerPtrVec[i]->setMsgPushCallBack(cb);
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key)
+{
+	int ret = KAFKA_UNHAPPEN_ERRPR;
+	if(kfkProducerNum == 0)
+	{
+		ret = KAFKA_NO_INIT_ALREADY;
+		return ret;
+	}
+	unsigned int index = lastIndex++;
+	int sunindex = index % kfkProducerNum;
+	if(ZooKfkProducerPtrVec[sunindex])
+	{
+		ret = ZooKfkProducerPtrVec[sunindex]->push(topic, msg, key);
+		if(ret < 0)
+		{
+			ret = ZooKfkProducerPtrVec[sunindex]->getLastErrorMsg(errorMsg);
+		}
+	}
+	return ret;
+}
+
 
 }
 
