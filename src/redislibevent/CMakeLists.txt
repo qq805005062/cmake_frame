@@ -9,6 +9,6 @@ set(REDISASYNC_SRCS
 add_library(redisasync ${REDISASYNC_SRCS})
 
 add_executable(redislibevent redislibevent.cpp RedisAsync.cpp)
-target_link_libraries(redislibevent common hiredis event pthread dl rt z)
+target_link_libraries(redislibevent common hiredis event_core event_pthreads pthread dl rt z)
 
 

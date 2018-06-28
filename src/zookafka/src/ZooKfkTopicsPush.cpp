@@ -2,18 +2,10 @@
 #include "../ZooKfkCommon.h"
 #include "../ZooKfkTopicsPush.h"
 
-#define KFK_LOG_EMERG   0
-#define KFK_LOG_ALERT   1
-#define KFK_LOG_CRIT    2
-#define KFK_LOG_ERR     3
-#define KFK_LOG_WARNING 4
-#define KFK_LOG_NOTICE  5
-#define KFK_LOG_INFO    6
-#define KFK_LOG_DEBUG   7
+#pragma GCC diagnostic ignored "-Wconversion"
 
 namespace ZOOKEEPERKAFKA
 {
-
 static const char KafkaBrokerPath[] = "/brokers/ids";
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
@@ -563,7 +555,7 @@ int ZooKfkProducers::setMsgPushCallBack(const MsgPushCallBack& cb)
 	return ret;
 }
 
-int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key)
+int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key, void *msgPri)
 {
 	int ret = KAFKA_UNHAPPEN_ERRPR;
 	if(kfkProducerNum == 0)
@@ -575,7 +567,7 @@ int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg
 	int sunindex = index % kfkProducerNum;
 	if(ZooKfkProducerPtrVec[sunindex])
 	{
-		ret = ZooKfkProducerPtrVec[sunindex]->push(topic, msg, key);
+		ret = ZooKfkProducerPtrVec[sunindex]->push(topic, msg, key, msgPri);
 		if(ret < 0)
 		{
 			ret = ZooKfkProducerPtrVec[sunindex]->getLastErrorMsg(errorMsg);

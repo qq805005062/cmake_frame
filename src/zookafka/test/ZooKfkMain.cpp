@@ -1,51 +1,125 @@
-
+#include <stdio.h>
 #include <pthread.h>
-#include "../ZooKfkTopicsPop.h"
+
+#include <string>
+#include <memory>
+
+#include "Timestamp.h"
+#include "ThreadPool.h"
+#include "ConfigFile.h"
+
 #include "../ZooKfkCommon.h"
+#include "../ZooKfkTopicsPop.h"
+#include "../ZooKfkTopicsPush.h"
 
 static volatile uint64_t countNum = 0;
 
-int consuerTest()
+std::unique_ptr<ZOOKEEPERKAFKA::ThreadPool> testThreadPool;
+static char *pBuf = NULL;
+
+static void produceKfkMsg(const std::string& top, const std::string& msg)
 {
+	std::string errMsg;
+	int ret = ZOOKEEPERKAFKA::ZooKfkProducers::instance().psuhKfkMsg(top, msg, errMsg);
+	if(ret < 0)
+	{
+		PERROR("produceKfkMsg error %d %s", ret, errMsg.c_str());
+	}
+}
+
+static void consumerKfkMsg(int index)
+{
+	std::string topicName, msgData, errMsg;
+	int ret = ZOOKEEPERKAFKA::ZooKfkConsumers::instance().consume(index, topicName, msgData, errMsg);
+	if(ret < 0)
+	{
+		PERROR("produceKfkMsg error %d %s", ret, errMsg.c_str());
+	}
+}
+
+int consumerTest(int msgNum, int threadNum)
+{
+	int index = 0;
+	std::string broAdds = ConfigFile::instance().zookeepBrokers();
+	std::string topicName = ConfigFile::instance().testTopicName();
+	std::string consumerGroup = "testConsumer";
+	ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit(threadNum, broAdds, topicName, consumerGroup);
+
+	PDEBUG("kafka producer test for brokers %s thread num %d msg num %d topic name %s", broAdds.c_str(), threadNum, msgNum, topicName.c_str());
+	ZOOKEEPERKAFKA::Timestamp startSecond(ZOOKEEPERKAFKA::Timestamp::now());
+	for(int i = 0; i < msgNum; i++)
+	{
+		index = i % threadNum;
+		testThreadPool->run(std::bind(consumerKfkMsg, index));
+	}
+	ZOOKEEPERKAFKA::Timestamp endSecond(ZOOKEEPERKAFKA::Timestamp::now());
+	
+	ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerDestroy();
+	ZOOKEEPERKAFKA::Timestamp overSecond(ZOOKEEPERKAFKA::Timestamp::now());
+	PDEBUG("kafka consumer test begin %lu end %lu over %lu", startSecond.microSecondsSinceEpoch(), endSecond.microSecondsSinceEpoch(), overSecond.microSecondsSinceEpoch());
+	
 	return 0;
 }
 
-int producerTest()
+int producerTest(const std::string& msg, int msgNum, int threadNum)
 {
+	std::string broAdds = ConfigFile::instance().zookeepBrokers();
+	std::string topicName = ConfigFile::instance().testTopicName();
+	
+	ZOOKEEPERKAFKA::ZooKfkProducers::instance().zooKfkProducersInit(threadNum,broAdds,topicName);
+
+	PDEBUG("kafka producer test for brokers %s thread num %d msg num %d topic name %s", broAdds.c_str(), threadNum, msgNum, topicName.c_str());
+	ZOOKEEPERKAFKA::Timestamp startSecond(ZOOKEEPERKAFKA::Timestamp::now());
+	for(int i = 0; i < msgNum; i++)
+	{
+		testThreadPool->run(std::bind(produceKfkMsg, topicName, msg));
+	}
+	ZOOKEEPERKAFKA::Timestamp endSecond(ZOOKEEPERKAFKA::Timestamp::now());
+
+	ZOOKEEPERKAFKA::ZooKfkProducers::instance().zooKfkProducersDestroy();
+	ZOOKEEPERKAFKA::Timestamp overSecond(ZOOKEEPERKAFKA::Timestamp::now());
+	PDEBUG("kafka producer test begin %lu end %lu over %lu", startSecond.microSecondsSinceEpoch(), endSecond.microSecondsSinceEpoch(), overSecond.microSecondsSinceEpoch());
+	
 	return 0;
 };
 
 int main(int argc, char* argv[])
 {
-	#if 0
-	static volatile uint64_t last_recv_num = 0;
-	static volatile int second = 0;
-	while(1)
+	int sw = ConfigFile::instance().producerSwitch();
+	testThreadPool.reset(new ZOOKEEPERKAFKA::ThreadPool("testPool"));
+	int msgNum = ConfigFile::instance().testMsgNum();
+	if(sw)
 	{
-		second++;
-		if(last_recv_num == 0 && countNum > 0)
+		PDEBUG("Now begin kafka produce test.........");
+		int threadNum = ConfigFile::instance().testThreadNum();
+		testThreadPool->start(threadNum);
+		int msgLen = ConfigFile::instance().producerMessSize();
+		pBuf = new char[msgLen];
+		if(pBuf)
 		{
-			second = 1;
+			memset(pBuf,1,msgLen);
+		}else{
+			PERROR("kafka produce prepare test data new error");
+			return 0;
 		}
+		std::string testMsg(pBuf,msgLen);
+		producerTest(testMsg, msgNum, threadNum);
 
-		uint64_t NowCountNum = countNum;
-		printf("recv all num :: %lu,recv speed :: %lu,average speed :: %ld\n",
-			NowCountNum, (NowCountNum - last_recv_num), (NowCountNum / second) );
-		last_recv_num = NowCountNum;
-		sleep(1);
+		if(pBuf)
+			delete[] pBuf;
+		return 0;
 	}
-	#endif
 
-	ZOOKEEPERKAFKA::ZooKfkTopicsPop pop;
-	pop.zookInit("192.169.0.61:2181,192.169.0.62:2181,192.169.0.63:2181","zookeeper33,v-topic","xiaoxiao");
-
-	while(1)
+	sw = ConfigFile::instance().consumerSwitch();
+	if(sw)
 	{
-		std::string topic,kfkdata;
-		int64_t off;
-		pop.pop(topic,kfkdata,nullptr,&off);
-		PDEBUG("topic :: %s,kfkdata :: %s,offset:: %lu\n",topic.c_str(),kfkdata.c_str(),off);
+		PDEBUG("Now begin kafka consumer test.........");
+		int threadNum = ConfigFile::instance().testThreadNum();
+		testThreadPool->start(threadNum);
+		consumerTest(msgNum,threadNum);
+		return 0;
 	}
+
 	return 0;
 }
 

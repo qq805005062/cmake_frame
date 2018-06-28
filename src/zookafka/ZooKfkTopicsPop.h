@@ -17,6 +17,8 @@
 #include "Singleton.h"
 #include "noncopyable.h"
 
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+
 #include "librdkafka/rdkafka.h"
 
 #include "zookeeper/zookeeper.h"

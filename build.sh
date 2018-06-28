@@ -18,7 +18,7 @@ mkdir -p $BUILD_DIR/$BUILD_TYPE \
            $SOURCE_DIR \
   && make $*
 
-[[ $# = 0 ]] && cp $SOURCE_DIR/conf/* bin
+#[[ $# = 0 ]] && cp $SOURCE_DIR/conf/* bin
 
 #[[ $PARAMSTR =~ "install" ]] \
 #  && mkdir -p $INSTALL_DIR/rdngatesvr $INSTALL_DIR/rdnurisvr $INSTALL_DIR/rdnsyncli $INSTALL_DIR/rsc \

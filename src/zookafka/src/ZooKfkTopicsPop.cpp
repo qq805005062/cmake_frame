@@ -2,14 +2,7 @@
 #include "../ZooKfkCommon.h"
 #include "../ZooKfkTopicsPop.h"
 
-#define KFK_LOG_EMERG   0
-#define KFK_LOG_ALERT   1
-#define KFK_LOG_CRIT    2
-#define KFK_LOG_ERR     3
-#define KFK_LOG_WARNING 4
-#define KFK_LOG_NOTICE  5
-#define KFK_LOG_INFO    6
-#define KFK_LOG_DEBUG   7
+#pragma GCC diagnostic ignored "-Wconversion"
 
 namespace ZOOKEEPERKAFKA
 {

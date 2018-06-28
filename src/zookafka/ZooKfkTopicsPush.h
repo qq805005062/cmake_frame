@@ -14,6 +14,8 @@
 #include "Singleton.h"
 #include "noncopyable.h"
 
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+
 #include "librdkafka/rdkafka.h"
 
 #include "zookeeper/zookeeper.h"
@@ -63,8 +65,8 @@ public:
 	//初始化zookeeper，内部调用kfkInit初始化topics，可以是多个，逗号分开，不要任何多余的符号
 	int zookInit(const std::string& zookeepers,
 			  const std::string& topics,
-			  int queueBuffMaxMs = 500,
-			  int queueBuffMaxMess = 2 * 1024 * 1024);
+			  int queueBuffMaxMs = 1000,
+			  int queueBuffMaxMess = 100000);
 
 	//设置错误回调函数，一旦写入kafka发送错误，调用此回调
 	void setMsgPushErrorCall(const MsgPushCallBack& cb)
@@ -83,8 +85,8 @@ public:
 	//topics可以是多个，逗号分开，不要任何多余的符号，必须一次性初始化完，后期不可以再增加topic
 	int kfkInit(const std::string& brokers,
 			  const std::string& topics,
-			  int queueBuffMaxMs = 500,
-			  int queueBuffMaxMess = 2 * 1024 * 1024);
+			  int queueBuffMaxMs = 1000,
+			  int queueBuffMaxMess = 100000);
 
 	//往kfk生成数据，指定topic,如果topic不存在的话，则返回错误，必须在初始化的时候初始化
 	//内部处理队列满的错误，外面不需要处理 -184
@@ -199,7 +201,7 @@ public:
 	int setMsgPushCallBack(const MsgPushCallBack& cb);
 
 	//写消息，topic名称，消息内容，如果有错误，返回错误信息，key，默认空
-	int psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key = NULL);
+	int psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key = NULL, void *msgPri = NULL);
 
 private:
 	//volatile unsigned int lastIndex;

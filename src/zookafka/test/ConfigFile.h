@@ -4,13 +4,13 @@
 
 #include <string>
 
-#include <common/Singleton.h>
-#include <common/MutexLock.h>
-
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
-class ConfigFile : public common::noncopyable
+#include "../Singleton.h"
+#include "../noncopyable.h"
+
+class ConfigFile : public ZOOKEEPERKAFKA::noncopyable
 {
 
 public:
@@ -18,19 +18,22 @@ public:
 	ConfigFile();
 	~ConfigFile();
 	
-	static ConfigFile& instance() { return common::Singleton<ConfigFile>::instance();}
+	static ConfigFile& instance() { return ZOOKEEPERKAFKA::Singleton<ConfigFile>::instance();}
+
+	std::string zookeepBrokers();
+	
+	int testMsgNum();
+	
+	int testThreadNum();
+
+	std::string testTopicName();
 
 	int producerSwitch();
 
-	int producerMessNum();
-
 	int producerMessSize();
-	
-	int producerNum();
 
 	int consumerSwitch();
 
-	int consumerNum();
 private:
 	boost::property_tree::ptree m_pt;
 	bool isErr;

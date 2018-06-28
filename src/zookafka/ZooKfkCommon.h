@@ -21,6 +21,8 @@
 #define PERROR(fmt, args...)
 #endif
 
+/////////////////////////////////////////////////////////////////////////////////////////////
+
 #define NO_KAFKA_BROKERS_FOUND				-10000
 #define TRANSMIT_PARAMTER_ERROR				-10001
 #define PUSH_TOPIC_NAME_NOINIT				-10002
@@ -38,6 +40,18 @@
 #define KAFKA_CONSUMER_CONFSET_ERROR		-10012
 #define KAFKA_CONSUMER_ADDTOPIC_ERROR		-10013
 
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define KFK_LOG_EMERG   0
+#define KFK_LOG_ALERT   1
+#define KFK_LOG_CRIT    2
+#define KFK_LOG_ERR     3
+#define KFK_LOG_WARNING 4
+#define KFK_LOG_NOTICE  5
+#define KFK_LOG_INFO    6
+#define KFK_LOG_DEBUG   7
+
+//////////////////////////////////////////////////////////////////////////////////////////////
 inline int strIntLen(const char *str)
 {
 	int len = 0;
