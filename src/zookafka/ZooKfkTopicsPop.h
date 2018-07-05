@@ -81,7 +81,7 @@ public:
 	//zookeeper发现brokers变化修正brokers
 	void changeKafkaBrokers(const std::string& brokers);
 private:
-	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
+	zhandle_t* initialize_zookeeper(const char* zookeeper, const int debug);
 
 	bool str2Vec(const char* src, std::vector<std::string>& dest, const char delim);
 
@@ -110,7 +110,7 @@ private:
 
 typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPop> ZooKfkConsumerPtr;
 
-/*
+/*目前不建议使用单进程多消费者情况，测试会出现数据读不到情况
  *多个消费者单实例模式，多个消费者所有的配置参数都是一样的
  *可以直接包含头文件单实例使用，可以直接指定初始化多个消费者，提高并发量
  *返回错误码参考 头文件ZooKfkCommon.h

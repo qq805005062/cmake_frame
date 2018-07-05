@@ -89,7 +89,7 @@ public:
 			  int queueBuffMaxMess = 100000);
 
 	//往kfk生成数据，指定topic,如果topic不存在的话，则返回错误，必须在初始化的时候初始化
-	//内部处理队列满的错误，外面不需要处理 -184
+	//内部处理队列满的错误，外面不需要处理 -184//内部已经处理这个错误，外部就不需要调用bolckFlush
 	//data是要生成的数据，msgPri私有数据，回调的时候会回调回来
 	//key是对于消费者每个消息时的，可以为空
 	//partition分区默认分片
@@ -106,6 +106,7 @@ public:
 
 	//上层应用可以对本地队列进行刷新操作，当本地队列小于queueSize值的时候才会返回，阻塞
 	//当push返回错误的时候，getLastErrorMsg == -184的时候，必须要调用这个方法，参数可以不传，有默认值
+	//后续测试发现这个方法调用并不影响数据是否到服务端，只是会影响本地队列大小，push内部已经处理了，外部不用调用
 	int bolckFlush(int queueSize = 0);
 
 	//资源释放，释放所有的资源、异步退出，清除资源使用,此方法是阻塞的，退出之后就表示所有数据已经清理干净
@@ -135,7 +136,7 @@ public:
 			wcb_(msgPri, msgInfo);
 	}
 private:
-	zhandle_t* initialize_zookeeper(const char * zookeeper, const int debug);
+	zhandle_t* initialize_zookeeper(const char* zookeeper, const int debug);
 
 	bool str2Vec(const char* src, std::vector<std::string>& dest, const char delim);
 
@@ -178,7 +179,7 @@ public:
 	{
 		for(int i = 0; i < kfkProducerNum; i++)
 		{
-			if(ZooKfkProducerPtrVec[i])
+			if(ZooKfkProducerPtrVec.size() > 0 && ZooKfkProducerPtrVec[i])
 				ZooKfkProducerPtrVec[i].reset();
 		}
 

@@ -7,6 +7,7 @@
 namespace ZOOKEEPERKAFKA
 {
 static const char KafkaBrokerPath[] = "/brokers/ids";
+static int zookeeperColonyNum = 0;
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
 {
@@ -15,13 +16,33 @@ static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const c
 
 static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 {
-	int ret = 0;
+	int ret = 0,tryTime = 0;
 	if (zzh)
 	{
 		struct String_vector brokerlist;
-		if (zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist) != ZOK)
+		do{
+			#if 1
+			ret = zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist);
+			#else
+			struct Stat nodes;
+			ret = zoo_get_children2(zzh, KafkaBrokerPath, 1, &brokerlist, &nodes);
+			PDEBUG("zoo_get_children2 %d nodes.czxid %lu", ret, nodes.czxid);
+			#endif
+			if(ret != ZOK)
+			{
+				PERROR("Zookeeper No brokers found on path %s error %d %s %d", KafkaBrokerPath, ret, zerror(ret), zoo_state(zzh));
+				if(ZCONNECTIONLOSS == ret)
+					tryTime++;
+				else
+					return ret;
+			}else{
+				break;
+			}
+		}while(tryTime < zookeeperColonyNum);
+		PDEBUG("tryTime %d", tryTime);
+		if(ret != ZOK)
 		{
-			PERROR("Zookeeper No brokers found on path %s", KafkaBrokerPath);
+			PERROR("Zookeeper No brokers found on path %s error %d %s %d", KafkaBrokerPath, ret, zerror(ret), zoo_state(zzh));
 			return ret;
 		}
 
@@ -90,7 +111,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 
 static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void *opaque)
 {
-	PDEBUG("deliver: %s: offset %ld", rd_kafka_err2str(message->err), message->offset);
+	//PDEBUG("deliver: %s: offset %ld", rd_kafka_err2str(message->err), message->offset);
 	ZooKfkTopicsPush *pKfkPush = static_cast<ZooKfkTopicsPush *>(opaque);
 	CALLBACKMSG msg;
 	msg.offset = message->offset;
@@ -105,12 +126,13 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 	if (message->err)
 	{
 		// 这里可以写失败的处理
-		PERROR("%% Message delivery failed error msg: %s", rd_kafka_err2str(message->err));
+		//PERROR("%% Message delivery failed error msg: %s", rd_kafka_err2str(message->err));
 		pKfkPush->msgPushErrorCall(message->_private, &msg);
 	}
 	else
 	{
-		#ifdef SHOW_DEBUG_MESSAGE
+		//#ifdef SHOW_DEBUG_MESSAGE
+		#if 0
 		// 发送成功处理，这里只是示范，一般可以不处理成功的，只处理失败的就OK
 		std::string data, key;
 		data.assign(const_cast<const char* >(static_cast<char* >(message->payload)), message->len);
@@ -160,6 +182,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 		PERROR("initialize_zookeeper new error");
 		return KAFKA_MODULE_NEW_ERROR;
 	}
+	
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
 	////////////////////////////////////////////////
 	if(ret <= 0)
@@ -246,8 +269,12 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	
 	rd_kafka_conf_set(kfkconft, "message.send.max.retries", "3", NULL, 0);
 	rd_kafka_conf_set(kfkconft, "retry.backoff.ms", "100", NULL, 0);
-	rd_kafka_conf_set(kfkconft, "socket.blocking.max.ms", "50", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "socket.blocking.max.ms", "10", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "queue.enqueue.timeout.ms", "0", NULL, 0);
 	rd_kafka_conf_set(kfkconft, "queue.buffering.max.kbytes", "4096", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "batch.num.messages", "1", NULL, 0);
+	//rd_kafka_conf_set(kfkconft, "producer.type", "sync", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "producer.type", "async", NULL, 0);
 
 	kfkt = rd_kafka_new(RD_KAFKA_PRODUCER, kfkconft, errStr, sizeof errStr);
 	if(!kfkt)
@@ -313,6 +340,14 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	int ret = 0;
 	if(data.empty() || topic.empty() || topicPtrMap.empty())
 	{
+		if(data.empty())
+		{
+			PERROR("push data empty");
+		}
+		if(topic.empty())
+		{
+			PERROR("push topic empty");
+		}
 		PERROR("push parameter no enought");
 		ret = TRANSMIT_PARAMTER_ERROR;
 		return ret;
@@ -361,7 +396,9 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 			break;
 		}
 	}
-	//rd_kafka_poll(kfkt, 100);
+	//这个地方阻塞并不影响数据是否到服务端，仅仅影响分发回调方法回调
+	rd_kafka_poll(kfkt, 0);
+	#if 0
 	int waitTimer = 0;
 	while(rd_kafka_outq_len(kfkt) > 50)
 	{
@@ -370,6 +407,10 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		if(waitTimer >= 3)
 			break;
 	}
+
+	while(rd_kafka_outq_len(kfkt) > 0)
+		rd_kafka_poll(kfkt, 100);
+	#endif
 	pushNum--;
 	ret = rd_kafka_outq_len(kfkt);
 	return ret;
@@ -401,7 +442,7 @@ void ZooKfkTopicsPush::kfkDestroy()
 	{
 		rd_kafka_poll(kfkt, 100);
 	}
-
+	PERROR("topicPtrMap size %ld",topicPtrMap.size());
 	for(KfkTopicPtrMapIter iter = topicPtrMap.begin();iter != topicPtrMap.end();iter++)
 	{
 		rd_kafka_topic_destroy(iter->second);
@@ -433,7 +474,7 @@ void ZooKfkTopicsPush::changeKafkaBrokers(const std::string& brokers)
 	return;
 }
 
-zhandle_t* ZooKfkTopicsPush::initialize_zookeeper(const char * zookeeper, const int debug)
+zhandle_t* ZooKfkTopicsPush::initialize_zookeeper(const char* zookeeper, const int debug)
 {
 	zhandle_t *zh = NULL;
 	if (debug)
@@ -449,6 +490,15 @@ zhandle_t* ZooKfkTopicsPush::initialize_zookeeper(const char * zookeeper, const 
 		PERROR("Zookeeper connection not established");
 		return NULL;
 	}
+
+	const char *p = zookeeper;
+	do
+	{
+		p++;
+		zookeeperColonyNum++;
+		p = utilFristConstchar(p, ',');
+	}while(p && *p);
+	
 	return zh;
 }
 
@@ -466,14 +516,14 @@ bool ZooKfkTopicsPush::str2Vec(const char* src, std::vector<std::string>& dest, 
 	srcLen--;
 	memcpy(pSrc,src,srcLen);
 
-	char *pChar = pSrc, *qChar = utilFristConstchar(pChar,delim);
+	char *pChar = pSrc, *qChar = utilFristchar(pChar,delim);
 	while(qChar)
 	{
 		PDEBUG("str2Vec :: curr :: %s",pChar);
 		*qChar = 0;
 		dest.push_back(pChar);
 		pChar = ++qChar;
-		qChar = utilFristConstchar(pChar,delim);
+		qChar = utilFristchar(pChar,delim);
 	}
 	PDEBUG("str2Vec :: curr :: %s",pChar);
 	dest.push_back(pChar);
@@ -508,6 +558,8 @@ int ZooKfkProducers::zooKfkProducersInit(int produceNum, const std::string& zook
 		{
 			PERROR("producer->zookInit error ret : %d", ret);
 			return ret;
+		}else{
+			PDEBUG("producer->zookInit success %d",i);
 		}
 		ZooKfkProducerPtrVec.push_back(producer);
 	}

@@ -65,7 +65,7 @@ inline int strIntLen(const char *str)
 	return len;
 }
 
-inline char* utilFristConstchar(char *str,const char c)
+inline char* utilFristchar(char *str,const char c)
 {
 	char *p = str;
 	if(!str)
@@ -79,6 +79,22 @@ inline char* utilFristConstchar(char *str,const char c)
 	}
 	return NULL;
 }
+
+inline const char* utilFristConstchar(const char *str,const char c)
+{
+	const char *p = str;
+	if(!str)
+		return NULL;
+	while(*p)
+	{
+		if(*p == c)
+			return p;
+		else
+			p++;
+	}
+	return NULL;
+}
+
 
 #endif
 

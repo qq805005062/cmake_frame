@@ -7,6 +7,7 @@
 namespace ZOOKEEPERKAFKA
 {
 static const char KafkaBrokerPath[] = "/brokers/ids";
+static int zookeeperColonyNum = 0;
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
 {
@@ -15,13 +16,33 @@ static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const c
 
 static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 {
-	int ret = 0;
+	int ret = 0,tryTime = 0;
 	if (zzh)
 	{
 		struct String_vector brokerlist;
-		if (zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist) != ZOK)
+		do{
+			#if 1
+			ret = zoo_get_children(zzh, KafkaBrokerPath, 1, &brokerlist);
+			#else
+			struct Stat nodes;
+			ret = zoo_get_children2(zzh, KafkaBrokerPath, 1, &brokerlist, &nodes);
+			PDEBUG("zoo_get_children2 %d nodes.czxid %lu", ret, nodes.czxid);
+			#endif
+			if(ret != ZOK)
+			{
+				PERROR("Zookeeper No brokers found on path %s error %d %s %d", KafkaBrokerPath, ret, zerror(ret), zoo_state(zzh));
+				if(ZCONNECTIONLOSS == ret)
+					tryTime++;
+				else
+					return ret;
+			}else{
+				break;
+			}
+		}while(tryTime < zookeeperColonyNum);
+		PDEBUG("tryTime %d", tryTime);
+		if(ret != ZOK)
 		{
-			PERROR("No brokers found on path %s", KafkaBrokerPath);
+			PERROR("Zookeeper No brokers found on path %s error %d %s %d", KafkaBrokerPath, ret, zerror(ret), zoo_state(zzh));
 			return ret;
 		}
 
@@ -392,12 +413,15 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 				key->assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
 			}
 			
+			PDEBUG("partition %d , offset %ld", message->partition, message->offset);
+			#if 0
 			if(top)
 			{
-				PDEBUG("len: %zu,topic :: %s partition: %d, offset: %ld", message->len, top, message->partition, message->offset);
+				PDEBUG("len: %zu,topic :: %s partition: %d, data %s ,offset: %ld", message->len, top, message->partition, static_cast<char *>(message->payload), message->offset);
 			}else{
-				PDEBUG("len: %zu, partition: %d, offset: %ld", message->len, message->partition, message->offset);
+				PDEBUG("len: %zu, partition: %d, data %s ,offset: %ld", message->len, message->partition, static_cast<char *>(message->payload), message->offset);
 			}
+			#endif
 			rd_kafka_message_destroy(message);
 		}
 	}
@@ -572,7 +596,7 @@ void ZooKfkTopicsPop::kfkDestroy()
 	partition = RD_KAFKA_PARTITION_UA;
 }
 
-zhandle_t* ZooKfkTopicsPop::initialize_zookeeper(const char * zookeeper, const int debug)
+zhandle_t* ZooKfkTopicsPop::initialize_zookeeper(const char* zookeeper, const int debug)
 {
 	zhandle_t *zh = NULL;
 	if (debug)
@@ -588,6 +612,15 @@ zhandle_t* ZooKfkTopicsPop::initialize_zookeeper(const char * zookeeper, const i
 		PERROR("Zookeeper connection not established.");
 		return NULL;
 	}
+
+	const char *p = zookeeper;
+	do
+	{
+		p++;
+		zookeeperColonyNum++;
+		p = utilFristConstchar(p, ',');
+	}while(p && *p);
+	
 	return zh;
 }
 
@@ -605,14 +638,14 @@ bool ZooKfkTopicsPop::str2Vec(const char* src, std::vector<std::string>& dest, c
 	srcLen--;
 	memcpy(pSrc,src,srcLen);
 
-	char *pChar = pSrc, *qChar = utilFristConstchar(pChar,delim);
+	char *pChar = pSrc, *qChar = utilFristchar(pChar,delim);
 	while(qChar)
 	{
 		PDEBUG("str2Vec :: curr :: %s",pChar);
 		*qChar = 0;
 		dest.push_back(pChar);
 		pChar = ++qChar;
-		qChar = utilFristConstchar(pChar,delim);
+		qChar = utilFristchar(pChar,delim);
 	}
 	PDEBUG("str2Vec :: curr :: %s",pChar);
 	dest.push_back(pChar);
@@ -657,7 +690,7 @@ void ZooKfkConsumers::zooKfkConsumerDestroy()
 {
 	for(int i = 0; i < kfkConsumerNum; i++)
 	{
-		if(ZooKfkConsumerPtrVec[i])
+		if(ZooKfkConsumerPtrVec.size() > 0 && ZooKfkConsumerPtrVec[i])
 			ZooKfkConsumerPtrVec[i]->kfkDestroy();
 	}
 }

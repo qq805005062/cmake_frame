@@ -13,6 +13,39 @@ namespace common
 
 char DirUtil::lastError_[256] = { 0 };
 
+void mkdirs(const char *muldir) 
+{
+    size_t i = 0, len = 0;
+    char str[1024] = {0};    
+    strncpy(str, muldir, 1024);
+    len= strlen(str);
+    for( i=0; i<len; i++ )
+    {
+        if( str[i]=='/' )
+        {
+            str[i] = '\0';
+            if(access(str, F_OK) != 0 )
+            {
+                if(mkdir(str, 0755 ) != 0)
+				{
+					fprintf(stderr, "%s :: %s() %d: ERROR mkdir error %s \n", __FILE__, __FUNCTION__, __LINE__, strerror(errno));
+				}
+            }
+            str[i]='/';
+        }
+    }
+	
+    if( len > 0 && access(str, F_OK) != 0 )
+    {
+        if(mkdir(str, 0755 ) != 0)
+		{
+			fprintf(stderr, "%s :: %s() %d: ERROR mkdir error %s \n", __FILE__, __FUNCTION__, __LINE__, strerror(errno));
+		}
+    }
+	
+    return;
+}
+
 int DirUtil::MakeDir(const std::string& path)
 {
 	if (path.empty())
@@ -26,12 +59,15 @@ int DirUtil::MakeDir(const std::string& path)
 		return 0;
 	}
 
+#if 1
+	mkdirs(path.c_str());
+#else
 	if (mkdir(path.c_str(), 0755) != 0)
 	{
 		_LOG_LAST_ERROR("mkdir %s failed(%s)", path.c_str(), strerror(errno));
 		return -1;
 	}
-
+#endif
 	return 0;
 }
 
