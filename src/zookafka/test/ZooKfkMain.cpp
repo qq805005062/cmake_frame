@@ -17,8 +17,8 @@ static volatile uint64_t countNum = 0;
 
 std::unique_ptr<ZOOKEEPERKAFKA::ThreadPool> testThreadPool;
 static char *pBuf = NULL;
-static volatile int targetMsgNum = 0, kafkaProducerCallNum = 0, kafkaConsumerCallNum = 0;
-static pthread_mutex_t syncLock,countLock;
+static volatile int targetMsgNum = 0, kafkaProducerCallNum = 0, kafkaPushNum = 0, kafkaConsumerCallNum = 0;
+static pthread_mutex_t syncLock, countLock, pushLock;
 static void everyKfkDeliverCall(void *msgPri, CALLBACKMSG *msgInfo)
 {
 	if(msgInfo)
@@ -48,6 +48,14 @@ static void produceKfkMsg(const std::string& top, const std::string& msg)
 	{
 		PERROR("produceKfkMsg error %d %s", ret, errMsg.c_str());
 	}
+	pthread_mutex_lock(&pushLock);
+	kafkaPushNum++;
+	if(kafkaPushNum == targetMsgNum)
+	{
+		ZOOKEEPERKAFKA::Timestamp pushEndSecond(ZOOKEEPERKAFKA::Timestamp::now());
+		PDEBUG("kafka producer test pushEndSecond %lu ", pushEndSecond.microSecondsSinceEpoch());
+	}
+	pthread_mutex_unlock(&pushLock);
 }
 
 static void consumerKfkMsg(int index)
@@ -67,10 +75,13 @@ static void consumerKfkMsg(int index)
 		kafkaConsumerCallNum++;
 		if(kafkaConsumerCallNum == targetMsgNum)
 		{
+			PDEBUG("pthread_mutex_unlock %d ", kafkaConsumerCallNum);
 			pthread_mutex_unlock(&syncLock);
+			pthread_mutex_unlock(&countLock);
 			break;
 		}else if(kafkaConsumerCallNum > targetMsgNum)
 		{
+			pthread_mutex_unlock(&countLock);
 			break;
 		}
 		pthread_mutex_unlock(&countLock);
@@ -85,7 +96,7 @@ int consumerTest(int msgNum, int threadNum)
 	ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit(threadNum, broAdds, topicName, consumerGroup);
 
 	targetMsgNum = msgNum;
-	PDEBUG("kafka producer test for brokers %s thread num %d msg num %d topic name %s", broAdds.c_str(), threadNum, msgNum, topicName.c_str());
+	PDEBUG("kafka consumer for brokers %s thread num %d msg num %d topic name %s", broAdds.c_str(), threadNum, msgNum, topicName.c_str());
 	ZOOKEEPERKAFKA::Timestamp startSecond(ZOOKEEPERKAFKA::Timestamp::now());
 	pthread_mutex_lock(&syncLock);
 	for(int i = 0; i < threadNum; i++)
@@ -95,9 +106,9 @@ int consumerTest(int msgNum, int threadNum)
 	ZOOKEEPERKAFKA::Timestamp endSecond(ZOOKEEPERKAFKA::Timestamp::now());
 	pthread_mutex_lock(&syncLock);
 	ZOOKEEPERKAFKA::Timestamp overSecond(ZOOKEEPERKAFKA::Timestamp::now());
-	ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerDestroy();
 	PDEBUG("kafka consumer test begin %lu end %lu over %lu", startSecond.microSecondsSinceEpoch(), endSecond.microSecondsSinceEpoch(), overSecond.microSecondsSinceEpoch());
 	
+	ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerDestroy();
 	return 0;
 }
 
@@ -137,7 +148,6 @@ int producerTest(const std::string& msg, int msgNum, int threadNum)
 	PDEBUG("kafka producer test begin %lu end %lu", startSecond.microSecondsSinceEpoch(), endSecond.microSecondsSinceEpoch());
 	ZOOKEEPERKAFKA::ZooKfkProducers::instance().zooKfkProducersDestroy();
 	ZOOKEEPERKAFKA::Timestamp overSecond(ZOOKEEPERKAFKA::Timestamp::now());
-	PDEBUG("kafkaProducerCallNum :%d",kafkaProducerCallNum);
 	PDEBUG("kafka producer test begin %lu end %lu over %lu", startSecond.microSecondsSinceEpoch(), endSecond.microSecondsSinceEpoch(), overSecond.microSecondsSinceEpoch());
 	
 	return 0;
@@ -145,15 +155,17 @@ int producerTest(const std::string& msg, int msgNum, int threadNum)
 
 int main(int argc, char* argv[])
 {
-	int sw = ConfigFile::instance().producerSwitch();
 	testThreadPool.reset(new ZOOKEEPERKAFKA::ThreadPool("testPool"));
 	int msgNum = ConfigFile::instance().testMsgNum();
 
 	pthread_mutex_init(&syncLock, NULL);
 	pthread_mutex_init(&countLock, NULL);
+	pthread_mutex_init(&pushLock, NULL);
+
+	int sw = ConfigFile::instance().producerSwitch();
 	if(sw)
 	{
-		PDEBUG("Now begin kafka produce test.........");
+		PDEBUG("Now begin kafka produce test begin.........");
 		int threadNum = ConfigFile::instance().testThreadNum();
 		testThreadPool->start(threadNum);
 		int msgLen = ConfigFile::instance().producerMessSize();
@@ -170,19 +182,23 @@ int main(int argc, char* argv[])
 
 		if(pBuf)
 			delete[] pBuf;
+		PDEBUG("Now begin kafka produce test end.........");
 		return 0;
 	}
 
 	sw = ConfigFile::instance().consumerSwitch();
 	if(sw)
 	{
-		PDEBUG("Now begin kafka consumer test.........");
+		PDEBUG("Now begin kafka consumer test begin.........");
 		int threadNum = ConfigFile::instance().testThreadNum();
 		testThreadPool->start(threadNum);
 		consumerTest(msgNum,threadNum);
+		PDEBUG("Now begin kafka consumer test end.........");
 		return 0;
 	}
 	pthread_mutex_destroy(&syncLock);
+	pthread_mutex_destroy(&countLock);
+	pthread_mutex_destroy(&pushLock);
 	return 0;
 }
 
