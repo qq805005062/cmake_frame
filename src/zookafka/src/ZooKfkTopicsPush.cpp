@@ -146,7 +146,8 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 }
 
 ZooKfkTopicsPush::ZooKfkTopicsPush()
-	:zKeepers()
+	:flushLock()
+	,zKeepers()
 	,zookeeph(nullptr)
 	,kfkBrokers()
 	,kfkt(nullptr)
@@ -366,7 +367,10 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		ret = MODULE_RECV_EXIT_COMMND;
 		return ret;
 	}
-	pushNum++;
+	{
+		std::lock_guard<std::mutex> lock(flushLock);
+		pushNum++;
+	}
 	while(1)
 	{
 		ret = rd_kafka_produce(iter->second,
@@ -397,7 +401,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		}
 	}
 	//这个地方阻塞并不影响数据是否到服务端，仅仅影响分发回调方法回调
-	rd_kafka_poll(kfkt, 0);
+	//rd_kafka_poll(kfkt, 0);
 	#if 0
 	int waitTimer = 0;
 	while(rd_kafka_outq_len(kfkt) > 50)
@@ -411,13 +415,17 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	while(rd_kafka_outq_len(kfkt) > 0)
 		rd_kafka_poll(kfkt, 100);
 	#endif
-	pushNum--;
+	{
+		std::lock_guard<std::mutex> lock(flushLock);
+		pushNum--;
+	}
 	ret = rd_kafka_outq_len(kfkt);
 	return ret;
 }
 
 int ZooKfkTopicsPush::bolckFlush(int queueSize)
 {
+	std::lock_guard<std::mutex> lock(flushLock);
 	if(queueSize <= 0)
 	{
 		int queueLen = rd_kafka_outq_len(kfkt);
@@ -436,8 +444,10 @@ int ZooKfkTopicsPush::bolckFlush(int queueSize)
 void ZooKfkTopicsPush::kfkDestroy()
 {
 	destroy = 1;
+	PDEBUG("kfkDestroy pushNum %d", pushNum);
 	while(pushNum)
 		usleep(500);
+	PDEBUG("kfkDestroy pushNum %d", pushNum);
 	while(rd_kafka_outq_len(kfkt) > 0)
 	{
 		rd_kafka_poll(kfkt, 100);
@@ -570,7 +580,7 @@ void ZooKfkProducers::zooKfkProducersDestroy()
 {
 	for(int i = 0; i < kfkProducerNum; i++)
 	{
-		if(ZooKfkProducerPtrVec[i])
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
 			ZooKfkProducerPtrVec[i]->kfkDestroy();
 	}
 }
@@ -580,7 +590,7 @@ int ZooKfkProducers::setMsgPushErrorCall(const MsgPushCallBack& cb)
 	int ret = KAFKA_NO_INIT_ALREADY;
 	for(int i = 0; i < kfkProducerNum; i++)
 	{
-		if(ZooKfkProducerPtrVec[i])
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
 		{
 			ret++;
 			ZooKfkProducerPtrVec[i]->setMsgPushErrorCall(cb);
@@ -596,7 +606,7 @@ int ZooKfkProducers::setMsgPushCallBack(const MsgPushCallBack& cb)
 	int ret = KAFKA_NO_INIT_ALREADY;
 	for(int i = 0; i < kfkProducerNum; i++)
 	{
-		if(ZooKfkProducerPtrVec[i])
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
 		{
 			ret++;
 			ZooKfkProducerPtrVec[i]->setMsgPushCallBack(cb);
@@ -617,7 +627,7 @@ int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg
 	}
 	unsigned int index = lastIndex++;
 	int sunindex = index % kfkProducerNum;
-	if(ZooKfkProducerPtrVec[sunindex])
+	if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[sunindex])
 	{
 		ret = ZooKfkProducerPtrVec[sunindex]->push(topic, msg, key, msgPri);
 		if(ret < 0)
@@ -628,6 +638,13 @@ int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg
 	return ret;
 }
 
+void ZooKfkProducers::produceFlush(int index)
+{
+	if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[index])
+	{
+		ZooKfkProducerPtrVec[index]->bolckFlush();
+	}
+}
 
 }
 

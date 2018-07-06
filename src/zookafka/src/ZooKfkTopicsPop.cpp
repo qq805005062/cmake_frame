@@ -111,6 +111,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 
 ZooKfkTopicsPop::ZooKfkTopicsPop()
 	:listLock()
+	,flushLock()
 	,zKeepers()
 	,zookeeph(nullptr)
 	,kfkBrokers()
@@ -369,7 +370,10 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 	int ret = 0;
 	if(destroy)
 		return MODULE_RECV_EXIT_COMMND;
-	popNum++;
+	{
+		std::lock_guard<std::mutex> lock(flushLock);
+		popNum++;
+	}
 	rd_kafka_message_t* message = NULL;
 	while(1)
 	{
@@ -412,9 +416,9 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			{
 				key->assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
 			}
-			
-			PDEBUG("partition %d , offset %ld", message->partition, message->offset);
 			#if 0
+			PDEBUG("partition %d , offset %ld", message->partition, message->offset);
+			
 			if(top)
 			{
 				PDEBUG("len: %zu,topic :: %s partition: %d, data %s ,offset: %ld", message->len, top, message->partition, static_cast<char *>(message->payload), message->offset);
@@ -425,7 +429,10 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			rd_kafka_message_destroy(message);
 		}
 	}
-	popNum--;
+	{
+		std::lock_guard<std::mutex> lock(flushLock);
+		popNum--;
+	}
 	return ret;
 }
 
@@ -434,7 +441,10 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 	int ret = 0;
 	if(destroy)
 		return MODULE_RECV_EXIT_COMMND;
-	popNum++;
+	{
+		std::lock_guard<std::mutex> lock(flushLock);
+		popNum++;
+	}
 	rd_kafka_message_t* message = NULL;
 	message = rd_kafka_consumer_poll(kfkt, 500);
 	if(message)
@@ -475,7 +485,10 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			rd_kafka_message_destroy(message);
 		}
 	}
-	popNum--;
+	{
+		std::lock_guard<std::mutex> lock(flushLock);
+		popNum--;
+	}
 	return ret;
 }
 
@@ -565,8 +578,10 @@ void ZooKfkTopicsPop::changeKafkaBrokers(const std::string& brokers)
 void ZooKfkTopicsPop::kfkDestroy()
 {
 	destroy = 1;
+	PDEBUG("kfkDestroy popNum %d", popNum);
 	while(popNum)
 		usleep(500);
+	PDEBUG("kfkDestroy popNum %d", popNum);
 	rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
 	if (err)
 	{
@@ -700,7 +715,7 @@ int ZooKfkConsumers::zooKfkConsumerStart(const std::string& topic)
 	int ret = 0;
 	for(int i = 0;i < kfkConsumerNum; i++)
 	{
-		if(ZooKfkConsumerPtrVec[i])
+		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
 			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStart(topic);
 		else
 			ret = KAFKA_UNHAPPEN_ERRPR;
@@ -713,7 +728,7 @@ int ZooKfkConsumers::zooKfkConsumerStop(const std::string& topic)
 	int ret = 0;
 	for(int i = 0;i < kfkConsumerNum; i++)
 	{
-		if(ZooKfkConsumerPtrVec[i])
+		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
 			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStop(topic);
 		else
 			ret = KAFKA_UNHAPPEN_ERRPR;
@@ -726,7 +741,7 @@ int ZooKfkConsumers::consume(int index, std::string& topic, std::string& data, s
 	int ret = 0;
 	if(index >= kfkConsumerNum)
 		return KAFKA_NO_INIT_ALREADY;
-	if(ZooKfkConsumerPtrVec[index])
+	if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[index])
 	{
 		ret = ZooKfkConsumerPtrVec[index]->pop(topic, data, key, offset);
 		if(ret < 0)
@@ -743,7 +758,7 @@ int ZooKfkConsumers::tryConsume(int index, std::string& topic, std::string& data
 	int ret = 0;
 	if(index >= kfkConsumerNum)
 		return KAFKA_NO_INIT_ALREADY;
-	if(ZooKfkConsumerPtrVec[index])
+	if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[index])
 	{
 		ret = ZooKfkConsumerPtrVec[index]->tryPop(topic, data, timeout_ms, key, offset);
 		if(ret < 0)

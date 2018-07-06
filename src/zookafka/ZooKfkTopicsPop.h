@@ -88,6 +88,7 @@ private:
 	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
 
 	std::mutex listLock;
+	std::mutex flushLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
@@ -104,13 +105,13 @@ private:
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;
 	int destroy;
-	int popNum;
+	volatile int popNum;
 	int initFlag;
 };
 
 typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPop> ZooKfkConsumerPtr;
 
-/*目前不建议使用单进程多消费者情况，测试会出现数据读不到情况
+/*
  *多个消费者单实例模式，多个消费者所有的配置参数都是一样的
  *可以直接包含头文件单实例使用，可以直接指定初始化多个消费者，提高并发量
  *返回错误码参考 头文件ZooKfkCommon.h

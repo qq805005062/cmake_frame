@@ -10,6 +10,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <mutex>
 
 #include "Singleton.h"
 #include "noncopyable.h"
@@ -141,7 +142,8 @@ private:
 	bool str2Vec(const char* src, std::vector<std::string>& dest, const char delim);
 
 	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
-	
+
+	std::mutex flushLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
@@ -155,7 +157,7 @@ private:
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;
 	int destroy;
-	int pushNum;
+	volatile int pushNum;
 };
 
 typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPush> ZooKfkProducerPtr;
@@ -203,6 +205,8 @@ public:
 
 	//写消息，topic名称，消息内容，如果有错误，返回错误信息，key，默认空
 	int psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key = NULL, void *msgPri = NULL);
+
+	void produceFlush(int index);
 
 private:
 	//volatile unsigned int lastIndex;
