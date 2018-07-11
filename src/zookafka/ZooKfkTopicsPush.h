@@ -89,6 +89,8 @@ public:
 			  int queueBuffMaxMs = 1000,
 			  int queueBuffMaxMess = 100000);
 
+	int producerAddTopic(const std::string& topic);
+
 	//往kfk生成数据，指定topic,如果topic不存在的话，则返回错误，必须在初始化的时候初始化
 	//内部处理队列满的错误，外面不需要处理 -184//内部已经处理这个错误，外部就不需要调用bolckFlush
 	//data是要生成的数据，msgPri私有数据，回调的时候会回调回来
@@ -144,6 +146,7 @@ private:
 	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
 
 	std::mutex flushLock;
+	std::mutex topicMapLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;

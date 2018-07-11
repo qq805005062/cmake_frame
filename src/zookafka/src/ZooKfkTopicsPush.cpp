@@ -147,6 +147,7 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 
 ZooKfkTopicsPush::ZooKfkTopicsPush()
 	:flushLock()
+	,topicMapLock()
 	,zKeepers()
 	,zookeeph(nullptr)
 	,kfkBrokers()
@@ -324,11 +325,38 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 			PERROR("rd_kafka_topic_new ERROR");
 			return KAFKA_TOPIC_NEW_ERROR;
 		}
-
-		topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
+		{
+			std::lock_guard<std::mutex> lock(topicMapLock);
+			topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
+		}
 	}
 	ret = 0;
 	return ret;
+}
+
+int ZooKfkTopicsPush::producerAddTopic(const std::string& topic)
+{
+	char errStr[512] = {0};
+	rd_kafka_topic_conf_t *pTopiConf = rd_kafka_topic_conf_new();
+	if(!pTopiConf)
+	{
+		PERROR("rd_kafka_topic_conf_new ERROR");
+		return KAFKA_TOPIC_CONF_NEW_ERROR;
+	}
+	
+	rd_kafka_topic_conf_set(pTopiConf, "produce.offset.report", "true", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(pTopiConf, "request.required.acks", "1", errStr, sizeof(errStr));
+
+	rd_kafka_topic_t *pTopic = rd_kafka_topic_new(kfkt, topic.c_str(), pTopiConf);
+	if(!pTopic)
+	{
+		PERROR("rd_kafka_topic_new ERROR");
+		return KAFKA_TOPIC_NEW_ERROR;
+	}
+	
+	std::lock_guard<std::mutex> lock(topicMapLock);
+	topicPtrMap.insert(KfkTopicPtrMap::value_type(topic, pTopic));
+	return 0;
 }
 
 int ZooKfkTopicsPush::push(const std::string& topic,
@@ -353,7 +381,8 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		ret = TRANSMIT_PARAMTER_ERROR;
 		return ret;
 	}
-
+	
+	std::lock_guard<std::mutex> lock(topicMapLock);
 	KfkTopicPtrMapIter iter = topicPtrMap.find(topic);
 	if(iter == topicPtrMap.end())
 	{
