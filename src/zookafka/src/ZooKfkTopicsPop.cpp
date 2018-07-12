@@ -365,7 +365,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	return 0;
 }
 
-int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key, int64_t* offset)
+int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key, int64_t* offset, int32_t* parnum)
 {
 	int ret = 0;
 	if(destroy)
@@ -411,7 +411,10 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			{
 				*offset = message->offset;
 			}
-			
+			if(parnum)
+			{
+				*parnum = message->partition;
+			}
 			if (key)
 			{
 				key->assign(const_cast<const char* >(static_cast<char* >(message->key)), message->key_len);
@@ -436,7 +439,7 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 	return ret;
 }
 
-int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_ms, std::string* key, int64_t* offset)
+int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_ms, std::string* key, int64_t* offset, int32_t* parnum)
 {
 	int ret = 0;
 	if(destroy)
@@ -471,6 +474,10 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			if(offset)
 			{
 				*offset = message->offset;
+			}
+			if(parnum)
+			{
+				*parnum = message->partition;
 			}
 			if (key)
 			{

@@ -93,8 +93,10 @@ int consumerTest(int msgNum, int threadNum)
 	std::string broAdds = ConfigFile::instance().zookeepBrokers();
 	std::string topicName = ConfigFile::instance().testTopicName();
 	std::string consumerGroup = "testConsumer";
-	ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit(threadNum, broAdds, topicName, consumerGroup);
-
+	int ret = ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit(threadNum, broAdds, topicName, consumerGroup);
+	PDEBUG("ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit %d", ret);
+	if(ret < 0)
+		return ret;
 	targetMsgNum = msgNum;
 	PDEBUG("kafka consumer for brokers %s thread num %d msg num %d topic name %s", broAdds.c_str(), threadNum, msgNum, topicName.c_str());
 	ZOOKEEPERKAFKA::Timestamp startSecond(ZOOKEEPERKAFKA::Timestamp::now());

@@ -61,10 +61,10 @@ public:
 	int kfkTopicConsumeStart(const std::string& topic);	
 	//获取kfk一个消息，并可以获取对应的topic，偏移量，key；
 	//-1表示有错，内部过滤了-191（读到队尾的错误)
-	int pop(std::string& topic, std::string& data, std::string* key = NULL, int64_t* offset = NULL);
+	int pop(std::string& topic, std::string& data, std::string* key = NULL, int64_t* offset = NULL, int32_t* parnum = NULL);
 	//获取kfk一个消息，timeout_ms超时时间，
 	//内部已经过滤-191的错误，不需要外部过滤-191的错误
-	int tryPop(std::string& topic, std::string& data, int timeout_ms, std::string* key = NULL, int64_t* offset = NULL);
+	int tryPop(std::string& topic, std::string& data, int timeout_ms, std::string* key = NULL, int64_t* offset = NULL, int32_t* parnum = NULL);
 	
 	//停止某一个topic读，必须存在已经读的topic
 	int kfkTopicConsumeStop(const std::string& topic);
