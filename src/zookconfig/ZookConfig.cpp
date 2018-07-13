@@ -5,18 +5,8 @@
 namespace ZOOKCONFIG
 {
 static int zookeeperColonyNum = 0;
-static std::string rootDirect = "";
-#if 0
-static char worldArray[] = "world", anyoneArray[] = "anyone", authArray[] = "auth";
+static std::string rootDirect;
 
-static struct ACL _OPEN_ACL_UNSAFE_ACL[] = {{0x1f, {worldArray, anyoneArray}}};
-static struct ACL _READ_ACL_UNSAFE_ACL[] = {{0x01, {worldArray, anyoneArray}}};
-static struct ACL _CREATOR_ALL_ACL_ACL[] = {{0x1f, {authArray, NULL}}};
-
-struct ACL_vector ZOO_OPEN_ACL_UNSAFE = { 1, _OPEN_ACL_UNSAFE_ACL};
-struct ACL_vector ZOO_READ_ACL_UNSAFE = { 1, _READ_ACL_UNSAFE_ACL};
-struct ACL_vector ZOO_CREATOR_ALL_ACL = { 1, _CREATOR_ALL_ACL_ACL};
-#endif
 static void watcher(zhandle_t *zh, int type, int state, const char *path, void *watcherCtx)
 {
 	PDEBUG("watcher type %d",type);
@@ -55,6 +45,20 @@ int ZookConfig::zookLoadAllConfig(const std::string& path)
 {
 	rootDirect.assign(path);
 	return loadAllKeyValue(path.c_str());
+}
+
+int ZookConfig::getConfigKeyValue(const std::string& key, std::string& value)
+{
+	int ret = -1;
+	std::lock_guard<std::mutex> lock(configLock);
+	ConfigMapDataIter iter = configMap.find(key);
+	if(iter == configMap.end())
+	{
+		return ret;
+	}
+	value.assign(iter->second);
+	ret = 0;
+	return ret;
 }
 
 int ZookConfig::createSessionPath(const std::string& path, const std::string& value)
@@ -164,8 +168,6 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 	}
 }
 
-
-
 void ZookConfig::configUpdateCallBack(const std::string& key)
 {
 	char path[255] = {0}, cfg[1024] = {0};
@@ -195,7 +197,6 @@ void ZookConfig::configUpdateCallBack(const std::string& key)
 		PDEBUG("configUpdateCallBack path :: %s value empty", path);
 	}
 }
-
 
 int ZookConfig::loadAllKeyValue(const char* rootPath)
 {
@@ -318,6 +319,20 @@ int ZookConfigSingleton::createSessionPath(const std::string& path, const std::s
 {
 	if(configPoint)
 		return configPoint->createSessionPath(path,value);
+	else
+		return ZOOK_CONFIG_NO_INIT;
+}
+
+void ZookConfigSingleton::setConfigChangeCall(const ConfigChangeCall& cb)
+{
+	if(configPoint)
+		configPoint->setConfigChangeCall(cb);
+}
+
+int ZookConfigSingleton::getConfigKeyValue(const std::string& key, std::string& value)
+{
+	if(configPoint)
+		return configPoint->getConfigKeyValue(key,value);
 	else
 		return ZOOK_CONFIG_NO_INIT;
 }

@@ -107,7 +107,10 @@ public:
 	int zookConfigInit(const std::string& zookAddr, const std::string& path);
 
 	int createSessionPath(const std::string& path, const std::string& value);
-	
+
+	void setConfigChangeCall(const ConfigChangeCall& cb);
+
+	int getConfigKeyValue(const std::string& key, std::string& value);
 private:
 	ZookConfigPtr configPoint;
 };
