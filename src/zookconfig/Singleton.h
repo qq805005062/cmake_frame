@@ -1,11 +1,11 @@
-#ifndef __ZOO_KFK_TOPICS_SINGLETON_H__
-#define __ZOO_KFK_TOPICS_SINGLETON_H__
+#ifndef __ZOO_CONFIG_TOPICS_SINGLETON_H__
+#define __ZOO_CONFIG_TOPICS_SINGLETON_H__
 
 #include <assert.h>
 #include <pthread.h>
 #include <stdlib.h> // atexit
 
-namespace ZOOKEEPERKAFKA
+namespace ZOOKCONFIG
 {
 
 template<typename T>
@@ -60,6 +60,6 @@ pthread_once_t Singleton<T>::ponce_ = PTHREAD_ONCE_INIT;
 template<typename T>
 T* Singleton<T>::value_ = NULL;
 
-} // end namespace ZOOKEEPERKAFKA
+} // end namespace ZOOKCONFIG
 
-#endif // __ZOO_KFK_TOPICS_SINGLETON_H__
+#endif // __ZOO_CONFIG_TOPICS_SINGLETON_H__

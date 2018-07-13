@@ -2,19 +2,30 @@
 
 #include "ZookConfig.h"
 
-namespace ZookConfig
+namespace ZOOKCONFIG
 {
 static int zookeeperColonyNum = 0;
 static std::string rootDirect = "";
+#if 0
+static char worldArray[] = "world", anyoneArray[] = "anyone", authArray[] = "auth";
 
+static struct ACL _OPEN_ACL_UNSAFE_ACL[] = {{0x1f, {worldArray, anyoneArray}}};
+static struct ACL _READ_ACL_UNSAFE_ACL[] = {{0x01, {worldArray, anyoneArray}}};
+static struct ACL _CREATOR_ALL_ACL_ACL[] = {{0x1f, {authArray, NULL}}};
+
+struct ACL_vector ZOO_OPEN_ACL_UNSAFE = { 1, _OPEN_ACL_UNSAFE_ACL};
+struct ACL_vector ZOO_READ_ACL_UNSAFE = { 1, _READ_ACL_UNSAFE_ACL};
+struct ACL_vector ZOO_CREATOR_ALL_ACL = { 1, _CREATOR_ALL_ACL_ACL};
+#endif
 static void watcher(zhandle_t *zh, int type, int state, const char *path, void *watcherCtx)
 {
+	PDEBUG("watcher type %d",type);
 	if (type == ZOO_CHILD_EVENT && strncmp(path, rootDirect.c_str(), rootDirect.length()) == 0)
 	{
 		const char* p_char = path;
 		p_char += rootDirect.length() + 1;
 		PDEBUG("watcher path key change:: %s %s", path, p_char);
-		ZookConfig *pZookConfig = static_cast<ZookConfig *>(watcherCtx);
+		ZOOKCONFIG::ZookConfig *pZookConfig = static_cast<ZOOKCONFIG::ZookConfig *>(watcherCtx);
 		pZookConfig->configUpdateCallBack(p_char);
 	}
 }
@@ -36,7 +47,7 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 int ZookConfig::zookConfigInit(const std::string& zookAddr)
 {
 	int ret = initialize_zookeeper(zookAddr.c_str());
-
+	PDEBUG("initialize_zookeeper ret %d ", ret);
 	return ret;
 }
 
@@ -45,6 +56,115 @@ int ZookConfig::zookLoadAllConfig(const std::string& path)
 	rootDirect.assign(path);
 	return loadAllKeyValue(path.c_str());
 }
+
+int ZookConfig::createSessionPath(const std::string& path, const std::string& value)
+{
+	int valueLen = 0, pathLen = 0, ret = 0, tryTime = 0;
+	char *pathArray = NULL, *pBuff = NULL;
+	valueLen = static_cast<int>(value.length());
+	pathLen = static_cast<int>(path.length());
+	pathLen++;
+	pathArray = new char[pathLen];
+	if(pathArray)
+	{
+		pBuff = pathArray;
+		memset(pathArray, 0, pathLen);
+		pathLen--;
+		strncpy(pathArray, path.c_str(), pathLen);
+		for(int i = 1; i < pathLen; i++)
+		{
+			pBuff++;
+			if( *pBuff == '/' )
+			{
+				*pBuff = '\0';
+				tryTime = 0;
+				do{
+					struct Stat stat;
+					ret = zoo_exists(zkHandle, pathArray, 0, &stat);
+					PDEBUG("zoo_exists %s %d %d", pathArray, ret, zoo_state(zkHandle));
+					if(ZCONNECTIONLOSS == ret)
+						tryTime++;
+					else
+						break;
+				}while(tryTime < zookeeperColonyNum);
+
+				if(ZNONODE == ret)
+				{
+					tryTime = 0;
+					do{
+						ret = zoo_create(zkHandle, pathArray, NULL, 0, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);
+						PDEBUG("zoo_create %s %d %d", pathArray, ret, zoo_state(zkHandle));
+						if(ZCONNECTIONLOSS == ret)
+							tryTime++;
+						else
+							break;
+					}while(tryTime < zookeeperColonyNum);
+				}else if(ret != ZOK)
+				{
+					PERROR("zoo_exists %s %d %s %d", pathArray, ret, zerror(ret), zoo_state(zkHandle));
+					delete[] pathArray;
+					return ret;
+				}
+
+				if(ret != ZOK)
+				{
+					PERROR("zoo_create %s %d %s %d", pathArray, ret, zerror(ret), zoo_state(zkHandle));
+					delete[] pathArray;
+					return ret;
+				}
+
+				*pBuff = '/';
+			}
+		}
+
+		tryTime = 0;
+		do{
+			struct Stat stat;
+			ret = zoo_exists(zkHandle, pathArray, 0, &stat);
+			PDEBUG("zoo_exists %s %d %d", pathArray, ret, zoo_state(zkHandle));
+			if(ZCONNECTIONLOSS == ret)
+				tryTime++;
+			else
+				break;
+		}while(tryTime < zookeeperColonyNum);
+
+		if(ret == ZOK)
+		{
+			tryTime = 0;
+			do{
+				ret = zoo_set(zkHandle, pathArray, value.c_str(), valueLen, -1);
+				PDEBUG("zoo_set %s %d %d", pathArray, ret, zoo_state(zkHandle));
+				if(ZCONNECTIONLOSS == ret)
+					tryTime++;
+				else
+					break;
+			}while(tryTime < zookeeperColonyNum);
+		}else if(ret == ZNONODE)
+		{
+			tryTime = 0;
+			do{
+				ret = zoo_create(zkHandle, pathArray, value.c_str(), valueLen, &ZOO_READ_ACL_UNSAFE, 1, NULL, 0);
+				PDEBUG("zoo_create %s %d %d", pathArray, ret, zoo_state(zkHandle));
+				if(ZCONNECTIONLOSS == ret)
+					tryTime++;
+				else
+					break;
+			}while(tryTime < zookeeperColonyNum);
+		}else{
+			PERROR("zoo_exists %s %d %s %d", pathArray, ret, zerror(ret), zoo_state(zkHandle));
+			delete[] pathArray;
+			return ret;
+		}
+
+		delete[] pathArray;
+		return ret;
+	}else{
+		PDEBUG("createSessionPath %d", ZOOK_CONFIG_MALLOC_ERROR);
+		return ZOOK_CONFIG_MALLOC_ERROR;
+	}
+}
+
+
 
 void ZookConfig::configUpdateCallBack(const std::string& key)
 {
@@ -174,6 +294,32 @@ const char* ZookConfig::utilFristConstchar(const char *str,const char c)
 			p++;
 	}
 	return NULL;
+}
+
+int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr, const std::string& path)
+{
+	if(configPoint)
+		return ZOOK_CONFIG_ALREADY_INIT;
+
+	configPoint.reset(new ZookConfig());
+	if(configPoint == nullptr)
+	{
+		return ZOOK_CONFIG_MALLOC_ERROR;
+	}
+
+	int ret = configPoint->zookConfigInit(zookAddr);
+	if(ret < 0)
+		return ret;
+
+	return ret;
+}
+
+int ZookConfigSingleton::createSessionPath(const std::string& path, const std::string& value)
+{
+	if(configPoint)
+		return configPoint->createSessionPath(path,value);
+	else
+		return ZOOK_CONFIG_NO_INIT;
 }
 
 }

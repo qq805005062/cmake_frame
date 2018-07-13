@@ -1,7 +1,7 @@
-#ifndef __ZOO_KFK_TOPICS_NONCOPYABLE_H__
-#define __ZOO_KFK_TOPICS_NONCOPYABLE_H__
+#ifndef __ZOO_CONFIG_TOPICS_NONCOPYABLE_H__
+#define __ZOO_CONFIG_TOPICS_NONCOPYABLE_H__
 
-namespace ZOOKEEPERKAFKA
+namespace ZOOKCONFIG
 {
 
 class noncopyable
@@ -15,6 +15,6 @@ private:
 	const noncopyable& operator=(const noncopyable& ) = delete;
 };
 
-} // end namespace ZOOKEEPERKAFKA
+} // end namespace ZOOKCONFIG
 
-#endif // __ZOO_KFK_TOPICS_NONCOPYABLE_H__
+#endif // __ZOO_CONFIG_TOPICS_NONCOPYABLE_H__

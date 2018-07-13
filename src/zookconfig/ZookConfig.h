@@ -6,6 +6,10 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <memory>
+
+#include "Singleton.h"
+#include "noncopyable.h"
 
 #include "zookeeper/zookeeper.h"
 #include "zookeeper/zookeeper.jute.h"
@@ -21,6 +25,8 @@ typedef std::function<void(const std::string& key, const std::string& oldValue, 
 #define ZOOK_CONFIG_ALREADY_INIT		-10002
 #define ZOOK_CONFIG_NO_INIT				-10003
 
+#define ZOOK_CONFIG_MALLOC_ERROR		-10004
+
 #ifdef SHOW_PRINTF_MESSAGE
 
 #define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ## args)
@@ -35,7 +41,7 @@ typedef std::function<void(const std::string& key, const std::string& oldValue, 
 
 #endif
 
-namespace ZookConfig
+namespace ZOOKCONFIG
 {
 
 class ZookConfig
@@ -77,6 +83,33 @@ private:
 	ConfigChangeCall cb_;
 
 	ConfigMapData configMap;
+};
+
+typedef std::shared_ptr<ZOOKCONFIG::ZookConfig> ZookConfigPtr;
+
+class ZookConfigSingleton : public noncopyable
+{
+public:
+	ZookConfigSingleton()
+		:configPoint(nullptr)
+	{
+	
+}
+
+	~ZookConfigSingleton()
+	{
+		if(configPoint)
+			configPoint.reset();
+	}
+
+	static ZookConfigSingleton& instance() { return ZOOKCONFIG::Singleton<ZookConfigSingleton>::instance(); }
+
+	int zookConfigInit(const std::string& zookAddr, const std::string& path);
+
+	int createSessionPath(const std::string& path, const std::string& value);
+	
+private:
+	ZookConfigPtr configPoint;
 };
 
 }
