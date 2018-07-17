@@ -26,6 +26,11 @@ set(ZOOKAFKA_TEST_SRCS
   src/ZooKfkTopicsPop.cpp
 )
 
+set(ZOOKAFKA_CONSUMER_SRCS
+  test/kfk_consumer.cpp
+  src/ZooKfkTopicsPop.cpp
+)
+
 set(ZOOKAFKA_TEST_LIBS
   zookeeper_mt
   rdkafka++
@@ -46,6 +51,9 @@ add_executable(ZooKfkTest ${ZOOKAFKA_TEST_SRCS})
 
 target_link_libraries(ZooKfkTest ${ZOOKAFKA_TEST_LIBS})
 
+add_executable(ZooKfkConsumer ${ZOOKAFKA_CONSUMER_SRCS})
+
+target_link_libraries(ZooKfkConsumer ${ZOOKAFKA_TEST_LIBS})
 
 #set_source_files_properties(src/ZooKafkaGet.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
 #set_source_files_properties(src/ZooKfkTopicsGet.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion -Wno-deprecated-declarations")

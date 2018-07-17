@@ -21,35 +21,92 @@ int main(int argc, char* argv[])
 
 #endif
 
-#if 0
-#include "ZooKfkTopicsPop.h"
+#if 1
+#include <pthread.h>
+
+#include "../ZooKfkTopicsPop.h"
+
+ZOOKEEPERKAFKA::ZooKfkTopicsPop pop;
+static int flag = 0,popNum = 0;
+void* startConsumerThread(void* obj)
+{
+	while(1)
+	{
+		int64_t offsetNum = 0;
+		int32_t parationNum = 0;
+		std::string topicName, dataStr, keyStr;
+		while(flag)
+		{
+			sleep(1);
+		}
+		int ret = pop.pop(topicName, dataStr, &keyStr, &offsetNum, &parationNum);
+		popNum++;
+		if(popNum && popNum % 10 == 0)
+		{
+			flag = 1;
+		}
+		if(ret < 0)
+		{
+			printf("pop.pop return ret %d \n", ret);
+		}else{
+			printf("pop.pop topicName parationNum parationNum %s %d %lu\n", topicName.c_str(), parationNum, offsetNum);
+		}
+	}
+
+	return NULL;
+}
 
 int main(int argc, char* argv[])
 {
-	ZOOKEEPERKAFKA::ZooKfkTopicsPop pop;
-	pop.zookInit("192.169.0.61:2181,192.169.0.62:2181,192.169.0.63:2181","zookeeper,zookeeper11,zookeeper22,zookeeper33");
-
+	pthread_t pthreadId_;
+	int ret = 0;
+	pop.zookInit("192.169.0.61:2181,192.169.0.62:2181,192.169.0.63:2181","zookeeper11,zookeeper22,zookeeper33","248");
+	if (pthread_create(&pthreadId_, NULL, &startConsumerThread, NULL))
+	{
+		printf("startConsumerThread init error \n");
+		return 0;
+	}
+	
 	while(1)
 	{
-#if 1
-		pop.kfkTopicConsumeStop("zookeeper33");
-		sleep(10);
-		pop.kfkTopicConsumeStop("zookeeper22");
-		sleep(10);
-		pop.kfkTopicConsumeStop("zookeeper11");
-		sleep(10);
-		pop.kfkTopicConsumeStart("zookeeper33");
-		sleep(10);
-		pop.kfkTopicConsumeStart("zookeeper22");
-		sleep(10);
-		pop.kfkTopicConsumeStart("zookeeper11");
-#else
-		std::string topic,kfkdata;
-		int64_t off;
-		pop.pop(topic,kfkdata,&off);
-		PDEBUG("topic :: %s,kfkdata :: %s,offset:: %lu\n",topic.c_str(),kfkdata.c_str(),off);
-#endif
-	
+		sleep(1);
+		if(popNum && popNum % 10 == 0)
+		{
+			ret++;
+			ret = ret % 6;
+			switch(ret)
+			{
+				case 0:
+					printf("kfkTopicConsumeStart zookeeper11\n");
+					pop.kfkTopicConsumeStart("zookeeper11");
+					break;
+				case 1:
+					printf("kfkTopicConsumeStop zookeeper11\n");
+					pop.kfkTopicConsumeStop("zookeeper11");
+					break;
+				case 2:
+					printf("kfkTopicConsumeStop zookeeper22\n");
+					pop.kfkTopicConsumeStop("zookeeper22");
+					break;
+				case 3:
+					printf("kfkTopicConsumeStart zookeeper22\n");
+					pop.kfkTopicConsumeStart("zookeeper22");
+					break;
+				case 4:
+					printf("kfkTopicConsumeStop zookeeper33\n");
+					pop.kfkTopicConsumeStop("zookeeper33");
+					break;
+				case 5:
+					printf("kfkTopicConsumeStart zookeeper33\n");
+					pop.kfkTopicConsumeStart("zookeeper33");
+					break;
+				default:
+					printf("default break\n");
+					break;
+			}
+			popNum++;
+			flag = 0;
+		}
 	}
 	return 0;
 }
@@ -104,7 +161,7 @@ int main(int argc, char* argv[])
 }
 #endif
 
-#if 1
+#if 0
 
 #include "ZooKfkConsumer.h"
 

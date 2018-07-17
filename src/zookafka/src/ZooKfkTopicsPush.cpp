@@ -299,35 +299,39 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 		PERROR("*** No valid brokers specified: %s ***", brokers.c_str());
 		return KAFKA_BROKERS_ADD_ERROR;
 	}
-	
-	std::vector<std::string> topics_;
-	str2Vec(topics.c_str(), topics_, ',');
-	if(topics_.size() < 1)
-	{
-		PERROR("topics ERROR :: %s",topics.c_str());
-		return KAFKA_NO_TOPIC_NAME_INIT;
-	}
-	int size = static_cast<int>(topics_.size());
-	for(int i = 0;i < size;i++)
-	{
-		rd_kafka_topic_conf_t *pTopiConf = rd_kafka_topic_conf_new();
-		if(!pTopiConf)
-		{
-			PERROR("rd_kafka_topic_conf_new ERROR");
-			return KAFKA_TOPIC_CONF_NEW_ERROR;
-		}
-		rd_kafka_topic_conf_set(pTopiConf, "produce.offset.report", "true", errStr, sizeof(errStr));
-		rd_kafka_topic_conf_set(pTopiConf, "request.required.acks", "1", errStr, sizeof(errStr));
 
-		rd_kafka_topic_t *pTopic = rd_kafka_topic_new(kfkt, topics_[i].c_str(), pTopiConf);
-		if(!pTopic)
+	if(!topics.empty())
+	{
+		std::vector<std::string> topics_;
+		str2Vec(topics.c_str(), topics_, ',');
+		if(topics_.size() < 1)
 		{
-			PERROR("rd_kafka_topic_new ERROR");
-			return KAFKA_TOPIC_NEW_ERROR;
+			PERROR("topics ERROR :: %s",topics.c_str());
+			return KAFKA_NO_TOPIC_NAME_INIT;
 		}
+		
+		int size = static_cast<int>(topics_.size());
+		for(int i = 0;i < size;i++)
 		{
-			std::lock_guard<std::mutex> lock(topicMapLock);
-			topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
+			rd_kafka_topic_conf_t *pTopiConf = rd_kafka_topic_conf_new();
+			if(!pTopiConf)
+			{
+				PERROR("rd_kafka_topic_conf_new ERROR");
+				return KAFKA_TOPIC_CONF_NEW_ERROR;
+			}
+			rd_kafka_topic_conf_set(pTopiConf, "produce.offset.report", "true", errStr, sizeof(errStr));
+			rd_kafka_topic_conf_set(pTopiConf, "request.required.acks", "1", errStr, sizeof(errStr));
+
+			rd_kafka_topic_t *pTopic = rd_kafka_topic_new(kfkt, topics_[i].c_str(), pTopiConf);
+			if(!pTopic)
+			{
+				PERROR("rd_kafka_topic_new ERROR");
+				return KAFKA_TOPIC_NEW_ERROR;
+			}
+			{
+				std::lock_guard<std::mutex> lock(topicMapLock);
+				topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
+			}
 		}
 	}
 	ret = 0;

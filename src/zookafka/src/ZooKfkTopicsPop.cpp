@@ -119,7 +119,7 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 	,kfkt(nullptr)
 	,topicparlist(nullptr)
 	,kMessageMaxSize( 4 * 1024 * 1024)
-	,startOffset(static_cast<int64_t>(RD_KAFKA_OFFSET_END))
+	,startOffset(static_cast<int64_t>(RD_KAFKA_OFFSET_INVALID))
 	,partition(RD_KAFKA_PARTITION_UA)
 	,kfkErrorCode(RD_KAFKA_RESP_ERR_NO_ERROR)
 	,kfkErrorMsg()
@@ -295,7 +295,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		{
 			PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",topics[i].c_str());
 			rd_kafka_topic_partition_list_add(topicparlist, topics[i].c_str(), partition);
-			rd_kafka_topic_partition_list_set_offset(topicparlist, topics[i].c_str(), partition,startOffset);
+			//rd_kafka_topic_partition_list_set_offset(topicparlist, topics[i].c_str(), partition,startOffset);
 			topics_.push_back(topics[i]);
 		}
 
@@ -335,11 +335,11 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	{
 		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",iter->c_str());
 		rd_kafka_topic_partition_list_add(pList, iter->c_str(), partition);
-		rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
+		//rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
 	}
 	PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",topic.c_str());
 	rd_kafka_topic_partition_list_add(pList, topic.c_str(), partition);
-	rd_kafka_topic_partition_list_set_offset(pList, topic.c_str(), partition,startOffset);
+	//rd_kafka_topic_partition_list_set_offset(pList, topic.c_str(), partition,startOffset);
 	if(size > 1)
 	{
 		rd_kafka_resp_err_t err = rd_kafka_unsubscribe(kfkt);
@@ -549,7 +549,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	{
 		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",iter->c_str());
 		rd_kafka_topic_partition_list_add(pList, iter->c_str(), partition);
-		rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
+		//rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
 	}
 
 	rd_kafka_resp_err_t err = rd_kafka_unsubscribe(kfkt);
@@ -614,7 +614,7 @@ void ZooKfkTopicsPop::kfkDestroy()
 	std::string ().swap(kfkBrokers);
 	ListStringTopic ().swap(topics_);
 	kMessageMaxSize = 4 * 1024 * 1024;
-	startOffset = static_cast<int64_t>(RD_KAFKA_OFFSET_END);
+	startOffset = static_cast<int64_t>(RD_KAFKA_OFFSET_INVALID);
 	partition = RD_KAFKA_PARTITION_UA;
 }
 
