@@ -23,21 +23,13 @@
 #define ZOOK_CONFIG_MALLOC_ERROR		-10004
 #define ZOOK_SERVER_INFO_ALREADY_INIT	-10005
 #define ZOOK_SERVER_INFO_ERROR			-10006
-
-#ifdef SHOW_PRINTF_MESSAGE
-
-#define PDEBUG(fmt, args...)	fprintf(stderr, "%s :: %s() %d: DEBUG " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ## args)
-
-#define PERROR(fmt, args...)	fprintf(stderr, "%s :: %s() %d: ERROR " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ## args)
-
-#else
-
-#define PDEBUG(fmt, args...)
-
-#define PERROR(fmt, args...)
-
-#endif
-
+//错误信息定义，不包括zookeeper自己定义的错误类型
+/*
+ *zhaoxiaoxiao
+ *注意使用场景，仅适用于注册临时服务信息，监听服务信息，获取配置信息监听配置信息服务接口
+ *
+ *此接口都是同步接口
+ */
 namespace ZOOKCONFIG
 {
 //注册服务信息，目前只会有类型，（根节点名称）网关编号，（临时路径），ip：port为临时节点值，拆分开的，
@@ -94,7 +86,8 @@ typedef std::function<void(const TcpServerInfoVector& tcpServerInfo)> TcpServerC
 class ZookConfig
 {
 public:
-	ZookConfig();
+		
+ZookConfig();
 
 	~ZookConfig();
 	//初始化队列，异步初始化zookeeper连接
@@ -112,13 +105,19 @@ public:
 	//创建临时路径、消息值
 	int createSessionPath(const std::string& path, const std::string& value);
 
-	//修改key value值，暂时未实现
+	//创建一个永久路径，消息值
+	int createForeverPath(const std::string& path, const std::string& value);
+
+	//修改key value值，此接口可能会引起监控回调执行
 	int setConfigKeyValue(const std::string& key, const std::string& value);
+
+	//获取一个路径的值。
+	int zookGetPathValue(const std::string& getPath, std::string& value);
 
 	//配置参数变化，回调，使用者不用关心，内部使用
 	void configUpdateCallBack(const std::string& key);
 
-	//注册服务信息参数变化回调，使用者不用关系
+	//注册服务信息参数变化回调，使用者不用关心
 	void serverInfoChangeCallBack(const std::string& path);
 	
 	//设置参数监听回调
@@ -133,9 +132,9 @@ public:
 		serverCb = cb;
 	}
 	///////////////////////////////////////////////////////////////////////////////////
-	//内部使用，
+	//内部使用，使用者不用关心
 	int getConfigRootPath(std::string& path);
-	//内部使用
+	//内部使用，使用者不用关心
 	int getServerInfoRootPath(TcpServerTypeVector& pathList);
 
 private:
@@ -146,6 +145,8 @@ private:
 	int LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVector& infoList);
 
 	char* utilFristChar(char *str,const char c);
+
+	int zookeeperPathCheck(const char *str);
 	
 	const char* utilFristConstchar(const char *str,const char c);
 
@@ -188,16 +189,35 @@ public:
 
 	//zookAddr zookeeper 地址
 	//path 结尾不要带斜杠，配置的路径，末尾一定不能带斜杠
+	//路径需要自己有权限，如果没有读的权限是没有办法加载各个配置的
+	//如果暂时没有配置项，可以传空
 	int zookConfigInit(const std::string& zookAddr, const std::string& path);
+
 	//创建一个临时路径，
-	//path是路径， 末尾一定不能带斜杠，value是值，
+	//path是路径， 末尾一定不能带斜杠
+	//value是值，
 	int createSessionPath(const std::string& path, const std::string& value);
+
+	//获取一个路径对应的值
+	int zookGetPathValue(const std::string& path, std::string& value);
+
+	//创建一个永久的路径
+	//path是路径，末尾一定不能带斜杠
+	//value是值
+	int createForeverPath(const std::string& path, const std::string& value);
+
 	//设置参数变化回调函数
 	void setConfigChangeCall(const ConfigChangeCall& cb);
+
 	//设置服务信息变化回调函数
 	void setServerChangeCall(const TcpServerChangeCall& cb);
+
 	//获取配置参数中key value值
 	int getConfigKeyValue(const std::string& key, std::string& value);
+
+	//设置一个配置参数的值，这个有可能会引起回调执行
+	int setConfigKeyValue(const std::string& key, const std::string& value);
+
 	//获取服务信息接口，serverPath为路径，末尾不能带斜杠
 	//infoList 会返回服务信息列表信息。返回列表个数
 	int getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList);

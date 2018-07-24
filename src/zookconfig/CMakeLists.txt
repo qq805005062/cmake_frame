@@ -31,6 +31,6 @@ set(ZOOCONFIG_TEST_LIBS
 add_library(zooconfig ${ZOOCONFIG_LIB_SRCS})
 
 add_executable(ZooConfTest ${ZOOCONFIG_TEST_SRCS})
-
 target_link_libraries(ZooConfTest ${ZOOCONFIG_TEST_LIBS})
+install(TARGETS ZooConfTest DESTINATION bin)
 

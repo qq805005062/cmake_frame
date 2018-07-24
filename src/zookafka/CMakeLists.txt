@@ -48,12 +48,12 @@ set(ZOOKAFKA_TEST_LIBS
 add_library(zookafka ${ZOOKAFKA_LIB_SRCS})
 
 add_executable(ZooKfkTest ${ZOOKAFKA_TEST_SRCS})
-
 target_link_libraries(ZooKfkTest ${ZOOKAFKA_TEST_LIBS})
+install(TARGETS ZooKfkTest DESTINATION bin)
 
 add_executable(ZooKfkConsumer ${ZOOKAFKA_CONSUMER_SRCS})
-
 target_link_libraries(ZooKfkConsumer ${ZOOKAFKA_TEST_LIBS})
+install(TARGETS ZooKfkConsumer DESTINATION bin)
 
 #set_source_files_properties(src/ZooKafkaGet.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
 #set_source_files_properties(src/ZooKfkTopicsGet.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion -Wno-deprecated-declarations")
