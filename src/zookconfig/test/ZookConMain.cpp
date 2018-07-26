@@ -60,10 +60,11 @@ int main(int argc, char* argv[])
 	ZOOKCONFIG::ZookConfigSingleton::instance().createSessionPath("/im/222/imloginsvr/223/dadad_dasdad","192.169.0.61:9568");
 
 	ZOOKCONFIG::TcpServerInfoVector tcpServerInfo;
-	ZOOKCONFIG::ZookConfigSingleton::instance().getTcpServerListInfo("/xiaoxiao/imaccesssvr",tcpServerInfo);
+	std::string svrName;
+	ZOOKCONFIG::ZookConfigSingleton::instance().getTcpServerListInfo("/xiaoxiao/imaccesssvr", tcpServerInfo, &svrName);
 	for(size_t i = 0; i < tcpServerInfo.size(); i++)
 	{
-		PDEBUG("tcpServerInfo type %s, ip addr %s port %d process no %d", tcpServerInfo[i].typeKey.c_str(), tcpServerInfo[i].ipAddr.c_str(), tcpServerInfo[i].port, tcpServerInfo[i].gateNo);
+		PDEBUG("tcpServerInfo type %s, ip addr %s port %d process no %d", svrName.c_str(), tcpServerInfo[i].ipAddr.c_str(), tcpServerInfo[i].port, tcpServerInfo[i].gateNo);
 	}
 
 	while(1)
