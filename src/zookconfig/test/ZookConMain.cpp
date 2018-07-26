@@ -23,7 +23,7 @@ void configWatchFun(const std::string& key, const std::string& oldValue, const s
 
 void serverWatchFun(const ZOOKCONFIG::TcpServerInfoVector& tcpServerInfo, const std::string& typeName)
 {
-	PDEBUG("tcpServerInfo type %s", tcpServerInfo[i].typeKey.c_str());
+	PDEBUG("tcpServerInfo type %s", typeName.c_str());
 	for(size_t i = 0; i < tcpServerInfo.size(); i++)
 	{
 		PDEBUG("ip addr %s port %d process no %d", tcpServerInfo[i].ipAddr.c_str(), tcpServerInfo[i].port, tcpServerInfo[i].gateNo);
