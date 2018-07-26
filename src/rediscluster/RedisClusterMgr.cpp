@@ -200,7 +200,8 @@ int RedisClusterMgr::init2(const std::string& brokers,
 		return 0;
 	}
 
-	return 0;
+	// 如果返回填的节点都是连接失败，则直接返回失败
+	return -1;
 }
 
 void RedisClusterMgr::split(const std::string& str,
@@ -285,14 +286,20 @@ bool RedisClusterMgr::getClusterNodesInfo(redisContext* context)
 	}
 
 	std::vector<std::string> vLines;
-	str2Vec(reply->str, vLines, "\n");
+	// str2Vec(reply->str, vLines, "\n");
+	split(reply->str, "\n", &vLines);
 	nodes_.clear();
 
 	for (size_t i = 0; i < vLines.size(); ++i)
 	{
 		NodeInfo node;
 		std::vector<std::string> nodeInfo;
-		str2Vec(vLines[i].c_str(), nodeInfo, " ");
+		// str2Vec(vLines[i].c_str(), nodeInfo, " ");
+		split(vLines[i], " ", &nodeInfo);
+		if (nodeInfo.size() < 8)
+		{
+			return false;
+		}
 
 		// 过滤掉slave节点和失效的master节点
 		if ((NULL == strstr(nodeInfo[2].c_str(), "master")) ||
@@ -301,6 +308,7 @@ bool RedisClusterMgr::getClusterNodesInfo(redisContext* context)
 		{
 			continue;
 		}
+
 		// 如果是Master结点一定有9个或9个以上元素
 		/**
 		eb49bea0a910d757bb7644136ad0e36b55605c03 192.169.0.60:7000 myself,master - 0 0 1 connected 0-5461 10920-10922 16383
@@ -310,6 +318,7 @@ bool RedisClusterMgr::getClusterNodesInfo(redisContext* context)
 		12aad1513d0dcaf4be49e60d7a17f6a866abbe9e 192.169.0.61:7001 slave eb49bea0a910d757bb7644136ad0e36b55605c03 0 1515656146597 5 connected
 		baca54ba0cc9ce610c97ec362a9c8b6aa72f70a4 192.169.0.62:7001 slave 2bc89c7bd354c4ecfb9cc9630a24c2944194d121 0 1515656144593 6 connected
 		 */
+
 		if (nodeInfo.size() < 9)
 		{
 			return false;

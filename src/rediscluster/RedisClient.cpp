@@ -1,5 +1,6 @@
 #include "RedisClient.h"
 #include <iostream>
+//#include <common/Monitor.h>
 
 using namespace rediscluster;
 
@@ -79,21 +80,25 @@ bool RedisClient::auth()
 	// 未设置密码校验直接返回true
 	if ("" == password_ || password_.empty())
 	{
+		connStatus_ = true;
 		return true;
 	}
 
-	bool bRet = false;
-	redisReply *reply = static_cast<redisReply* >(redisCommand(context_, "AUTH %s", password_.c_str()));
-	if ((NULL == reply) || (strcasecmp(reply->str, "OK") != 0))
+	redisReply* reply = static_cast<redisReply* >(redisCommand(context_, "AUTH %s", password_.c_str()));
+	if (reply == NULL)
 	{
-		bRet = false;
+		setLastError("reply is null", strlen("reply is null"));
+		return false;
 	}
-	else
+	
+	connStatus_ = ((reply->str) && (strcasecmp(reply->str, "OK") == 0));
+	if ((REDIS_REPLY_ERROR == reply->type) && reply->str)
 	{
-		bRet = true;
+		setLastError(reply->str, reply->len);
 	}
+
 	freeReplyObject(reply);
-	return bRet;
+	return connStatus_;
 }
 
 void RedisClient::release()
@@ -128,7 +133,13 @@ bool RedisClient::ping()
 {
 	redisReply* reply = static_cast<redisReply* >(redisCommand(context_, "PING"));
 	connStatus_ = ((NULL != reply) && (reply->str) && (strcasecmp(reply->str, "PONG") == 0));
-	if (connStatus_)
+	
+	if ((reply->type == REDIS_REPLY_ERROR) && (reply->str))
+	{
+		setLastError(reply->str, reply->len);
+	}
+	
+	if (reply)
 	{
 		freeReplyObject(reply);
 	}
@@ -561,6 +572,8 @@ void RedisClient::setLastError(const char* buffer, size_t len)
 	{
 		lastError_.assign("系统错误");
 	}
+
+	//common::Monitor::instance().writeRedisErrorMsg();
 	
 	// 发送异常，值连接状态为false
 	connStatus_ = false;
@@ -702,6 +715,17 @@ bool RedisClient::hmset(const std::string& key, const HashMap& hashMap, int64_t&
 
 	return commandArgvInteger(vCmdData, retval);
 }
+
+bool RedisClient::hincrby(const std::string& key, const std::string& field, const std::string& value,int64_t& retval)
+{
+	if (key.empty() || key == "" || field.size() == 0)
+	{
+		return false;
+	}
+
+	return commandInteger(retval, "HINCRBY %s %s %s", key.c_str(), field.c_str(),value.c_str());
+}
+
 
 bool RedisClient::hmget(const std::string& key, const ArrayList& fieldList, HashMapDataItem& dataItemMap)
 {
@@ -914,3 +938,67 @@ bool RedisClient::zrangebyscore(const std::string& key,
 	return commandList(vValue, "ZRANGEBYSCORE %s %s %s LIMIT %d %d",
 	                   key.c_str(), start.c_str(), end.c_str(), offset, count);
 }
+
+bool RedisClient::zrevrangebyscore(const std::string& key,
+						std::vector<std::string>& vValue,
+						const std::string& start,
+						const std::string& end,
+						int offset,int cout)
+{
+	if(key.empty() || key == "")
+	{
+			return false;
+	}
+
+	if(start.empty() && end.empty())
+	{
+		if(offset == cout && cout == 0)
+		{
+			return commandList(vValue, "ZREVRANGEBYSCORE %s -inf +inf",key.c_str());
+		}else{
+			return commandList(vValue, "ZREVRANGEBYSCORE %s -inf +inf LIMIT %d %d",key.c_str(), offset, cout);
+		}
+	}else{
+		if(offset == cout && cout == 0)
+		{
+			return commandList(vValue, "ZREVRANGEBYSCORE %s %s %s",
+	                   key.c_str(), start.c_str(), end.c_str());
+		}else{
+			return commandList(vValue, "ZREVRANGEBYSCORE %s %s %s LIMIT %d %d",
+	                   key.c_str(), start.c_str(), end.c_str(), offset, cout);
+		}
+	}
+}
+
+bool RedisClient::zrangebyscore_(const std::string& key,
+						std::vector<std::string>& vValue,
+						const std::string& start,
+						const std::string& end,
+						int offset,int cout)
+{
+	if(key.empty() || key == "")
+	{
+			return false;
+	}
+
+	if(start.empty() && end.empty())
+	{
+		if(offset == cout && cout == 0)
+		{
+			return commandList(vValue, "ZRANGEBYSCORE %s -inf +inf WITHSCORES",key.c_str());
+		}else{
+			return commandList(vValue, "ZRANGEBYSCORE %s -inf +inf WITHSCORES LIMIT %d %d",key.c_str(), offset, cout);
+		}
+	}else{
+		if(offset == cout && cout == 0)
+		{
+			return commandList(vValue, "ZRANGEBYSCORE %s %s %s WITHSCORES",
+	                   key.c_str(), start.c_str(), end.c_str());
+		}else{
+			return commandList(vValue, "ZRANGEBYSCORE %s %s %s WITHSCORES LIMIT %d %d",
+	                   key.c_str(), start.c_str(), end.c_str(), offset, cout);
+		}
+	}
+}
+
+

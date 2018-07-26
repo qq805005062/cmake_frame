@@ -1,6 +1,7 @@
 #include "RedisClusterNode.h"
 #include "RedisClient.h"
 
+
 using namespace rediscluster;
 
 const int kMinSize = 1;
@@ -53,7 +54,7 @@ bool RedisClusterNode::init(const NodeInfo& info,
 
 void RedisClusterNode::stop()
 {
-	common::MutexLockGuard guard(mutex_);
+	std::lock_guard<std::mutex> lock(mutex_);
 	std::list<RedisClient* >::iterator it = idleList_.begin();
 	for ( ; it != idleList_.end(); ++it)
 	{
@@ -90,6 +91,8 @@ bool RedisClusterNode::applayNewRedisClient(RedisClient*& client)
 			bool bRet = client->connect();
 			if (!bRet && client)
 			{
+				printf("conn redis failed! reason: (%s:%d) %s\n",
+				      info_.ipStr.c_str(), info_.port, client->getLastError().c_str());
 				delete client;
 				client = NULL;
 			}
@@ -103,7 +106,7 @@ RedisClient* RedisClusterNode::getRedisClient()
 {
 	RedisClient* client = NULL;
 	{
-		common::MutexLockGuard guard(mutex_);
+		std::lock_guard<std::mutex> lock(mutex_);
 		if (!idleList_.empty())
 		{
 			client = idleList_.front();
@@ -130,16 +133,16 @@ void RedisClusterNode::releaseRedisClient(RedisClient* client)
 {
 	if (client != NULL)
 	{
-		common::MutexLockGuard guard(mutex_);
+		std::lock_guard<std::mutex> lock(mutex_);
 		if (useMap_.find(client) != useMap_.end())
 		{
 			idleList_.push_back(client);
 			useMap_.erase(client);
-			//DEBUG("releaseRedisClient success, idleList_.size(): %lu", idleList_.size());
+			printf("releaseRedisClient success, idleList_.size(): %lu\n", idleList_.size());
 		}
 		else
 		{
-			//DEBUG("releaseRedisClient failed, idleList_.size(): %lu", idleList_.size());
+			printf("releaseRedisClient failed, idleList_.size(): %lu\n", idleList_.size());
 		}
 	}
 }
@@ -148,7 +151,7 @@ void RedisClusterNode::removeRedisClient(RedisClient* client)
 {
 	if (client != NULL)
 	{
-		common::MutexLockGuard guard(mutex_);
+		std::lock_guard<std::mutex> lock(mutex_);
 		if (useMap_.find(client) != useMap_.end())
 		{
 			useMap_.erase(client);

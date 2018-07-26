@@ -94,6 +94,9 @@ public:
 
 	bool hmset(const std::string& key, const HashMap& hashMap, int64_t& retval);
 	bool hmget(const std::string& key, const ArrayList& fieldList, HashMapDataItem& dataItemMap);
+	
+	//
+	bool hincrby(const std::string& key, const std::string& field, const std::string& value,int64_t& retval);
 
 	// 无序set操作
 	bool sadd(const std::string& key, const std::vector<std::string>& vValue, int64_t& retval);
@@ -208,13 +211,56 @@ public:
 	                 const std::string& end,
 	                 std::vector<std::string>& vValue,
 	                 int offset = 0, int count = 1024);
-
+	/* 返回有序集合中指定分数区间的成员列表,有序集成员按分数值递增(从小到大)次序排列
+	 *具有相同分数值的成员按字典序来排列(该属性是有序集提供的，不需要额外的计算),返回值无分数
+	 *
+	 *@param  key    [主键]
+	 *@param  start  [分数开始区间，(5 -inf ]
+	 *@param  end    [分数结束区间，(10 +inf ]
+	 *@param  vValue [返回所有满足条件的成员]
+	 *@param  offset [页码，从0开始计]
+	 *@param  count  [每页显示的数量，如果与offset同时为0，则返回全部]
+	 *@return        [true: 成功 false: 失败]
+	 */
 	bool zrangebyscore(const std::string& key,
 	                   const std::string& start,
 	                   const std::string& end,
 	                   std::vector<std::string>& vValue,
 	                   int offset = 0, int count = 1024);
 
+	/*返回有序集中指定分数区间内的所有的成员,有序集成员按分数值递减(从大到小)的次序排列
+	 *具有相同分数值的成员按字典序的逆序排列，返回值中无分数
+	 *
+	 *@param  key    [主键]
+	 *@param  start  [分数开始区间，-inf 可以为空，如果为空必须与end通知保持为空，返回全部程序]
+	 *@param  end    [分数结束区间，+inf 可以为空，如果为空必须与end通知保持为空，返回全部程序]
+	 *@param  vValue [返回所有满足条件的成员]
+	 *@param  offset [页码，从0开始计]
+	 *@param  count  [每页显示的数量，如果与offset同时为0，则返回全部]
+	 *@return        [true: 成功 false: 失败]
+	 */
+	bool zrevrangebyscore(const std::string& key,
+						std::vector<std::string>& vValue,
+						const std::string& start = "",
+						const std::string& end = "",
+						int offset = 0,int cout = 0);
+
+	/*返回有序集合中指定分数区间的成员列表,有序集成员按分数值递增(从小到大)次序排列
+	 *具有相同分数值的成员按字典序来排列(该属性是有序集提供的，不需要额外的计算),返回值有分数
+	 *
+	 *@param  key    [主键]
+	 *@param  start  [分数开始区间，(5 -inf ]
+	 *@param  end    [分数结束区间，(10 +inf ]
+	 *@param  vValue [返回所有满足条件的成员]
+	 *@param  offset [页码，从0开始计]
+	 *@param  count  [每页显示的数量，如果与offset同时为0，则返回全部]
+	 *@return        [true: 成功 false: 失败]
+	 */
+	bool zrangebyscore_(const std::string& key,
+						std::vector<std::string>& vValue,
+						const std::string& start = "",
+						const std::string& end = "",
+						int offset = 0,int cout = 0);
 private:
 	redisContext* connectWithTimeout();
 

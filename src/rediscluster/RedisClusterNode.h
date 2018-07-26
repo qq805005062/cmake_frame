@@ -1,7 +1,7 @@
 #ifndef __REDIS_CLUSTER_NODE_H__
 #define __REDIS_CLUSTER_NODE_H__
 
-#include <common/MutexLock.h>
+#include <mutex>
 #include <vector>
 #include <list>
 #include <map>
@@ -99,7 +99,7 @@ private:
 
 	std::map<RedisClient*, int> useMap_;
 	std::list<RedisClient* > idleList_;
-	common::MutexLock mutex_;
+	std::mutex mutex_;
 };
 
 } // end namespace rediscluster 
