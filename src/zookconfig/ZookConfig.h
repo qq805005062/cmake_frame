@@ -34,12 +34,12 @@ namespace ZOOKCONFIG
 {
 //注册服务信息，目前只会有类型，（根节点名称）网关编号，（临时路径），ip：port为临时节点值，拆分开的，
 //ip 和端口不好分开路径，不好实现，而且创建是分开创建，回调很难一次获取到
-typedef struct __TcpServerInfo{
-	__TcpServerInfo(int32_t no, int16_t po, const std::string& ip, const std::string& typeName)
+typedef struct __TcpServerInfo
+{
+	__TcpServerInfo(int32_t no, int16_t po, const std::string& ip)
 		:gateNo(no)
 		,port(po)
 		,ipAddr(ip)
-		,typeKey(typeName)
 	{
 	}
 
@@ -49,7 +49,6 @@ typedef struct __TcpServerInfo{
 		:gateNo(0)
 		,port(0)
 		,ipAddr()
-		,typeKey()
 	{
 		*this = that;
 	}
@@ -61,14 +60,12 @@ typedef struct __TcpServerInfo{
 		gateNo = that.gateNo;
 		port = that.port;
 		ipAddr = that.ipAddr;
-		typeKey = that.typeKey;
 		return *this;
 	}
 	
 	int32_t gateNo;
 	int16_t port;
 	std::string ipAddr;
-	std::string typeKey;
 }TcpServerInfo;
 
 typedef std::vector<TcpServerInfo> TcpServerInfoVector;
@@ -81,7 +78,7 @@ typedef ConfigMapData::iterator ConfigMapDataIter;
 typedef std::function<void(const std::string& key, const std::string& oldValue, const std::string& newValue)> ConfigChangeCall;
 
 //获取服务信息变化回调
-typedef std::function<void(const TcpServerInfoVector& tcpServerInfo)> TcpServerChangeCall;
+typedef std::function<void(const TcpServerInfoVector& tcpServerInfo, const std::string& typeName)> TcpServerChangeCall;
 //统一参数配置类接口
 class ZookConfig
 {
@@ -100,7 +97,7 @@ ZookConfig();
 	int getConfigKeyValue(const std::string& key, std::string& value);
 
 	//获取注册服务信息，返回列表
-	int getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList);
+	int getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList, std::string* serverType = NULL);
 	
 	//创建临时路径、消息值
 	int createSessionPath(const std::string& path, const std::string& value);
@@ -220,7 +217,7 @@ public:
 
 	//获取服务信息接口，serverPath为路径，末尾不能带斜杠
 	//infoList 会返回服务信息列表信息。返回列表个数
-	int getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList);
+	int getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList, std::string* serverType = NULL);
 private:
 	ZookConfigPtr configPoint;
 };

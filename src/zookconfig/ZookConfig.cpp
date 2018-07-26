@@ -123,18 +123,15 @@ int ZookConfig::getConfigKeyValue(const std::string& key, std::string& value)
 	return ret;
 }
 
-int ZookConfig::getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList)
+int ZookConfig::getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList, std::string* serverType)
 {
 	if(serverPath.empty())
 		return ZOOK_CONFIG_PARAMETER_ERROR;
 
 	int pathcheck = zookeeperPathCheck(serverPath.c_str());
-	if(pathcheck <= 0)
-		return pathcheck;
-
-	if(pathcheck == 1)
+	if(pathcheck <= 1)
 		return ZOOK_CONFIG_PARAMETER_ERROR;
-	
+
 	if (zkHandle)
 	{
 		for(size_t i = 0; i < serverPathVector.size(); i++)
@@ -147,6 +144,11 @@ int ZookConfig::getTcpServerListInfo(const std::string& serverPath, TcpServerInf
 		serverPathVector.push_back(serverPath);
 		TcpServerInfoVector ().swap(infoList);
 
+		const char* pServerType = utilLastConstchar(serverPath.c_str(), '/');
+		if(pServerType && serverType)
+		{
+			serverType->assign(pServerType);
+		}
 		return LoadTcpServerListInfo(serverPath.c_str(), infoList);
 	}else{
 		PERROR("loadAllKeyValue zkHandle no init");
@@ -442,9 +444,15 @@ void ZookConfig::serverInfoChangeCallBack(const std::string& path)
 {
 	if(serverCb)
 	{
+		std::string svrType = "";
 		TcpServerInfoVector serverInfo;
+		const char* pServerType = utilLastConstchar(path.c_str(), '/');
+		if(pServerType)
+		{
+			svrType.assign(pServerType);
+		} 
 		LoadTcpServerListInfo(path.c_str(), serverInfo);
-		serverCb(serverInfo);
+		serverCb(serverInfo, svrType);
 	}
 }
 
@@ -621,11 +629,6 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 	if (zkHandle)
 	{
 		TcpServerInfoVector ().swap(infoList);
-		const char* pServerType = utilLastConstchar(serverPath, '/');
-		if(pServerType == NULL)
-			return ZOOK_CONFIG_PARAMETER_ERROR;
-		pServerType++;
-		std::string serverTypeName(pServerType);
 		
 		struct String_vector brokerlist;
 		tryTime = 0;
@@ -681,6 +684,8 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 			}
 			
 			char *pServerPort = utilFristChar(infoCfg,':');
+			if(!pServerPort)
+				return ZOOK_SERVER_INFO_ERROR;
 			*pServerPort = '\0';
 			
 			std::string serverIp(infoCfg);
@@ -690,7 +695,7 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 			uint16_t serverPort = static_cast<uint16_t>(atoi(pServerPort));
 
 			PDEBUG("serverPort %d",serverPort);
-			TcpServerInfo tcpServerInfo(serverNo, serverPort, serverIp, serverTypeName);
+			TcpServerInfo tcpServerInfo(serverNo, serverPort, serverIp);
 			result++;
 			infoList.push_back(tcpServerInfo);
 		}
@@ -739,7 +744,7 @@ int ZookConfig::zookeeperPathCheck(const char *str)
 	int len = static_cast<int>(strlen(str));
 	if(len == 0)
 	{
-		len = -ZOOK_CONFIG_PARAMETER_ERROR;
+		len = ZOOK_CONFIG_PARAMETER_ERROR;
 		return len;
 	}
 
@@ -899,10 +904,10 @@ int ZookConfigSingleton::setConfigKeyValue(const std::string& key, const std::st
 		return ZOOK_CONFIG_NO_INIT;
 }
 
-int ZookConfigSingleton::getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList)
+int ZookConfigSingleton::getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList, std::string* serverType)
 {
 	if(configPoint)
-		return configPoint->getTcpServerListInfo(serverPath,infoList);
+		return configPoint->getTcpServerListInfo(serverPath, infoList, serverType);
 	else
 		return ZOOK_CONFIG_NO_INIT;
 }
