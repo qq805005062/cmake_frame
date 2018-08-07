@@ -6,6 +6,8 @@
 #include <pthread.h>
 
 #include <common/Timestamp.h>
+#include <event2/thread.h>
+#include <event2/util.h> 
 
 #include "RedisAsync.h"
 
@@ -13,7 +15,7 @@
 static int respond = 0;
 static int64_t beginS = 0,endS = 0;
 
-#define TESTNUM		10
+#define TESTNUM		1000
 
 void hMsetCallBack(int64_t ret, void *privdata, const std::string& err)
 {
@@ -33,7 +35,7 @@ void hMsetCallBack(int64_t ret, void *privdata, const std::string& err)
 
 void* RedisTestThread(void* obj)
 {
-	uint64_t msgId = 4051478067814942313;
+	uint64_t msgId = 4051478067814943313;
 	char redis_key[32] = {0},redis_valu[32] = {0};
 	
 	ASYNCREDIS::RedisAsync *pAsync = static_cast<ASYNCREDIS::RedisAsync *>(obj);
@@ -67,9 +69,10 @@ void* RedisTestThread(void* obj)
 		sprintf(redis_key,"msg:%lu",msgId);
 		memset(redis_valu,0,32);
 		sprintf(redis_valu,"%lu",msgId);
+		PDEBUG("-----------------------------\n");
 		pAsync->set(redis_key,redis_valu,std::bind(hMsetCallBack,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3),NULL);
 		//pAsync->hmset(redis_key,hmsetMap,std::bind(hMsetCallBack,std::placeholders::_1,std::placeholders::_2,std::placeholders::_3),NULL);
-		PDEBUG("hmset :::: %s %d\n",redis_key,i);
+		PDEBUG("set :::: %s %d\n",redis_key,i);
 	}
 
 	while(1)
@@ -82,14 +85,14 @@ int main (int argc, char **argv)
 	ASYNCREDIS::RedisAsync hha;
 	pthread_t pthreadId_;
 	//char redis_key[32] = "msg:4161478067814942313";
-
+	evthread_use_pthreads();
 	if (pthread_create(&pthreadId_, NULL, &RedisTestThread, static_cast<void *>(&hha)))
 	{
 		printf("RedisInitThread init error \n");
 		return -1;
 	}
-
-	hha.RedisConnect("127.0.0.1", 6379,1);
+	//RedisTestThread(static_cast<void *>(&hha));
+	hha.RedisConnect("127.0.0.1", 6379, 1);
 	hha.RedisLoop();
     return 0;
 }

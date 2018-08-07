@@ -31,7 +31,8 @@ static void respondCallback(redisAsyncContext *c, void *r, void *privdata) {
 		PERROR("respondCallback redisReply NULL,This suitation will never happen,big problem\n");
 		return;
 	}
-
+	uint32_t seq = pRedisRequest->RedisRespondSeq();
+	PDEBUG("$$$$$$$$$$$$$hmset seq %u\n", seq);
   	switch (reply->type)
 	{
 		case REDIS_REPLY_STRING:
@@ -215,6 +216,7 @@ RedisAsync::RedisAsync(struct event_base* base)
 	,host_()
 	,port_(0)
 	,conns_()
+	,seqNum()
 {
 	PDEBUG("RedisAsync\n");
 }
@@ -332,7 +334,10 @@ void RedisAsync::RedisOnConnection(const redisAsyncContext *c,int status,bool bC
 void RedisAsync::RedisLoop()
 {
 	if(libevent)
+	{
 		event_base_dispatch(libevent);
+		PERROR("event_base_dispatch\n");
+	}
 	PERROR("Redis no event loop may be disconnect\n");
 }
 
@@ -369,10 +374,13 @@ int RedisAsync::set(const std::string& key, const std::string& value, const CmdR
 	}
 	
 	int ret = 0;
+	uint32_t seq = seqNum.getAndAdd(1);
+	PDEBUG("################hmset seq %u\n", seq);
 	common::MutexLockGuard lock(IterLock);
 	if(retCb)
 	{
 		RedisRequest *pRedisRequest = new RedisRequest(priv,retCb);
+		pRedisRequest->SerRedisRequestSeq(seq);
 		ret = redisAsyncCommand(conns_[lastIndex], respondCallback, static_cast<void *>(pRedisRequest), "SET %s %s", key.c_str(), value.c_str());
 	}else{
 		ret = redisAsyncCommand(conns_[lastIndex], NULL, NULL, "SET %s %s", key.c_str(), value.c_str());
@@ -405,7 +413,9 @@ int RedisAsync::hmset(const std::string& key, const HashMap& hashMap, const CmdR
 		PERROR("hmset paramter empty\n");
 		return -1;
 	}
-	
+
+	uint32_t seq = seqNum.getAndAdd(1);
+	PDEBUG("################hmset seq %u\n", seq);
 	StrVector msetCmd;
 	msetCmd.push_back("HMSET");
 	msetCmd.push_back(key);
@@ -432,6 +442,7 @@ int RedisAsync::hmset(const std::string& key, const HashMap& hashMap, const CmdR
 	if(retCb)
 	{
 		RedisRequest *pRedisRequest = new RedisRequest(priv,retCb);
+		pRedisRequest->SerRedisRequestSeq(seq);
 		ret = redisAsyncCommandArgv(conns_[lastIndex], respondCallback, static_cast<void *>(pRedisRequest), static_cast<int>(argv.size()), &(argv[0]), &(argvlen[0]));
 	}else{
 		ret = redisAsyncCommandArgv(conns_[lastIndex], NULL, NULL, static_cast<int>(argv.size()), &(argv[0]), &(argvlen[0]));

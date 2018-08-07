@@ -6,6 +6,7 @@
 #include <vector>
 #include <functional>
 
+#include <common/Atomic.h>
 #include <common/MutexLock.h>
 
 #include <hiredis/hiredis.h>
@@ -47,11 +48,14 @@ typedef std::function<void(const StrVector& strV, void *privdata, const std::str
 typedef std::vector<redisAsyncContext *> ConstRedisAsyncConn;
 typedef ConstRedisAsyncConn::iterator ConstRedisAsyncConnIter;
 
+typedef common::AtomicIntegerT<uint32_t> AtomicUInt32;
+
 class RedisRequest
 {
 public:
 	RedisRequest()
-		:priv(nullptr)
+		:seq(0)
+		,priv(nullptr)
 		,retCb_(nullptr)
 		,strCb_(nullptr)
 		,strVCb_(nullptr)
@@ -64,6 +68,7 @@ public:
 
 	RedisRequest(RedisRequest& that)
 	{
+		this->seq = that.seq;
 		this->priv = that.priv;
 		this->retCb_ = that.retCb_;
 		this->strCb_ = that.strCb_;
@@ -86,6 +91,11 @@ public:
 	{
 		priv = opaque;
 		strVCb_ = cb;
+	}
+
+	void SerRedisRequestSeq(uint32_t s)
+	{
+		seq = s;
 	}
 
 	void SetRedisRequest(void *opaque, const CmdResultCallBack& cb)
@@ -147,9 +157,15 @@ public:
 		if(strVCb_)
 			strVCb_(strVector,priv,err);
 	}
+
+	uint32_t RedisRespondSeq()
+	{
+		return seq;
+	}
 	
 private:
-	
+
+	uint32_t seq;
 	void *priv;
 	CmdResultCallBack retCb_;
 	CmdStrValueCallBack strCb_;
@@ -191,6 +207,7 @@ private:
 	int port_;
 
 	ConstRedisAsyncConn conns_;
+	AtomicUInt32 seqNum;
 };
 
 }
