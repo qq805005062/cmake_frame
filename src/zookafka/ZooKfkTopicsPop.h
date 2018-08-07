@@ -107,6 +107,8 @@ private:
 	int destroy;
 	volatile int popNum;
 	int initFlag;
+	int switchFlag;
+	int errorFlag;
 };
 
 typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPop> ZooKfkConsumerPtr;
