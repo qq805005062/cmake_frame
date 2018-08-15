@@ -209,6 +209,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if(initFlag)
 		return KAFKA_INIT_ALREADY;
 	initFlag = 1;
+	
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	if(kfkconft == NULL)
 	{
@@ -232,6 +233,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (ret)
 	{
 		PERROR("rd_kafka_conf_set error: %s", errStr);
+		rd_kafka_conf_destroy(kfkconft);
 		return KAFKA_CONSUMER_CONFSET_ERROR;
 	}
 	if(!groupName.empty())
@@ -242,6 +244,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		if(ret != RD_KAFKA_CONF_OK)
 		{
 			PERROR("set kafka config value failed, reason: %s", errStr);
+			rd_kafka_conf_destroy(kfkconft);
 			return KAFKA_CONSUMER_CONFSET_ERROR;
 		}
 	}
@@ -256,6 +259,8 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
 	{
 		PERROR("set offset store method failed: %s", errStr);
+		rd_kafka_topic_conf_destroy(kfktopiconft);
+		rd_kafka_conf_destroy(kfkconft);
 		return KAFKA_CONSUMER_CONFSET_ERROR;
 	}
 	rd_kafka_conf_set_default_topic_conf(kfkconft, kfktopiconft);
@@ -264,6 +269,8 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (NULL == kfkt)
 	{
 		PERROR("Failed to create new consumer, reason: %s", errStr);
+		//rd_kafka_topic_conf_destroy(kfktopiconft);
+		rd_kafka_conf_destroy(kfkconft);
 		return KAFKA_MODULE_NEW_ERROR;
 	}
 	
@@ -276,10 +283,11 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	if (ret == 0)
 	{
 		PERROR("no valid brokers specified, brokers: %s", errStr);
+		//rd_kafka_topic_conf_destroy(kfktopiconft);
 		return KAFKA_BROKERS_ADD_ERROR;
 	}
 	rd_kafka_poll_set_consumer(kfkt);
-
+	
 	if(!topic.empty())
 	{
 		std::vector<std::string> topics;
@@ -319,11 +327,13 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 
 int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 {
+	char errStr[512] = { 0 },tmp[16] = { 0 };
+	int ret = 0;
 	if(errorFlag)
 		return errorFlag;
 	switchFlag = 1;
-
 	std::lock_guard<std::mutex> lock(listLock);
+	
 	for(ListStringTopicIter iter = topics_.begin();iter != topics_.end();iter++)
 	{
 		int ret = iter->compare(topic);
@@ -334,6 +344,92 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 			return 0;
 		}
 	}
+
+	rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
+	if (err)
+	{
+		PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
+		setKfkErrorMessage(err, rd_kafka_err2str(err));
+		switchFlag = 0;
+		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
+	}
+
+	if(kfkt)
+	{
+		rd_kafka_destroy(kfkt);
+		kfkt = NULL;
+	}
+
+	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
+	if(kfkconft == NULL)
+	{
+		PERROR("rd_kafka_conf_new NULL");
+		switchFlag = 0;
+		return KAFKA_MODULE_NEW_ERROR;
+	}
+	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
+
+	snprintf(tmp, sizeof tmp, "%i", SIGIO);
+	rd_kafka_conf_set(kfkconft, "internal.termination.signal", tmp, NULL, 0);
+	rd_kafka_conf_set(kfkconft, "queued.min.messages", "1000000", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "session.timeout.ms", "6000", NULL, 0);
+	
+	ret = rd_kafka_conf_set(kfkconft, "metadata.broker.list",kfkBrokers.c_str(), errStr, sizeof errStr);
+	if (ret)
+	{
+		PERROR("rd_kafka_conf_set error: %s", errStr);
+		rd_kafka_conf_destroy(kfkconft);
+		switchFlag = 0;
+		return KAFKA_CONSUMER_CONFSET_ERROR;
+	}
+
+	if(!groupName_.empty())
+	{
+		PERROR("kfkInit groupName: %s", groupName_.c_str());
+		ret = rd_kafka_conf_set(kfkconft, "group.id", groupName_.c_str(), errStr, sizeof errStr);
+		if(ret != RD_KAFKA_CONF_OK)
+		{
+			PERROR("set kafka config value failed, reason: %s", errStr);
+			rd_kafka_conf_destroy(kfkconft);
+			switchFlag = 0;
+			return KAFKA_CONSUMER_CONFSET_ERROR;
+		}
+	}
+
+	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.enable", "true", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.interval.ms", "500", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "largest", errStr, sizeof(errStr));
+	//rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "smallest", errStr, sizeof(errStr));
+	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
+	{
+		PERROR("set offset store method failed: %s", errStr);
+		rd_kafka_topic_conf_destroy(kfktopiconft);
+		rd_kafka_conf_destroy(kfkconft);
+		switchFlag = 0;
+		return KAFKA_CONSUMER_CONFSET_ERROR;
+	}
+	rd_kafka_conf_set_default_topic_conf(kfkconft, kfktopiconft);
+	
+	kfkt = rd_kafka_new(RD_KAFKA_CONSUMER, kfkconft, errStr, sizeof errStr);
+	if (NULL == kfkt)
+	{
+		PERROR("Failed to create new consumer, reason: %s", errStr);
+		//rd_kafka_topic_conf_destroy(kfktopiconft);
+		rd_kafka_conf_destroy(kfkconft);
+		switchFlag = 0;
+		return KAFKA_MODULE_NEW_ERROR;
+	}
+
+	ret = rd_kafka_brokers_add(kfkt, kfkBrokers.c_str());
+	if (ret == 0)
+	{
+		PERROR("no valid brokers specified, brokers: %s", errStr);
+		//rd_kafka_topic_conf_destroy(kfktopiconft);
+		switchFlag = 0;
+		return KAFKA_BROKERS_ADD_ERROR;
+	}
+	rd_kafka_poll_set_consumer(kfkt);
 	
 	int size = static_cast<int>(topics_.size());
 	size++;
@@ -349,25 +445,11 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	{
 		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",iter->c_str());
 		rd_kafka_topic_partition_list_add(pList, iter->c_str(), partition);
-		//rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
 	}
 	PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",topic.c_str());
 	rd_kafka_topic_partition_list_add(pList, topic.c_str(), partition);
-	//rd_kafka_topic_partition_list_set_offset(pList, topic.c_str(), partition,startOffset);
-	if(size > 1)
-	{
-		rd_kafka_resp_err_t err = rd_kafka_unsubscribe(kfkt);
-		if(err)
-		{
-			PERROR("Failed rd_kafka_unsubscribe topics: %s", rd_kafka_err2str(err));
-			switchFlag = 0;
-			errorFlag = KAFKA_CONSUMER_ADDTOPIC_ERROR;
-			rd_kafka_topic_partition_list_destroy(pList);
-			return KAFKA_CONSUMER_ADDTOPIC_ERROR;
-		}
-	}
 		
-	rd_kafka_resp_err_t err = rd_kafka_subscribe(kfkt, pList);
+	err = rd_kafka_subscribe(kfkt, pList);
 	if (err)
 	{
 		PERROR("Failed rd_kafka_subscribe topics: %s", rd_kafka_err2str(err));
@@ -377,8 +459,8 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 		rd_kafka_topic_partition_list_destroy(pList);
 		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 	}
-	topics_.push_back(topic);
 	rd_kafka_topic_partition_list_destroy(pList);
+	topics_.push_back(topic);
 	switchFlag = 0;
 	return errorFlag;
 }
@@ -388,45 +470,49 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 	int ret = 0;
 	
 	std::lock_guard<std::mutex> lock(listLock);
-		
 	if(destroy)
 		return MODULE_RECV_EXIT_COMMND;
 	if(errorFlag)
 		return errorFlag;
+	//PDEBUG("pop enter");
 	if(switchFlag)
 		return 0;
-	
 	rd_kafka_message_t* message = NULL;
-	while(1)
+	int pollFlag = 1;
+	while(pollFlag)
 	{
 		message = rd_kafka_consumer_poll(kfkt, 500);
 		if(switchFlag)
 		{
+			//PDEBUG("switchFlag %d destroy %d", switchFlag, destroy);
 			if(message && message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
 			{
 				rd_kafka_message_destroy(message);
 				message = NULL;
 			}
-			break;
+			pollFlag = 0;
 		}
+		
 		if(destroy)
 		{
+			//PDEBUG("switchFlag %d destroy %d", switchFlag, destroy);
 			if(message && message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
 			{
 				rd_kafka_message_destroy(message);
 				message = NULL;
 			}
-			break;
+			pollFlag = 0;
 		}
-		if(!message)
-			continue;
-		else if(message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
+		if(message)
 		{
-			rd_kafka_message_destroy(message);
-			continue;
+			if(message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
+			{
+				rd_kafka_message_destroy(message);
+				message = NULL;
+			}else{
+				pollFlag = 0;
+			}
 		}
-		else
-			break;
 	}
 	if(message)
 	{
@@ -470,7 +556,6 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			rd_kafka_message_destroy(message);
 		}
 	}
-	
 	return ret;
 }
 
@@ -529,24 +614,30 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 			}
 			rd_kafka_message_destroy(message);
 		}
-	}
+	}
 	return ret;
 }
 
 
 int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 {
+	char errStr[512] = { 0 },tmp[16] = { 0 };
+	int ret = 0;
+	
+	if(errorFlag)
+		return errorFlag;
+	switchFlag = 1;
+	PDEBUG("kfkTopicConsumeStop");
+	std::lock_guard<std::mutex> lock(listLock);
+	PDEBUG("kfkTopicConsumeStop enter");
+
 	int size = static_cast<int>(topics_.size());
 	if(size == 0)
 	{
 		PDEBUG("kfkTopicConsumeStop already stop");
+		switchFlag = 0;
 		return 0;
 	}
-	if(errorFlag)
-		return errorFlag;
-	switchFlag = 1;
-
-	std::lock_guard<std::mutex> lock(listLock);
 	
 	ListStringTopicIter iter = topics_.begin();
 	for(;iter != topics_.end();iter++)
@@ -557,25 +648,104 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 			break;
 		}
 	}
+	
 	if(size)
 	{
 		PERROR("There is no found topic in reading topic");
 		switchFlag = 0;
 		return TRANSMIT_PARAMTER_ERROR;
 	}
+
+	rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
+	if (err)
+	{
+		PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
+		setKfkErrorMessage(err, rd_kafka_err2str(err));
+		switchFlag = 0;
+		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
+	}
+
+	if(kfkt)
+	{
+		rd_kafka_destroy(kfkt);
+		kfkt = NULL;
+	}
+
+	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
+	if(kfkconft == NULL)
+	{
+		PERROR("rd_kafka_conf_new NULL");
+		switchFlag = 0;
+		return KAFKA_MODULE_NEW_ERROR;
+	}
+	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
+
+	snprintf(tmp, sizeof tmp, "%i", SIGIO);
+	rd_kafka_conf_set(kfkconft, "internal.termination.signal", tmp, NULL, 0);
+	rd_kafka_conf_set(kfkconft, "queued.min.messages", "1000000", NULL, 0);
+	rd_kafka_conf_set(kfkconft, "session.timeout.ms", "6000", NULL, 0);
+	
+	ret = rd_kafka_conf_set(kfkconft, "metadata.broker.list",kfkBrokers.c_str(), errStr, sizeof errStr);
+	if (ret)
+	{
+		PERROR("rd_kafka_conf_set error: %s", errStr);
+		rd_kafka_conf_destroy(kfkconft);
+		switchFlag = 0;
+		return KAFKA_CONSUMER_CONFSET_ERROR;
+	}
+
+	if(!groupName_.empty())
+	{
+		PERROR("kfkInit groupName: %s", groupName_.c_str());
+		ret = rd_kafka_conf_set(kfkconft, "group.id", groupName_.c_str(), errStr, sizeof errStr);
+		if(ret != RD_KAFKA_CONF_OK)
+		{
+			PERROR("set kafka config value failed, reason: %s", errStr);
+			rd_kafka_conf_destroy(kfkconft);
+			switchFlag = 0;
+			return KAFKA_CONSUMER_CONFSET_ERROR;
+		}
+	}
+
+	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.enable", "true", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.interval.ms", "500", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "largest", errStr, sizeof(errStr));
+	//rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "smallest", errStr, sizeof(errStr));
+	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
+	{
+		PERROR("set offset store method failed: %s", errStr);
+		rd_kafka_topic_conf_destroy(kfktopiconft);
+		rd_kafka_conf_destroy(kfkconft);
+		switchFlag = 0;
+		return KAFKA_CONSUMER_CONFSET_ERROR;
+	}
+	rd_kafka_conf_set_default_topic_conf(kfkconft, kfktopiconft);
+	
+	kfkt = rd_kafka_new(RD_KAFKA_CONSUMER, kfkconft, errStr, sizeof errStr);
+	if (NULL == kfkt)
+	{
+		PERROR("Failed to create new consumer, reason: %s", errStr);
+		//rd_kafka_topic_conf_destroy(kfktopiconft);
+		rd_kafka_conf_destroy(kfkconft);
+		switchFlag = 0;
+		return KAFKA_MODULE_NEW_ERROR;
+	}
+
+	ret = rd_kafka_brokers_add(kfkt, kfkBrokers.c_str());
+	if (ret == 0)
+	{
+		PERROR("no valid brokers specified, brokers: %s", errStr);
+		//rd_kafka_topic_conf_destroy(kfktopiconft);
+		switchFlag = 0;
+		return KAFKA_BROKERS_ADD_ERROR;
+	}
+	rd_kafka_poll_set_consumer(kfkt);
+	
 	topics_.erase(iter);
 	size = static_cast<int>(topics_.size());
 	if(size == 0)
 	{
-		rd_kafka_resp_err_t err = rd_kafka_unsubscribe(kfkt);
-		if(err)
-		{
-			PERROR("Failed rd_kafka_unsubscribe topics: %s", rd_kafka_err2str(err));
-			topics_.push_back(topic);
-			switchFlag = 0;
-			errorFlag = KAFKA_CONSUMER_ADDTOPIC_ERROR;
-			return KAFKA_CONSUMER_ADDTOPIC_ERROR;
-		}
 		switchFlag = 0;
 		return size;
 	}
@@ -583,8 +753,8 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	if(pList == NULL)
 	{
 		PERROR("rd_kafka_topic_partition_list_new ERROR NULL ptr");
-		topics_.push_back(topic);
 		switchFlag = 0;
+		ListStringTopic ().swap(topics_);
 		errorFlag = KAFKA_CONSUMER_ADDTOPIC_ERROR;
 		return KAFKA_MODULE_NEW_ERROR;
 	}
@@ -592,20 +762,8 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	{
 		PDEBUG("rd_kafka_topic_partition_list_add topic :: %s",iter->c_str());
 		rd_kafka_topic_partition_list_add(pList, iter->c_str(), partition);
-		//rd_kafka_topic_partition_list_set_offset(pList, iter->c_str(), partition,startOffset);
 	}
-
-	rd_kafka_resp_err_t err = rd_kafka_unsubscribe(kfkt);
-	if(err)
-	{
-		PERROR("Failed rd_kafka_unsubscribe topics: %s", rd_kafka_err2str(err));
-		topics_.push_back(topic);
-		switchFlag = 0;
-		errorFlag = KAFKA_CONSUMER_ADDTOPIC_ERROR;
-		rd_kafka_topic_partition_list_destroy(pList);
-		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
-	}
-
+	
 	err = rd_kafka_subscribe(kfkt, pList);
 	if (err)
 	{
@@ -616,7 +774,6 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 		rd_kafka_topic_partition_list_destroy(pList);
 		return KAFKA_CONSUMER_ADDTOPIC_ERROR;
 	}
-
 	rd_kafka_topic_partition_list_destroy(pList);
 	switchFlag = 0;
 	return errorFlag;
@@ -634,14 +791,15 @@ void ZooKfkTopicsPop::changeKafkaBrokers(const std::string& brokers)
 void ZooKfkTopicsPop::kfkDestroy()
 {
 	destroy = 1;
+
 	std::lock_guard<std::mutex> lock(listLock);
-	
+
 	rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
 	if (err)
 	{
 		PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
 	}
-
+	
 	if(kfkt)
 	{
 		rd_kafka_destroy(kfkt);
@@ -680,7 +838,7 @@ void ZooKfkTopicsPop::kfkSubscription()
 
 		rd_kafka_topic_partition_t *pInfo = NULL;
 		for(int i = 0; i < pList->cnt; i++)
-		{
+		{
 			if(pInfo)
 			{
 				pInfo++;

@@ -28,6 +28,8 @@ set(ZOOKAFKA_TEST_SRCS
 
 set(ZOOKAFKA_CONSUMER_SRCS
   test/kfk_consumer.cpp
+  #src/ZooKfkTopicsPop_free.cpp
+  #src/ZooKfkTopicsPop_rebalance.cpp
   src/ZooKfkTopicsPop.cpp
 )
 

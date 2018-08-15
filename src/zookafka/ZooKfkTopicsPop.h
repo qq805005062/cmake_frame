@@ -61,9 +61,11 @@ public:
 	int kfkTopicConsumeStart(const std::string& topic);	
 	//获取kfk一个消息，并可以获取对应的topic，偏移量，key；
 	//-1表示有错，内部过滤了-191（读到队尾的错误)
+	//需要处理返回空数据处理，
 	int pop(std::string& topic, std::string& data, std::string* key = NULL, int64_t* offset = NULL, int32_t* parnum = NULL);
 	//获取kfk一个消息，timeout_ms超时时间，
 	//内部已经过滤-191的错误，不需要外部过滤-191的错误
+	//需要处理返回空数据处理，
 	int tryPop(std::string& topic, std::string& data, int timeout_ms, std::string* key = NULL, int64_t* offset = NULL, int32_t* parnum = NULL);
 	
 	//停止某一个topic读，必须存在已经读的topic
@@ -77,6 +79,8 @@ public:
 		msg.assign(kfkErrorMsg);
 		return static_cast<int>(kfkErrorCode);
 	}
+
+	void kfkSubscription();
 	
 	//zookeeper发现brokers变化修正brokers
 	void changeKafkaBrokers(const std::string& brokers);
@@ -88,15 +92,13 @@ private:
 	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
 
 	std::mutex listLock;
-	std::mutex flushLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
 	std::string kfkBrokers;
+	std::string groupName_;
 	ListStringTopic topics_;
 	
 	rd_kafka_t* kfkt;
-	
-	rd_kafka_topic_partition_list_t* topicparlist;
 
 	size_t kMessageMaxSize;
 	int64_t startOffset;
@@ -105,7 +107,6 @@ private:
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;
 	int destroy;
-	volatile int popNum;
 	int initFlag;
 	int switchFlag;
 	int errorFlag;

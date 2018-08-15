@@ -1,6 +1,6 @@
 
 #include <unistd.h>
-
+#include <inttypes.h>
 #include "../ZooKfkCommon.h"
 #include "../ZooKfkTopicsPop.h"
 
@@ -10,11 +10,52 @@ namespace ZOOKEEPERKAFKA
 {
 static const char KafkaBrokerPath[] = "/brokers/ids";
 static int zookeeperColonyNum = 0;
+static int assign_cnt = 0;
 
 static void kfkLogger(const rd_kafka_t* rdk, int level, const char* fac, const char* buf)
 {
 	PDEBUG("rdkafka-%d-%s: %s: %s", level, fac, rdk ? rd_kafka_name(rdk) : NULL, buf);
 }
+
+static void rebalance_cb (rd_kafka_t *rk, rd_kafka_resp_err_t err, rd_kafka_topic_partition_list_t *partitions, void *opaque) {
+
+	char *memberid = rd_kafka_memberid(rk);
+	PDEBUG("%s: MemberId \"%s\": Consumer group rebalanced: %s\n", rd_kafka_name(rk), memberid, rd_kafka_err2str(err));
+
+	if (memberid)
+		free(memberid);
+
+	for (int i = 0 ; i < partitions->cnt ; i++) {
+		PDEBUG(" %s [%d] offset %ld %s %s\n",
+			 partitions->elems[i].topic,
+			 partitions->elems[i].partition,
+			 partitions->elems[i].offset,
+			 partitions->elems[i].err ? ": " : "",
+			 partitions->elems[i].err ?
+			 rd_kafka_err2str(partitions->elems[i].err) : "");
+		}
+
+	switch (err)
+	{
+		case RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS:
+			assign_cnt++;
+			rd_kafka_assign(rk, partitions);
+			break;
+
+		case RD_KAFKA_RESP_ERR__REVOKE_PARTITIONS:
+			if (assign_cnt == 0)
+				PDEBUG("asymetric rebalance_cb\n");
+			assign_cnt--;
+			rd_kafka_assign(rk, NULL);
+			break;
+
+		default:
+			PDEBUG("rebalance failed: %s\n",
+				  rd_kafka_err2str(err));
+			break;
+	}
+}
+
 
 static int set_brokerlist_from_zookeeper(zhandle_t *zzh, char *brokers)
 {
@@ -216,7 +257,8 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		return KAFKA_MODULE_NEW_ERROR;
 	}
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
-
+	rd_kafka_conf_set_rebalance_cb(kfkconft, rebalance_cb);
+	
 	snprintf(tmp, sizeof tmp, "%i", SIGIO);
 	rd_kafka_conf_set(kfkconft, "internal.termination.signal", tmp, NULL, 0);
 	rd_kafka_conf_set(kfkconft, "queued.min.messages", "1000000", NULL, 0);
@@ -246,13 +288,13 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		}
 	}
 	rd_kafka_topic_conf_t* kfktopiconft = rd_kafka_topic_conf_new();
-	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.enable", "true", errStr, sizeof(errStr));
-	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.interval.ms", "500", errStr, sizeof(errStr));
-	rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "largest", errStr, sizeof(errStr));
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.enable", "false", errStr, sizeof(errStr));
+	//rd_kafka_topic_conf_set(kfktopiconft, "auto.commit.interval.ms", "200", errStr, sizeof(errStr));
+	//rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "largest", errStr, sizeof(errStr));
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.path", filePath.c_str(), errStr, sizeof(errStr));
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "file", errStr, sizeof(errStr));
 	// rd_kafka_topic_conf_set(kfktopiconft, "offset.store.sync.interval.ms", "2000", errStr, sizeof(errStr));
-	// rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "smallest", NULL, 0);
+	rd_kafka_topic_conf_set(kfktopiconft, "auto.offset.reset", "smallest", NULL, 0);
 	if (rd_kafka_topic_conf_set(kfktopiconft, "offset.store.method", "broker", errStr, sizeof errStr) != RD_KAFKA_CONF_OK)
 	{
 		PERROR("set offset store method failed: %s", errStr);
@@ -322,8 +364,8 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	if(errorFlag)
 		return errorFlag;
 	switchFlag = 1;
-
 	std::lock_guard<std::mutex> lock(listLock);
+	usleep(200 * 1000);
 	for(ListStringTopicIter iter = topics_.begin();iter != topics_.end();iter++)
 	{
 		int ret = iter->compare(topic);
@@ -388,36 +430,19 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 	int ret = 0;
 	
 	std::lock_guard<std::mutex> lock(listLock);
-		
 	if(destroy)
 		return MODULE_RECV_EXIT_COMMND;
 	if(errorFlag)
 		return errorFlag;
-	if(switchFlag)
-		return 0;
 	
 	rd_kafka_message_t* message = NULL;
 	while(1)
 	{
 		message = rd_kafka_consumer_poll(kfkt, 500);
 		if(switchFlag)
-		{
-			if(message && message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
-			{
-				rd_kafka_message_destroy(message);
-				message = NULL;
-			}
 			break;
-		}
 		if(destroy)
-		{
-			if(message && message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
-			{
-				rd_kafka_message_destroy(message);
-				message = NULL;
-			}
 			break;
-		}
 		if(!message)
 			continue;
 		else if(message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
@@ -483,8 +508,6 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 		return MODULE_RECV_EXIT_COMMND;
 	if(errorFlag)
 		return errorFlag;
-	if(switchFlag)
-		return 0;
 	
 	rd_kafka_message_t* message = NULL;
 	message = rd_kafka_consumer_poll(kfkt, 500);
@@ -545,9 +568,8 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 	if(errorFlag)
 		return errorFlag;
 	switchFlag = 1;
-
 	std::lock_guard<std::mutex> lock(listLock);
-	
+	usleep(200 * 1000);
 	ListStringTopicIter iter = topics_.begin();
 	for(;iter != topics_.end();iter++)
 	{
