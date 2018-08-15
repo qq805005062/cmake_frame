@@ -22,12 +22,12 @@ int main(int argc, char* argv[])
 #endif
 
 #if 1
+#include <iostream>
 #include <pthread.h>
 
 #include "../ZooKfkTopicsPop.h"
 
 ZOOKEEPERKAFKA::ZooKfkTopicsPop pop;
-static int flag = 0,popNum = 0;
 void* startConsumerThread(void* obj)
 {
 	while(1)
@@ -35,21 +35,13 @@ void* startConsumerThread(void* obj)
 		int64_t offsetNum = 0;
 		int32_t parationNum = 0;
 		std::string topicName, dataStr, keyStr;
-		while(flag)
-		{
-			sleep(1);
-		}
 		int ret = pop.pop(topicName, dataStr, &keyStr, &offsetNum, &parationNum);
-		popNum++;
-		if(popNum && popNum % 10 == 0)
-		{
-			flag = 1;
-		}
 		if(ret < 0)
 		{
 			printf("pop.pop return ret %d \n", ret);
 		}else{
-			printf("pop.pop topicName parationNum parationNum %s %d %lu\n", topicName.c_str(), parationNum, offsetNum);
+			if(!topicName.empty())
+				printf("pop.pop topicName parationNum offset %s %d %lu\n", topicName.c_str(), parationNum, offsetNum);
 		}
 	}
 
@@ -59,54 +51,73 @@ void* startConsumerThread(void* obj)
 int main(int argc, char* argv[])
 {
 	pthread_t pthreadId_;
-	int ret = 0;
-	pop.zookInit("192.169.0.61:2181,192.169.0.62:2181,192.169.0.63:2181","zookeeper11,zookeeper22,zookeeper33","248");
+	int switchOne = 1, switchTwo = 1, switchThr = 1, switchFou = 1;
+	pop.zookInit("192.169.6.60:2181,192.169.6.61:2181,192.169.6.62:2181","zookeeper_11,zookeeper_22,zookeeper_33,zookeeper_44","248");
 	if (pthread_create(&pthreadId_, NULL, &startConsumerThread, NULL))
 	{
 		printf("startConsumerThread init error \n");
 		return 0;
 	}
-	
-	while(1)
+
+	pop.kfkSubscription();
+	std::cout << ">>";
+	for (std::string line; std::getline(std::cin, line); line.clear())
 	{
-		sleep(1);
-		if(popNum && popNum % 10 == 0)
+		if(!line.empty())
 		{
-			ret++;
-			ret = ret % 6;
-			switch(ret)
+			if(line.compare("1") == 0)
 			{
-				case 0:
-					printf("kfkTopicConsumeStart zookeeper11\n");
-					pop.kfkTopicConsumeStart("zookeeper11");
-					break;
-				case 1:
-					printf("kfkTopicConsumeStop zookeeper11\n");
-					pop.kfkTopicConsumeStop("zookeeper11");
-					break;
-				case 2:
-					printf("kfkTopicConsumeStop zookeeper22\n");
-					pop.kfkTopicConsumeStop("zookeeper22");
-					break;
-				case 3:
-					printf("kfkTopicConsumeStart zookeeper22\n");
-					pop.kfkTopicConsumeStart("zookeeper22");
-					break;
-				case 4:
-					printf("kfkTopicConsumeStop zookeeper33\n");
-					pop.kfkTopicConsumeStop("zookeeper33");
-					break;
-				case 5:
-					printf("kfkTopicConsumeStart zookeeper33\n");
-					pop.kfkTopicConsumeStart("zookeeper33");
-					break;
-				default:
-					printf("default break\n");
-					break;
+				if(switchOne)
+				{
+					pop.kfkTopicConsumeStop("zookeeper_11");
+					switchOne = 0;
+				}else{
+					pop.kfkTopicConsumeStart("zookeeper_11");
+					switchOne = 1;
+				}
+				pop.kfkSubscription();
 			}
-			popNum++;
-			flag = 0;
+
+			if(line.compare("2") == 0)
+			{
+				if(switchTwo)
+				{
+					pop.kfkTopicConsumeStop("zookeeper_22");
+					switchTwo = 0;
+				}else{
+					pop.kfkTopicConsumeStart("zookeeper_22");
+					switchTwo = 1;
+				}
+				pop.kfkSubscription();
+			}
+
+			if(line.compare("3") == 0)
+			{
+				if(switchThr)
+				{
+					pop.kfkTopicConsumeStop("zookeeper_33");
+					switchThr = 0;
+				}else{
+					pop.kfkTopicConsumeStart("zookeeper_33");
+					switchThr = 1;
+				}
+				pop.kfkSubscription();
+			}
+
+			if(line.compare("4") == 0)
+			{
+				if(switchFou)
+				{
+					pop.kfkTopicConsumeStop("zookeeper_44");
+					switchFou = 0;
+				}else{
+					pop.kfkTopicConsumeStart("zookeeper_44");
+					switchFou = 1;
+				}
+				pop.kfkSubscription();
+			}
 		}
+		std::cout << std::endl << ">>";
 	}
 	return 0;
 }

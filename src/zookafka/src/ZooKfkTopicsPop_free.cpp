@@ -474,9 +474,13 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 		return MODULE_RECV_EXIT_COMMND;
 	if(errorFlag)
 		return errorFlag;
-	//PDEBUG("pop enter");
 	if(switchFlag)
 		return 0;
+	if(kfkt == NULL)
+		return KAFKA_NO_INIT_ALREADY;
+	if(topics_.empty())
+		return KAFKA_NO_TOPIC_NAME_INIT;
+	
 	rd_kafka_message_t* message = NULL;
 	int pollFlag = 1;
 	while(pollFlag)
@@ -570,6 +574,10 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 		return errorFlag;
 	if(switchFlag)
 		return 0;
+	if(kfkt == NULL)
+		return KAFKA_NO_INIT_ALREADY;
+	if(topics_.empty())
+		return KAFKA_NO_TOPIC_NAME_INIT;
 	
 	rd_kafka_message_t* message = NULL;
 	message = rd_kafka_consumer_poll(kfkt, 500);
