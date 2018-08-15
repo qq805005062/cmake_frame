@@ -383,6 +383,7 @@ int ZooKfkTopicsPop::kfkTopicConsumeStart(const std::string& topic)
 	return errorFlag;
 }
 
+//自动提交偏移量，是在rd_kafka_consumer_poll接口中完成的，但是当我开启关闭topic期间总有一个时间差，可能会出现部分数据重复消费。
 int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key, int64_t* offset, int32_t* parnum)
 {
 	int ret = 0;
