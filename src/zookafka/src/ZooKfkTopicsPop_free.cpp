@@ -135,6 +135,7 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 ZooKfkTopicsPop::~ZooKfkTopicsPop()
 {
 	PDEBUG("ZooKfkTopicsPop exit");
+	kfkDestroy();
 }
 
 int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)

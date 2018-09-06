@@ -23,11 +23,12 @@
 
 #include "zookeeper/zookeeper.h"
 #include "zookeeper/zookeeper.jute.h"
-#include "jansson/jansson.h"
 
 
 typedef std::list<std::string> ListStringTopic;
 typedef ListStringTopic::iterator ListStringTopicIter;
+
+typedef std::function<int(const std::string& brokers)> BrokersChangeCallBack;//kafka 集群变化通知回调，有可能是空，如果返回大于0.则退出模块处理
 
 namespace ZOOKEEPERKAFKA
 {
@@ -48,10 +49,17 @@ public:
 	~ZooKfkTopicsPop();
 
 	//仅仅传入zookeeper的地址信息，逗号分隔多个ip port；其后自己调用kfkInit
-	int zookInit(const std::string& zookeepers);
+	//int zookInit(const std::string& zookeepers);
 	//传入zookeeper地址信息，逗号分隔多个ip port，传入多个topic，逗号分隔，不可以有多余的符号，内部调用kfkInit
 	//不需要自己再次调用kfkInit
 	int zookInit(const std::string& zookeepers, const std::string& topic, const std::string& groupName);
+
+	//设置kafka集群变化回调方法
+	void setBrokersChangeCallBack(const BrokersChangeCallBack& cb)
+	{
+		downcb_ = cb;
+	}
+	
 	//kfk初始化，如果前面调用了zookInit；brokers可以传入空，brokers可以从zookeeper中获取，
 	//brokers也可以不传入空，如果前面没有调用zookInit。多个topic，逗号分隔
 	//初始化的topic默认调用了kfkTopicConsumeStart
@@ -85,6 +93,8 @@ public:
 	//zookeeper发现brokers变化修正brokers
 	void changeKafkaBrokers(const std::string& brokers);
 private:
+	int zookInit(const std::string& zookeepers);
+	
 	zhandle_t* initialize_zookeeper(const char* zookeeper, const int debug);
 
 	bool str2Vec(const char* src, std::vector<std::string>& dest, const char delim);
@@ -110,9 +120,12 @@ private:
 	int initFlag;
 	int switchFlag;
 	int errorFlag;
+
+	BrokersChangeCallBack downcb_;
 };
 
 typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPop> ZooKfkConsumerPtr;
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 1.0
 
 /*
  *多个消费者单实例模式，多个消费者所有的配置参数都是一样的
@@ -155,6 +168,9 @@ public:
 	//关闭一个topic的读，单词只能配置一个
 	int zooKfkConsumerStop(const std::string& topic);
 
+	//设置kafka集群变化回调
+	int setBrokersChangeCall(const BrokersChangeCallBack& cb);
+	
 	//消费一条消息，如果有错误，会返回错误消息，自动过滤了队尾的错误，下标表示用的下标，不能大于等于初始化的个数
 	int consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key = NULL, int64_t* offset = NULL);
 
@@ -167,6 +183,65 @@ private:
 	int kfkConsumerNum;
 	std::vector<ZooKfkConsumerPtr> ZooKfkConsumerPtrVec;
 };
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 2.0
+
+/*
+ *多个消费者单实例模式，多个消费者所有的配置参数都是一样的
+ *可以直接包含头文件单实例使用，可以直接指定初始化多个消费者，提高并发量
+ *返回错误码参考 头文件ZooKfkCommon.h
+ */
+class ZooKfkSubscribes : public noncopyable
+{
+public:
+	ZooKfkSubscribes()
+		:lastIndex(0)
+		,kfkConsumerNum(0)
+		,ZooKfkConsumerPtrVec()
+	{
+	}
+
+	~ZooKfkSubscribes()
+	{
+		for(int i = 0;i < kfkConsumerNum; i++)
+		{
+			if(ZooKfkConsumerPtrVec[i])
+				ZooKfkConsumerPtrVec[i].reset();
+		}
+
+		std::vector<ZooKfkConsumerPtr> ().swap(ZooKfkConsumerPtrVec);
+	}
+
+	//单实例接口哦
+	static ZooKfkSubscribes& instance() { return ZOOKEEPERKAFKA::Singleton<ZooKfkSubscribes>::instance(); }
+
+	//初始化接口，消费者个数，zookeeper地址，订阅topic名称，组名称
+	int zooKfkConsumerInit(int consumerNum, const std::string& brokerStr, const std::string& topicStr,  const std::string& groupName);
+
+	//消费者退出接口，保证消息不丢失，进程退出调用接口
+	void zooKfkConsumerDestroy();
+
+	//开启一个topic的读，单次只能配置一个
+	int zooKfkConsumerStart(const std::string& topic);
+
+	//关闭一个topic的读，单词只能配置一个
+	int zooKfkConsumerStop(const std::string& topic);
+
+	//设置kafka集群变化回调
+	int setBrokersChangeCall(const BrokersChangeCallBack& cb);
+	
+	//消费一条消息，如果有错误，会返回错误消息，自动过滤了队尾的错误，下标表示用的下标，不能大于等于初始化的个数
+	int consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key = NULL, int64_t* offset = NULL);
+
+	//超时消费一条消息，如果超时，无消息也会返回，返回1就是有消息，0是超时，错误小于0，下标不能呢个大于等于初始化个数，内部过滤到队尾的错误，不可以当定时器用
+	int tryConsume(int index, std::string& topic, std::string& data, int timeout_ms, std::string& errorMsg, std::string* key = NULL, int64_t* offset = NULL);
+	
+private:
+	//volatile unsigned int lastIndex;
+	unsigned int lastIndex;
+	int kfkConsumerNum;
+	std::vector<ZooKfkConsumerPtr> ZooKfkConsumerPtrVec;
+};
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 3.0
 
 }
 

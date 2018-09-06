@@ -1,5 +1,5 @@
 
-#include <unistd.h>
+#include "jansson/jansson.h"
 
 #include "../ZooKfkCommon.h"
 #include "../ZooKfkTopicsPop.h"
@@ -107,6 +107,13 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 			pZooKafkaPop->changeKafkaBrokers(brokers);
 			//rd_kafka_brokers_add(rk, brokers);
 			//rd_kafka_poll(rk, 10);
+		}else if(ret == 0)
+		{
+			PERROR("There is no found any brokers in zookeeper");
+			ZooKfkTopicsPop *pZooKafkaPop = static_cast<ZooKfkTopicsPop *>(watcherCtx);
+			pZooKafkaPop->changeKafkaBrokers("");
+		}else{
+			PERROR("There is something wrong about zookeeper found brokers");
 		}
 	}
 }
@@ -128,6 +135,7 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 	,initFlag(0)
 	,switchFlag(0)
 	,errorFlag(0)
+	,downcb_(nullptr)
 {
 	PDEBUG("ZooKfkTopicsPop struct");
 }
@@ -135,6 +143,7 @@ ZooKfkTopicsPop::ZooKfkTopicsPop()
 ZooKfkTopicsPop::~ZooKfkTopicsPop()
 {
 	PDEBUG("ZooKfkTopicsPop exit");
+	kfkDestroy();
 }
 
 int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
@@ -160,7 +169,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers)
 		return NO_KAFKA_BROKERS_FOUND;
 	}
 
-	zKeepers = zookeepers;
+	zKeepers.assign(zookeepers);
 	kfkBrokers.assign(brokers);
 	ret = 0;
 	return ret;
@@ -189,7 +198,7 @@ int ZooKfkTopicsPop::zookInit(const std::string& zookeepers, const std::string& 
 		return NO_KAFKA_BROKERS_FOUND;
 	}
 
-	zKeepers = zookeepers;
+	zKeepers.assign(zookeepers);
 	kfkBrokers.assign(brokers);
 	ret = kfkInit(kfkBrokers, topic, groupName);
 	if(ret < 0)
@@ -205,9 +214,18 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	int ret = 0;
 	PDEBUG("librdkafka version:: %s",rd_kafka_version_str());
 
+	if(brokers.empty())
+	{
+		PERROR("There is no any brokers pass in");		
+		return NO_KAFKA_BROKERS_FOUND;
+	}
+
 	std::lock_guard<std::mutex> lock(listLock);
 	if(initFlag)
+	{
+		PERROR("initialize_zookeeper init already");
 		return KAFKA_INIT_ALREADY;
+	}
 	initFlag = 1;
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	if(kfkconft == NULL)
@@ -221,14 +239,12 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 	rd_kafka_conf_set(kfkconft, "internal.termination.signal", tmp, NULL, 0);
 	rd_kafka_conf_set(kfkconft, "queued.min.messages", "1000000", NULL, 0);
 	rd_kafka_conf_set(kfkconft, "session.timeout.ms", "6000", NULL, 0);
-	
-	if(brokers.empty() || brokers.length() == 0)
+	if(kfkBrokers.empty())
 	{
-		ret = rd_kafka_conf_set(kfkconft, "metadata.broker.list",kfkBrokers.c_str(), errStr, sizeof errStr);
-	}else{
-		ret = rd_kafka_conf_set(kfkconft, "metadata.broker.list",brokers.c_str(), errStr, sizeof errStr);
 		kfkBrokers.assign(brokers);
 	}
+	
+	ret = rd_kafka_conf_set(kfkconft, "metadata.broker.list",brokers.c_str(), errStr, sizeof errStr);
 	if (ret)
 	{
 		PERROR("rd_kafka_conf_set error: %s", errStr);
@@ -267,12 +283,7 @@ int ZooKfkTopicsPop::kfkInit(const std::string& brokers, const std::string& topi
 		return KAFKA_MODULE_NEW_ERROR;
 	}
 	
-	if(brokers.empty() || brokers.length() == 0)
-	{
-		ret = rd_kafka_brokers_add(kfkt, kfkBrokers.c_str());
-	}else{
-		ret = rd_kafka_brokers_add(kfkt, brokers.c_str());
-	}
+	ret = rd_kafka_brokers_add(kfkt, brokers.c_str());
 	if (ret == 0)
 	{
 		PERROR("no valid brokers specified, brokers: %s", errStr);
@@ -391,15 +402,25 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 	std::lock_guard<std::mutex> lock(listLock);
 		
 	if(destroy)
+	{
 		return MODULE_RECV_EXIT_COMMND;
+	}
 	if(errorFlag)
+	{
 		return errorFlag;
+	}
 	if(switchFlag)
+	{
 		return 0;
+	}
 	if(kfkt == NULL)
+	{
 		return KAFKA_NO_INIT_ALREADY;
+	}
 	if(topics_.empty())
+	{
 		return KAFKA_NO_TOPIC_NAME_INIT;
+	}
 	
 	rd_kafka_message_t* message = NULL;
 	while(1)
@@ -423,7 +444,7 @@ int ZooKfkTopicsPop::pop(std::string& topic, std::string& data, std::string* key
 			}
 			break;
 		}
-		if(!message)
+		if(message == NULL)
 			continue;
 		else if(message->err == RD_KAFKA_RESP_ERR__PARTITION_EOF)
 		{
@@ -485,15 +506,25 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 	
 	std::lock_guard<std::mutex> lock(listLock);
 	if(destroy)
+	{
 		return MODULE_RECV_EXIT_COMMND;
+	}
 	if(errorFlag)
+	{
 		return errorFlag;
+	}
 	if(switchFlag)
+	{
 		return 0;
+	}
 	if(kfkt == NULL)
+	{
 		return KAFKA_NO_INIT_ALREADY;
+	}
 	if(topics_.empty())
+	{
 		return KAFKA_NO_TOPIC_NAME_INIT;
+	}
 	
 	rd_kafka_message_t* message = NULL;
 	message = rd_kafka_consumer_poll(kfkt, 500);
@@ -541,7 +572,6 @@ int ZooKfkTopicsPop::tryPop(std::string& topic, std::string& data, int timeout_m
 	}
 	return ret;
 }
-
 
 int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 {
@@ -633,7 +663,21 @@ int ZooKfkTopicsPop::kfkTopicConsumeStop(const std::string& topic)
 
 void ZooKfkTopicsPop::changeKafkaBrokers(const std::string& brokers)
 {
-	//kfkBrokers.clear();
+	if(downcb_)
+	{
+		int ret = downcb_(brokers);
+		if(ret > 0)
+		{
+			kfkDestroy();
+			return;
+		}
+	}else{
+		if(brokers.empty())
+		{
+			kfkDestroy();
+			return;
+		}
+	}
 	kfkBrokers.assign(brokers);
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
 	rd_kafka_poll(kfkt, 10);
@@ -644,11 +688,17 @@ void ZooKfkTopicsPop::kfkDestroy()
 {
 	destroy = 1;
 	std::lock_guard<std::mutex> lock(listLock);
+	destroy++;
+	if(destroy > 2)
+		return;
 	
-	rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
-	if (err)
+	if(kfkt)
 	{
-		PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
+		rd_kafka_resp_err_t err = rd_kafka_consumer_close(kfkt);
+		if (err)
+		{
+			PERROR("failed to close consumer: %s", rd_kafka_err2str(err));
+		}
 	}
 
 	if(kfkt)
@@ -658,7 +708,10 @@ void ZooKfkTopicsPop::kfkDestroy()
 	}
 
 	//rd_kafka_wait_destroyed(2000);
-	zookeeper_close(zookeeph);
+	if(zookeeph)
+	{
+		zookeeper_close(zookeeph);
+	}
 	
 	zookeeph = NULL;
 	std::string ().swap(zKeepers);
@@ -770,8 +823,153 @@ void ZooKfkTopicsPop::setKfkErrorMessage(rd_kafka_resp_err_t code,const char *ms
 	kfkErrorCode = code;
 	kfkErrorMsg.assign(msg);
 }
-
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 1.0
 int ZooKfkConsumers::zooKfkConsumerInit(int consumerNum, const std::string& zookStr, const std::string& topicStr,  const std::string& groupName)
+{
+	int ret = 0;
+	if(kfkConsumerNum)
+	{
+		return KAFKA_INIT_ALREADY;
+	}
+	kfkConsumerNum = consumerNum;
+	for(int i = 0; i < kfkConsumerNum; i++)
+	{
+		ZooKfkConsumerPtr consumer(new ZOOKEEPERKAFKA::ZooKfkTopicsPop());
+		if(!consumer)
+		{
+			PERROR("New ZooKfkConsumerPtr point error");
+			ret = KAFKA_MODULE_NEW_ERROR;
+			return ret;
+		}
+		ret = consumer->zookInit(zookStr, topicStr, groupName);
+		if(ret < 0)
+		{
+			PERROR("consumer->zookInit error ret : %d", ret);
+			return ret;
+		}
+		ZooKfkConsumerPtrVec.push_back(consumer);
+	}
+	
+	return ret;
+}
+
+void ZooKfkConsumers::zooKfkConsumerDestroy()
+{
+	for(int i = 0; i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec.size() > 0 && ZooKfkConsumerPtrVec[i])
+		{
+			ZooKfkConsumerPtrVec[i]->kfkDestroy();
+		}
+	}
+}
+
+int ZooKfkConsumers::zooKfkConsumerStart(const std::string& topic)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0;i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
+		{
+			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStart(topic);
+			if(ret < 0)
+			{
+				return ret;
+			}
+		}
+		else
+		{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkConsumers::zooKfkConsumerStop(const std::string& topic)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0;i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
+		{
+			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStop(topic);
+			if(ret < 0)
+			{
+				return ret;
+			}
+		}
+		else
+		{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkConsumers::setBrokersChangeCall(const BrokersChangeCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0;i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
+		{
+			ZooKfkConsumerPtrVec[i]->setBrokersChangeCallBack(cb);
+		}
+		else
+		{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkConsumers::consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key, int64_t* offset)
+{
+	int ret = 0;
+	if(index >= kfkConsumerNum)
+	{
+		return KAFKA_NO_INIT_ALREADY;
+	}
+	if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[index])
+	{
+		ret = ZooKfkConsumerPtrVec[index]->pop(topic, data, key, offset);
+		if(ret < 0)
+		{
+			ret = ZooKfkConsumerPtrVec[index]->getLastErrorMsg(errorMsg);
+		}
+	}
+	else
+	{
+		ret = KAFKA_UNHAPPEN_ERRPR;
+	}
+		
+	return ret;
+}
+
+int ZooKfkConsumers::tryConsume(int index, std::string& topic, std::string& data, int timeout_ms, std::string& errorMsg, std::string* key, int64_t* offset)
+{
+	int ret = 0;
+	if(index >= kfkConsumerNum)
+	{
+		return KAFKA_NO_INIT_ALREADY;
+	}
+	if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[index])
+	{
+		ret = ZooKfkConsumerPtrVec[index]->tryPop(topic, data, timeout_ms, key, offset);
+		if(ret < 0)
+		{
+			ret = ZooKfkConsumerPtrVec[index]->getLastErrorMsg(errorMsg);
+		}
+	}
+	else
+	{
+		ret = KAFKA_UNHAPPEN_ERRPR;
+	}
+	return ret;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 2.0
+
+int ZooKfkSubscribes::zooKfkConsumerInit(int consumerNum, const std::string& brokerStr, const std::string& topicStr,  const std::string& groupName)
 {
 	int ret = 0;
 	if(kfkConsumerNum)
@@ -786,10 +984,10 @@ int ZooKfkConsumers::zooKfkConsumerInit(int consumerNum, const std::string& zook
 			ret = KAFKA_MODULE_NEW_ERROR;
 			return ret;
 		}
-		ret = consumer->zookInit(zookStr, topicStr, groupName);
+		ret = consumer->kfkInit(brokerStr, topicStr, groupName);
 		if(ret < 0)
 		{
-			PERROR("producer->zookInit error ret : %d", ret);
+			PERROR("consumer->zookInit error ret : %d", ret);
 			return ret;
 		}
 		ZooKfkConsumerPtrVec.push_back(consumer);
@@ -798,74 +996,123 @@ int ZooKfkConsumers::zooKfkConsumerInit(int consumerNum, const std::string& zook
 	return ret;
 }
 
-void ZooKfkConsumers::zooKfkConsumerDestroy()
+void ZooKfkSubscribes::zooKfkConsumerDestroy()
 {
 	for(int i = 0; i < kfkConsumerNum; i++)
 	{
 		if(ZooKfkConsumerPtrVec.size() > 0 && ZooKfkConsumerPtrVec[i])
+		{
 			ZooKfkConsumerPtrVec[i]->kfkDestroy();
+		}
 	}
 }
 
-int ZooKfkConsumers::zooKfkConsumerStart(const std::string& topic)
+int ZooKfkSubscribes::zooKfkConsumerStart(const std::string& topic)
 {
-	int ret = 0;
+	int ret = KAFKA_NO_INIT_ALREADY;
 	for(int i = 0;i < kfkConsumerNum; i++)
 	{
 		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
+		{
 			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStart(topic);
+			if(ret < 0)
+			{
+				return ret;
+			}
+		}
 		else
+		{
 			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
 	}
 	return ret;
 }
 
-int ZooKfkConsumers::zooKfkConsumerStop(const std::string& topic)
+int ZooKfkSubscribes::zooKfkConsumerStop(const std::string& topic)
 {
-	int ret = 0;
+	int ret = KAFKA_NO_INIT_ALREADY;
 	for(int i = 0;i < kfkConsumerNum; i++)
 	{
 		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
+		{
 			ret = ZooKfkConsumerPtrVec[i]->kfkTopicConsumeStop(topic);
+			if(ret < 0)
+			{
+				return ret;
+			}
+		}
 		else
+		{
 			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
 	}
 	return ret;
 }
 
-int ZooKfkConsumers::consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key, int64_t* offset)
+int ZooKfkSubscribes::setBrokersChangeCall(const BrokersChangeCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0;i < kfkConsumerNum; i++)
+	{
+		if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[i])
+		{
+			ZooKfkConsumerPtrVec[i]->setBrokersChangeCallBack(cb);
+		}
+		else
+		{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+
+int ZooKfkSubscribes::consume(int index, std::string& topic, std::string& data, std::string& errorMsg, std::string* key, int64_t* offset)
 {
 	int ret = 0;
 	if(index >= kfkConsumerNum)
+	{
 		return KAFKA_NO_INIT_ALREADY;
+	}
 	if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[index])
 	{
 		ret = ZooKfkConsumerPtrVec[index]->pop(topic, data, key, offset);
 		if(ret < 0)
+		{
 			ret = ZooKfkConsumerPtrVec[index]->getLastErrorMsg(errorMsg);
+		}
 	}
 	else
+	{
 		ret = KAFKA_UNHAPPEN_ERRPR;
+	}
 		
 	return ret;
 }
 
-int ZooKfkConsumers::tryConsume(int index, std::string& topic, std::string& data, int timeout_ms, std::string& errorMsg, std::string* key, int64_t* offset)
+int ZooKfkSubscribes::tryConsume(int index, std::string& topic, std::string& data, int timeout_ms, std::string& errorMsg, std::string* key, int64_t* offset)
 {
 	int ret = 0;
 	if(index >= kfkConsumerNum)
+	{
 		return KAFKA_NO_INIT_ALREADY;
+	}
 	if(ZooKfkConsumerPtrVec.size() && ZooKfkConsumerPtrVec[index])
 	{
 		ret = ZooKfkConsumerPtrVec[index]->tryPop(topic, data, timeout_ms, key, offset);
 		if(ret < 0)
+		{
 			ret = ZooKfkConsumerPtrVec[index]->getLastErrorMsg(errorMsg);
+		}
 	}
 	else
+	{
 		ret = KAFKA_UNHAPPEN_ERRPR;
+	}
 	return ret;
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 3.0
 
 }
 

@@ -1,4 +1,6 @@
 
+#include "jansson/jansson.h"
+
 #include "../ZooKfkCommon.h"
 #include "../ZooKfkTopicsPush.h"
 
@@ -105,6 +107,14 @@ static void watcher(zhandle_t *zh, int type, int state, const char *path, void *
 			pZooKafkaPush->changeKafkaBrokers(brokers);
 			//rd_kafka_brokers_add(rk, brokers);
 			//rd_kafka_poll(rk, 10);
+		}else if(ret == 0)
+		{
+			PERROR("There is no found any brokers in zookeeper");
+			ZooKfkTopicsPush *pZooKafkaPush = static_cast<ZooKfkTopicsPush *>(watcherCtx);
+			pZooKafkaPush->changeKafkaBrokers("");
+		}else
+		{
+			PERROR("There is something wrong about zookeeper found brokers");
 		}
 	}
 }
@@ -146,8 +156,7 @@ static void msgDelivered(rd_kafka_t *rk, const rd_kafka_message_t* message, void
 }
 
 ZooKfkTopicsPush::ZooKfkTopicsPush()
-	:flushLock()
-	,topicMapLock()
+	:topicMapLock()
 	,zKeepers()
 	,zookeeph(nullptr)
 	,kfkBrokers()
@@ -158,7 +167,7 @@ ZooKfkTopicsPush::ZooKfkTopicsPush()
 	,kfkErrorCode(RD_KAFKA_RESP_ERR_NO_ERROR)
 	,kfkErrorMsg()
 	,destroy(0)
-	,pushNum(0)
+	,initFlag(0)
 {
 	PDEBUG("ZooKfkTopicsPush init");
 }
@@ -166,18 +175,20 @@ ZooKfkTopicsPush::ZooKfkTopicsPush()
 ZooKfkTopicsPush::~ZooKfkTopicsPush()
 {
 	PDEBUG("~ZooKfkTopicsPush exit");
+	kfkDestroy();
 }
 
 int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 {
 	int ret = 0;
 	char brokers[1024] = {0};
-	/////////////////////////
+
 	if(zookeeph)
 	{
 		PERROR("initialize_zookeeper init already");
 		return KAFKA_INIT_ALREADY;
 	}
+	
 	zookeeph = initialize_zookeeper(zookeepers.c_str(), 1);
 	if(zookeeph == NULL)
 	{
@@ -186,18 +197,14 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers)
 	}
 	
 	ret = set_brokerlist_from_zookeeper(zookeeph, brokers);
-	////////////////////////////////////////////////
 	if(ret <= 0)
 	{
 		PERROR("set_brokerlist_from_zookeeper error :: %d",ret);
 		return NO_KAFKA_BROKERS_FOUND;
 	}
 	
-	zKeepers.clear();
-	zKeepers = zookeepers;
-	kfkBrokers.clear();
-	kfkBrokers.append(brokers);
-	ret = 0;
+	zKeepers.assign(zookeepers);
+	kfkBrokers.assign(brokers);
 	return ret;
 }
 
@@ -208,7 +215,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 {
 	int ret = 0;
 	char brokers[1024] = {0};
-	/////////////////////////
+	
 	if(zookeeph)
 	{
 		PERROR("initialize_zookeeper init already");
@@ -228,9 +235,7 @@ int ZooKfkTopicsPush::zookInit(const std::string& zookeepers,
 		return NO_KAFKA_BROKERS_FOUND;
 	}
 	
-	//zKeepers.clear();
 	zKeepers.assign(zookeepers);
-	//kfkBrokers.clear();
 	kfkBrokers.assign(brokers,strlen(brokers));
 	ret = kfkInit(kfkBrokers, topics, queueBuffMaxMs, queueBuffMaxMess);
 	if(ret < 0)
@@ -248,11 +253,21 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	char tmp[64] = {0},errStr[512] = {0};
 	int ret = 0;
 	PDEBUG("librdkafka version:: %s",rd_kafka_version_str());
-	if(topicPtrMap.empty() == false)
+
+	if(brokers.empty())
+	{
+		PERROR("There is no any brokers pass in");
+		return NO_KAFKA_BROKERS_FOUND;
+	}
+
+	std::lock_guard<std::mutex> lock(topicMapLock);
+	if(initFlag)
 	{
 		PERROR("initialize_zookeeper init already");
 		return KAFKA_INIT_ALREADY;
 	}
+	initFlag = 1;
+
 	rd_kafka_conf_t* kfkconft = rd_kafka_conf_new();
 	rd_kafka_conf_set_log_cb(kfkconft, kfkLogger);
 	rd_kafka_conf_set_opaque(kfkconft,this);
@@ -286,14 +301,12 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 	}
 	rd_kafka_set_log_level(kfkt, KFK_LOG_DEBUG);
 
-	if(brokers.empty())
+	if(kfkBrokers.empty())
 	{
-		ret = rd_kafka_brokers_add(kfkt, kfkBrokers.c_str());
-	}else{
-		ret = rd_kafka_brokers_add(kfkt, brokers.c_str());
-		if(kfkBrokers.empty())
-			kfkBrokers = brokers;
-	}
+		kfkBrokers.assign(brokers);
+	
+}
+	ret = rd_kafka_brokers_add(kfkt, brokers.c_str());
 	if (ret == 0)
 	{
 		PERROR("*** No valid brokers specified: %s ***", brokers.c_str());
@@ -328,10 +341,8 @@ int ZooKfkTopicsPush::kfkInit(const std::string& brokers,
 				PERROR("rd_kafka_topic_new ERROR");
 				return KAFKA_TOPIC_NEW_ERROR;
 			}
-			{
-				std::lock_guard<std::mutex> lock(topicMapLock);
-				topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
-			}
+		
+			topicPtrMap.insert(KfkTopicPtrMap::value_type(topics_[i],pTopic));
 		}
 	}
 	ret = 0;
@@ -387,6 +398,12 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	}
 	
 	std::lock_guard<std::mutex> lock(topicMapLock);
+	if(destroy)
+	{
+		ret = MODULE_RECV_EXIT_COMMND;
+		return ret;
+	}
+	
 	KfkTopicPtrMapIter iter = topicPtrMap.find(topic);
 	if(iter == topicPtrMap.end())
 	{
@@ -395,15 +412,6 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 		return ret;
 	}
 
-	if(destroy)
-	{
-		ret = MODULE_RECV_EXIT_COMMND;
-		return ret;
-	}
-	{
-		std::lock_guard<std::mutex> lock(flushLock);
-		pushNum++;
-	}
 	while(1)
 	{
 		ret = rd_kafka_produce(iter->second,
@@ -423,7 +431,7 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 			      rd_kafka_err2str(rd_kafka_last_error()), ret);
 			if(RD_KAFKA_RESP_ERR__QUEUE_FULL == rd_kafka_last_error())
 			{
-				bolckFlush();
+				bolckFlush(false);
 			}else{
 				setKfkErrorMessage(rd_kafka_last_error(),rd_kafka_err2str(rd_kafka_last_error()));
 				break;
@@ -448,17 +456,31 @@ int ZooKfkTopicsPush::push(const std::string& topic,
 	while(rd_kafka_outq_len(kfkt) > 0)
 		rd_kafka_poll(kfkt, 100);
 	#endif
-	{
-		std::lock_guard<std::mutex> lock(flushLock);
-		pushNum--;
-	}
-	ret = rd_kafka_outq_len(kfkt);
+	if(ret >= 0)
+		ret = rd_kafka_outq_len(kfkt);
 	return ret;
 }
 
-int ZooKfkTopicsPush::bolckFlush(int queueSize)
+int ZooKfkTopicsPush::bolckFlush(bool lockFlag, int queueSize)
 {
-	std::lock_guard<std::mutex> lock(flushLock);
+	if(lockFlag)
+	{
+		std::lock_guard<std::mutex> lock(topicMapLock);
+		if(queueSize <= 0)
+		{
+			int queueLen = rd_kafka_outq_len(kfkt);
+			if(queueLen > 0)
+			{
+				queueSize = queueLen / 2;
+			}else{
+				queueSize = 0;
+			}
+		}
+		while(rd_kafka_outq_len(kfkt) > queueSize)
+			rd_kafka_poll(kfkt, 50);
+		return 0;
+	}
+
 	if(queueSize <= 0)
 	{
 		int queueLen = rd_kafka_outq_len(kfkt);
@@ -477,14 +499,19 @@ int ZooKfkTopicsPush::bolckFlush(int queueSize)
 void ZooKfkTopicsPush::kfkDestroy()
 {
 	destroy = 1;
-	PDEBUG("kfkDestroy pushNum %d", pushNum);
-	while(pushNum)
-		usleep(500);
-	PDEBUG("kfkDestroy pushNum %d", pushNum);
-	while(rd_kafka_outq_len(kfkt) > 0)
+	std::lock_guard<std::mutex> lock(topicMapLock);
+	destroy++;
+	if(destroy > 2)
+		return;
+
+	if(kfkt)
 	{
-		rd_kafka_poll(kfkt, 100);
+		while(rd_kafka_outq_len(kfkt) > 0)
+		{
+			rd_kafka_poll(kfkt, 100);
+		}
 	}
+	
 	PERROR("topicPtrMap size %ld",topicPtrMap.size());
 	for(KfkTopicPtrMapIter iter = topicPtrMap.begin();iter != topicPtrMap.end();iter++)
 	{
@@ -492,10 +519,18 @@ void ZooKfkTopicsPush::kfkDestroy()
 	}
 
 	KfkTopicPtrMap ().swap(topicPtrMap);
-	rd_kafka_destroy(kfkt);
+
+	if(kfkt)
+	{
+		rd_kafka_destroy(kfkt);
+		kfkt = NULL;
+	}
 	
 	//rd_kafka_wait_destroyed(2000);
-	zookeeper_close(zookeeph);
+	if(zookeeph)
+	{
+		zookeeper_close(zookeeph);
+	}
 	zookeeph = NULL;
 
 	KfkTopicPtrMap ().swap(topicPtrMap);
@@ -510,7 +545,21 @@ void ZooKfkTopicsPush::kfkDestroy()
 
 void ZooKfkTopicsPush::changeKafkaBrokers(const std::string& brokers)
 {
-//	kfkBrokers.clear();
+	if(downcb_)
+	{
+		int ret = downcb_(brokers);
+		if(ret > 0)
+		{
+			kfkDestroy();
+			return;
+		}
+	}else{
+		if(brokers.empty())
+		{
+			kfkDestroy();
+			return;
+		}
+	}
 	kfkBrokers.assign(brokers);
 	rd_kafka_brokers_add(kfkt, brokers.c_str());
 	rd_kafka_poll(kfkt, 10);
@@ -579,6 +628,7 @@ void ZooKfkTopicsPush::setKfkErrorMessage(rd_kafka_resp_err_t code,const char *m
 	kfkErrorCode = code;
 	kfkErrorMsg.assign(msg);
 }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 1.0
 
 int ZooKfkProducers::zooKfkProducersInit(int produceNum, const std::string& zookStr, const std::string& topicStr)
 {
@@ -634,6 +684,22 @@ int ZooKfkProducers::setMsgPushErrorCall(const MsgPushCallBack& cb)
 	return ret;
 }
 
+int ZooKfkProducers::setBrokersChangeCall(const BrokersChangeCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ZooKfkProducerPtrVec[i]->setBrokersChangeCallBack(cb);
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
 int ZooKfkProducers::setMsgPushCallBack(const MsgPushCallBack& cb)
 {
 	int ret = KAFKA_NO_INIT_ALREADY;
@@ -671,13 +737,176 @@ int ZooKfkProducers::psuhKfkMsg(const std::string& topic, const std::string& msg
 	return ret;
 }
 
-void ZooKfkProducers::produceFlush(int index)
+int ZooKfkProducers::addProducerTopic(const std::string& topic)
 {
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ret = ZooKfkProducerPtrVec[i]->producerAddTopic(topic);
+			if(ret < 0)
+			{
+				return ret;
+			}
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkProducers::produceFlush(int index)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
 	if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[index])
 	{
 		ZooKfkProducerPtrVec[index]->bolckFlush();
+		ret = 0;
+	}
+	return ret;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 2.0
+
+int ZooKfkGenerators::zooKfkProducersInit(int produceNum, const std::string& brokerStr, const std::string& topicStr)
+{
+	int ret = 0;
+	if(kfkProducerNum)
+		return KAFKA_INIT_ALREADY;
+	kfkProducerNum = produceNum;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		ZooKfkProducerPtr producer(new ZOOKEEPERKAFKA::ZooKfkTopicsPush());
+		if(!producer)
+		{
+			PERROR("New ZooKfkProducerPtr point error");
+			ret = KAFKA_MODULE_NEW_ERROR;
+			return ret;
+		}
+
+		ret = producer->kfkInit(brokerStr, topicStr);
+		if(ret < 0)
+		{
+			PERROR("producer->zookInit error ret : %d", ret);
+			return ret;
+		}else{
+			PDEBUG("producer->zookInit success %d",i);
+		}
+		ZooKfkProducerPtrVec.push_back(producer);
+	}
+	return ret;
+}
+
+void ZooKfkGenerators::zooKfkProducersDestroy()
+{
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+			ZooKfkProducerPtrVec[i]->kfkDestroy();
 	}
 }
+
+int ZooKfkGenerators::setMsgPushErrorCall(const MsgPushCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ZooKfkProducerPtrVec[i]->setMsgPushErrorCall(cb);
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkGenerators::setBrokersChangeCall(const BrokersChangeCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ZooKfkProducerPtrVec[i]->setBrokersChangeCallBack(cb);
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkGenerators::setMsgPushCallBack(const MsgPushCallBack& cb)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ZooKfkProducerPtrVec[i]->setMsgPushCallBack(cb);
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkGenerators::psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key, void *msgPri)
+{
+	int ret = KAFKA_UNHAPPEN_ERRPR;
+	if(kfkProducerNum == 0)
+	{
+		ret = KAFKA_NO_INIT_ALREADY;
+		return ret;
+	}
+	unsigned int index = lastIndex++;
+	int sunindex = index % kfkProducerNum;
+	if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[sunindex])
+	{
+		ret = ZooKfkProducerPtrVec[sunindex]->push(topic, msg, key, msgPri);
+		if(ret < 0)
+		{
+			ret = ZooKfkProducerPtrVec[sunindex]->getLastErrorMsg(errorMsg);
+		}
+	}
+	return ret;
+}
+
+int ZooKfkGenerators::addGereratorsTopic(const std::string& topic)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	for(int i = 0; i < kfkProducerNum; i++)
+	{
+		if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[i])
+		{
+			ret++;
+			ret = ZooKfkProducerPtrVec[i]->producerAddTopic(topic);
+			if(ret < 0)
+			{
+				return ret;
+			}
+		}else{
+			ret = KAFKA_UNHAPPEN_ERRPR;
+		}
+	}
+	return ret;
+}
+
+int ZooKfkGenerators::produceFlush(int index)
+{
+	int ret = KAFKA_NO_INIT_ALREADY;
+	if(ZooKfkProducerPtrVec.size() && ZooKfkProducerPtrVec[index])
+	{
+		ZooKfkProducerPtrVec[index]->bolckFlush();
+		ret = 0;
+	}
+	return ret;
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////version 3.0
 
 }
 

@@ -31,6 +31,7 @@ set(ZOOKAFKA_CONSUMER_SRCS
   #src/ZooKfkTopicsPop_free.cpp
   #src/ZooKfkTopicsPop_rebalance.cpp
   src/ZooKfkTopicsPop.cpp
+  src/ZooKafBrokers.cpp
 )
 
 set(ZOOKAFKA_TEST_LIBS

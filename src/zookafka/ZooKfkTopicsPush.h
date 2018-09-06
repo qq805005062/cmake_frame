@@ -21,7 +21,6 @@
 
 #include "zookeeper/zookeeper.h"
 #include "zookeeper/zookeeper.jute.h"
-#include "jansson/jansson.h"
 
 typedef struct callBackMsg
 {
@@ -38,6 +37,7 @@ typedef struct callBackMsg
 //typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushErrorCallBack;
 
 typedef std::function<void(void *msgPri, CALLBACKMSG *msgInfo)> MsgPushCallBack;
+typedef std::function<int(const std::string& brokers)> BrokersChangeCallBack;//kafka 集群变化通知回调，有可能是空，如果返回大于0.则退出模块处理
 
 typedef std::map<std::string,rd_kafka_topic_t*> KfkTopicPtrMap;
 typedef KfkTopicPtrMap::iterator KfkTopicPtrMapIter;
@@ -62,7 +62,7 @@ public:
 	~ZooKfkTopicsPush();
 
 	//仅仅初始化zookeeper，后面自己调用kfkInit，参数brokers可以为空字符串
-	int zookInit(const std::string& zookeepers);
+	//int zookInit(const std::string& zookeepers);
 	//初始化zookeeper，内部调用kfkInit初始化topics，可以是多个，逗号分开，不要任何多余的符号
 	int zookInit(const std::string& zookeepers,
 			  const std::string& topics,
@@ -79,6 +79,12 @@ public:
 	void setMsgPushCallBack(const MsgPushCallBack& cb)
 	{
 		wcb_ = cb;
+	}
+
+	//设置kafka集群变化回调方法
+	void setBrokersChangeCallBack(const BrokersChangeCallBack& cb)
+	{
+		downcb_ = cb;
 	}
 
 	//kfk初始化，可以自己设置brokers，如果前面调用zookInit则brokers可以为空，brokers会从zookeeper获取
@@ -110,7 +116,7 @@ public:
 	//上层应用可以对本地队列进行刷新操作，当本地队列小于queueSize值的时候才会返回，阻塞
 	//当push返回错误的时候，getLastErrorMsg == -184的时候，必须要调用这个方法，参数可以不传，有默认值
 	//后续测试发现这个方法调用并不影响数据是否到服务端，只是会影响本地队列大小，push内部已经处理了，外部不用调用
-	int bolckFlush(int queueSize = 0);
+	int bolckFlush(bool lockFlag = true, int queueSize = 0);
 
 	//资源释放，释放所有的资源、异步退出，清除资源使用,此方法是阻塞的，退出之后就表示所有数据已经清理干净
 	void kfkDestroy();
@@ -139,13 +145,14 @@ public:
 			wcb_(msgPri, msgInfo);
 	}
 private:
+	int zookInit(const std::string& zookeepers);
+	
 	zhandle_t* initialize_zookeeper(const char* zookeeper, const int debug);
 
 	bool str2Vec(const char* src, std::vector<std::string>& dest, const char delim);
 
 	void setKfkErrorMessage(rd_kafka_resp_err_t code,const char *msg);
 
-	std::mutex flushLock;
 	std::mutex topicMapLock;
 	std::string zKeepers;
 	zhandle_t *zookeeph;
@@ -156,15 +163,16 @@ private:
 	KfkTopicPtrMap topicPtrMap;
 	MsgPushCallBack cb_;
 	MsgPushCallBack wcb_;
+	BrokersChangeCallBack downcb_;
 
 	rd_kafka_resp_err_t kfkErrorCode;
 	std::string kfkErrorMsg;
 	int destroy;
-	volatile int pushNum;
+	int initFlag;
 };
 
 typedef std::shared_ptr<ZOOKEEPERKAFKA::ZooKfkTopicsPush> ZooKfkProducerPtr;
-
+//////////////////////////////////////////////////////////////////////////////////////version 1.0
 /*
  *多个生产者单实例模式，多个生产者所有的配置参数都是一样的
  *可以直接包含头文件单实例使用，可以直接指定初始化多个生产者，提高并发量
@@ -194,7 +202,7 @@ public:
 	//单实例接口
 	static ZooKfkProducers& instance() { return ZOOKEEPERKAFKA::Singleton<ZooKfkProducers>::instance(); }
 
-	//初始化接口，生产者个数、zookeeper地址信息、需要生产的topic，必须一次性初始化完，后续不能增加
+	//初始化接口，生产者个数、zookeeper地址信息、需要生产的topic
 	int zooKfkProducersInit(int produceNum, const std::string& zookStr, const std::string& topicStr);
 
 	//进程退出之前调用接口，保证不会丢数据，数据全部持久化完
@@ -203,13 +211,18 @@ public:
 	//设置错误回调接口
 	int setMsgPushErrorCall(const MsgPushCallBack& cb);
 
+	//设置kafka集群变化回调
+	int setBrokersChangeCall(const BrokersChangeCallBack& cb);
+
 	//设置每天消息回调接口，会包括错误回调
 	int setMsgPushCallBack(const MsgPushCallBack& cb);
 
 	//写消息，topic名称，消息内容，如果有错误，返回错误信息，key，默认空
 	int psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key = NULL, void *msgPri = NULL);
 
-	void produceFlush(int index);
+	int addProducerTopic(const std::string& topic);
+
+	int produceFlush(int index);
 
 private:
 	//volatile unsigned int lastIndex;
@@ -217,6 +230,67 @@ private:
 	int kfkProducerNum;//生产者个数
 	std::vector<ZooKfkProducerPtr> ZooKfkProducerPtrVec;
 };
+//////////////////////////////////////////////////////////////////////////////////////version 2.0
+
+/*
+ *多个生产者单实例模式，多个生产者所有的配置参数都是一样的
+ *可以直接包含头文件单实例使用，可以直接指定初始化多个生产者，提高并发量
+ *返回错误码参考 头文件ZooKfkCommon.h
+ */
+class ZooKfkGenerators : public noncopyable
+{
+public:
+	ZooKfkGenerators()
+		:lastIndex(0)
+		,kfkProducerNum(0)
+		,ZooKfkProducerPtrVec()
+	{
+	}
+
+	~ZooKfkGenerators()
+	{
+		for(int i = 0; i < kfkProducerNum; i++)
+		{
+			if(ZooKfkProducerPtrVec.size() > 0 && ZooKfkProducerPtrVec[i])
+				ZooKfkProducerPtrVec[i].reset();
+		}
+
+		std::vector<ZooKfkProducerPtr> ().swap(ZooKfkProducerPtrVec);
+	}
+
+	//单实例接口
+	static ZooKfkGenerators& instance() { return ZOOKEEPERKAFKA::Singleton<ZooKfkGenerators>::instance(); }
+
+	//初始化接口，生产者个数、zookeeper地址信息、需要生产的topic
+	int zooKfkProducersInit(int produceNum, const std::string& brokerStr, const std::string& topicStr);
+
+	//进程退出之前调用接口，保证不会丢数据，数据全部持久化完
+	void zooKfkProducersDestroy();
+	
+	//设置错误回调接口
+	int setMsgPushErrorCall(const MsgPushCallBack& cb);
+
+	//设置kafka集群变化回调
+	int setBrokersChangeCall(const BrokersChangeCallBack& cb);
+	
+	//设置每天消息回调接口，会包括错误回调
+	int setMsgPushCallBack(const MsgPushCallBack& cb);
+
+	//写消息，topic名称，消息内容，如果有错误，返回错误信息，key，默认空
+	int psuhKfkMsg(const std::string& topic, const std::string& msg, std::string& errorMsg, std::string* key = NULL, void *msgPri = NULL);
+
+	int addGereratorsTopic(const std::string& topic);
+		
+	int produceFlush(int index);
+
+private:
+	//volatile unsigned int lastIndex;
+	unsigned int lastIndex;//每次写的下标，均衡写
+	int kfkProducerNum;//生产者个数
+	std::vector<ZooKfkProducerPtr> ZooKfkProducerPtrVec;
+};
+//////////////////////////////////////////////////////////////////////////////////////version 3.0
+
 
 }
 
