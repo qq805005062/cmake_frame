@@ -1,0 +1,42 @@
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
+
+#指定工程名称,并可指定工程支持的语言。支持语言列表可忽略,默认支持所有语言
+project(pro C CXX)
+
+#向C/C++编译器添加-D定义
+add_definitions("-g -Wall -std=c++11 -fPIC -rdynamic")
+
+set(CMAKE_CXX_COMPILER "g++")
+
+set_source_files_properties(rediscluster_test.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
+
+
+#通过set 把下面的文件列表绑定到 这个宏rediscluster_SRCS，然后add_library去生成动态链接（默认动态）
+set(test_SRCS
+  rediscluster_test.cpp
+)
+
+
+#PROJECT_SOURCE_DIR 是根目录
+include_directories(${PROJECT_SOURCE_DIR}/pro)
+
+#动态库、静态库路径
+link_directories(${PROJECT_SOURCE_DIR}/pro)
+link_directories(${PROJECT_SOURCE_DIR}/pro/build)
+link_directories(${PROJECT_SOURCE_DIR}/pro/hiredis)
+
+
+#可以写库名，他会去搜索，也可以直接全路径,这里建议用下面的targetlink，此处适合算法库之类的
+#添加需要链接的库文件路径
+#link_libraries(rediscluster)
+#link_libraries(hiredis)
+
+
+add_executable(test ${test_SRCS})
+
+
+#综合连接各种动态库
+target_link_libraries(test rediscluster hiredis pthread dl rt z)
+
+
+
