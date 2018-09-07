@@ -81,6 +81,7 @@ add_subdirectory(src/common)
 add_subdirectory(src/rediscluster)
 add_subdirectory(src/zookafka)
 add_subdirectory(src/redislibevent)
+add_subdirectory(src/redisSync)
 
 if(NOT CMAKE_BUILD_NO_EXAMPLES)
   add_subdirectory(examples)
