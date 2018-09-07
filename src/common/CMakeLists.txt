@@ -8,7 +8,6 @@ set(common_SRCS
   DirUtil.cpp
   StringUtility.cpp
   TimeUtility.cpp
-#  Log4cxxImpl.cpp
   Condition.cpp
   Thread.cpp
   ThreadPool.cpp
@@ -17,10 +16,8 @@ set(common_SRCS
   Timestamp.cpp
   Base64.cpp
   MysqlEncryPass.cpp
-#  Des.cpp
   AES.cpp
   process_stat_linux_ex.cpp
-#  Monitor.cpp
 )
 
 add_library(common ${common_SRCS})

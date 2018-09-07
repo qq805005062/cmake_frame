@@ -118,13 +118,21 @@ bool Base64::Decode(const std::string& src, std::string* dst)
     {
         if (src[i] == '=')
             break;
-        do
-        {
-            if (src[i])
-                c = Chr2Base(src[i]);
-            else
-                c = 65; // 字符串结束
-        } while (c == 64); // 跳过无效字符,如回车等
+        // do
+        // {
+        //     if (src[i])
+        //         c = Chr2Base(src[i]);
+        //     else
+        //         c = 65; // 字符串结束
+        // } while (c == 64); // 跳过无效字符,如回车等
+
+        if (src[i])
+            c = Chr2Base(src[i]);
+        else
+            c = 65; // 字符串结束
+        
+        if (c == 64)
+            return false;   // 无效字符，返回false
 
         if (c == 65)
             break;

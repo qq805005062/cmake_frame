@@ -306,8 +306,8 @@ std::string aesEncryption(std::string pass)
 	memcpy(aes_key,key.c_str(),RDN_AES_KEY_LEN);
 	memcpy(aes_iv,iv.c_str(),RDN_AES_KEY_LEN);
 	//Ã÷ÎÄ¡¢ÃÜÎÄ
-	char *p_expre = new char[inLen], *q_encry = new char[outLen];
-	memset(p_expre,0,inLen);
+	char *p_expre = new char[outLen], *q_encry = new char[outLen];
+	memset(p_expre,0,outLen);
 	memset(q_encry,0,outLen);
 	memcpy(p_expre,pass.c_str(),inLen);
 	aes_cbcEncrypt((unsigned char *)(p_expre),inLen,static_cast<const unsigned char *>(aes_key),aes_iv,(unsigned char *)(q_encry));
