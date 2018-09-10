@@ -12,6 +12,7 @@ endif()
 set(ZOOKAFKA_LIB_SRCS
   src/ZooKfkTopicsPush.cpp
   src/ZooKfkTopicsPop.cpp
+  src/ZooKafBrokers.cpp
 )
 
 set(ZOOKAFKA_TEST_SRCS
