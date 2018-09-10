@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <string>
 
+#pragma GCC diagnostic ignored "-Wconversion"
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+
 #include <hiredis/hiredis.h>
 
 #define REDIS_SYNC_PARAMETER_ERROR			-4000
