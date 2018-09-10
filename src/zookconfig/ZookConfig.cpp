@@ -100,10 +100,14 @@ int ZookConfig::zookConfigInit(const std::string& zookAddr)
 int ZookConfig::zookLoadAllConfig(const std::string& configPath)
 {
 	if(configPath.empty())
+	{
 		return ZOOK_CONFIG_PARAMETER_ERROR;
+	}
 
 	if(!configRootPath.empty())
+	{
 		return ZOOK_CONFIG_ALREADY_INIT;
+	}
 	
 	configRootPath.assign(configPath);
 	return loadAllKeyValue(configPath.c_str());
@@ -126,11 +130,15 @@ int ZookConfig::getConfigKeyValue(const std::string& key, std::string& value)
 int ZookConfig::getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList, std::string* serverType)
 {
 	if(serverPath.empty())
+	{
 		return ZOOK_CONFIG_PARAMETER_ERROR;
+	}
 
 	int pathcheck = zookeeperPathCheck(serverPath.c_str());
 	if(pathcheck <= 1)
+	{
 		return ZOOK_CONFIG_PARAMETER_ERROR;
+	}
 
 	if (zkHandle)
 	{
@@ -163,10 +171,14 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 
 	pathcheck = zookeeperPathCheck(path.c_str());
 	if(pathcheck <= 0)
+	{
 		return pathcheck;
+	}
 
 	if(pathcheck == 1)
+	{
 		return ZOOK_CONFIG_PARAMETER_ERROR;
+	}
 	
 	valueLen = static_cast<int>(value.length());
 	pathLen = static_cast<int>(path.length());
@@ -189,12 +201,18 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 					struct Stat stat;
 					ret = zoo_exists(zkHandle, pathArray, 0, &stat);
 					if(ret == ZOK)
+					{
 						break;
+					}
 					PERROR("zoo_exists %s %d %d", pathArray, ret, zoo_state(zkHandle));
 					if(ZCONNECTIONLOSS == ret)
+					{
 						tryTime++;
+					}
 					else
+					{
 						break;
+					}
 				}while(tryTime < colonyNum);
 
 				if(ZNONODE == ret)
@@ -203,12 +221,18 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 					do{
 						ret = zoo_create(zkHandle, pathArray, NULL, 0, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);
 						if(ret == ZOK)
+						{
 							break;
+						}
 						PERROR("zoo_create %s %d %d", pathArray, ret, zoo_state(zkHandle));
 						if(ZCONNECTIONLOSS == ret)
+						{
 							tryTime++;
+						}
 						else
+						{
 							break;
+						}
 					}while(tryTime < colonyNum);
 				}else if(ret != ZOK)
 				{
@@ -233,12 +257,18 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 			struct Stat stat;
 			ret = zoo_exists(zkHandle, pathArray, 0, &stat);
 			if(ret == ZOK)
+			{
 				break;
+			}
 			PERROR("zoo_exists %s %d %d", pathArray, ret, zoo_state(zkHandle));
 			if(ZCONNECTIONLOSS == ret)
+			{
 				tryTime++;
+			}
 			else
+			{
 				break;
+			}
 		}while(tryTime < colonyNum);
 
 		if(ret == ZOK)
@@ -247,12 +277,18 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 			do{
 				ret = zoo_set(zkHandle, pathArray, value.c_str(), valueLen, -1);
 				if(ret == ZOK)
+				{
 					break;
+				}
 				PERROR("zoo_set %s %d %d", pathArray, ret, zoo_state(zkHandle));
 				if(ZCONNECTIONLOSS == ret)
+				{
 					tryTime++;
+				}
 				else
+				{
 					break;
+				}
 			}while(tryTime < colonyNum);
 		}else if(ret == ZNONODE)
 		{
@@ -260,12 +296,18 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 			do{
 				ret = zoo_create(zkHandle, pathArray, value.c_str(), valueLen, &ZOO_READ_ACL_UNSAFE, 1, NULL, 0);
 				if(ret == ZOK)
+				{
 					break;
+				}
 				PERROR("zoo_create %s %d %d", pathArray, ret, zoo_state(zkHandle));
 				if(ZCONNECTIONLOSS == ret)
+				{
 					tryTime++;
+				}
 				else
+				{
 					break;
+				}
 			}while(tryTime < colonyNum);
 		}else{
 			PERROR("zoo_exists %s %d %s %d", pathArray, ret, zerror(ret), zoo_state(zkHandle));
@@ -281,6 +323,18 @@ int ZookConfig::createSessionPath(const std::string& path, const std::string& va
 	}
 }
 
+int ZookConfig::createServerInfo(const std::string& path, const std::string& ip, int port, const std::string& suffix)
+{
+	char infoValue[512] = {0};
+	if(suffix.empty())
+	{
+		sprintf(infoValue, "%s:%d", ip.c_str(), port);
+	}else{
+		sprintf(infoValue, "%s:%d:%s", ip.c_str(), port, suffix.c_str());
+	}
+	return createSessionPath(path, infoValue);
+}
+
 int ZookConfig::createForeverPath(const std::string& path, const std::string& value)
 {
 	int valueLen = 0, pathLen = 0, ret = 0, tryTime = 0, pathcheck = 0;
@@ -288,10 +342,14 @@ int ZookConfig::createForeverPath(const std::string& path, const std::string& va
 
 	pathcheck = zookeeperPathCheck(path.c_str());
 	if(pathcheck <= 0)
+	{
 		return pathcheck;
+	}
 
 	if(pathcheck == 1)
+	{
 		return ZOOK_CONFIG_PARAMETER_ERROR;
+	}
 	
 	valueLen = static_cast<int>(value.length());
 	pathLen = static_cast<int>(path.length());
@@ -314,12 +372,18 @@ int ZookConfig::createForeverPath(const std::string& path, const std::string& va
 					struct Stat stat;
 					ret = zoo_exists(zkHandle, pathArray, 0, &stat);
 					if(ret == ZOK)
+					{
 						break;
+					}
 					PERROR("zoo_exists %s %d %d", pathArray, ret, zoo_state(zkHandle));
 					if(ZCONNECTIONLOSS == ret)
+					{
 						tryTime++;
+					}
 					else
+					{
 						break;
+					}
 				}while(tryTime < colonyNum);
 
 				if(ZNONODE == ret)
@@ -328,12 +392,18 @@ int ZookConfig::createForeverPath(const std::string& path, const std::string& va
 					do{
 						ret = zoo_create(zkHandle, pathArray, NULL, 0, &ZOO_OPEN_ACL_UNSAFE, 0, NULL, 0);
 						if(ret == ZOK)
+						{
 							break;
+						}
 						PERROR("zoo_create %s %d %d", pathArray, ret, zoo_state(zkHandle));
 						if(ZCONNECTIONLOSS == ret)
+						{
 							tryTime++;
+						}
 						else
+						{
 							break;
+						}
 					}while(tryTime < colonyNum);
 				}else if(ret != ZOK)
 				{
@@ -358,12 +428,18 @@ int ZookConfig::createForeverPath(const std::string& path, const std::string& va
 			struct Stat stat;
 			ret = zoo_exists(zkHandle, pathArray, 0, &stat);
 			if(ret == ZOK)
+			{
 				break;
+			}
 			PERROR("zoo_exists %s %d %d", pathArray, ret, zoo_state(zkHandle));
 			if(ZCONNECTIONLOSS == ret)
+			{
 				tryTime++;
+			}
 			else
+			{
 				break;
+			}
 		}while(tryTime < colonyNum);
 
 		if(ret == ZOK)
@@ -372,12 +448,18 @@ int ZookConfig::createForeverPath(const std::string& path, const std::string& va
 			do{
 				ret = zoo_set(zkHandle, pathArray, value.c_str(), valueLen, -1);
 				if(ret == ZOK)
+				{
 					break;
+				}
 				PERROR("zoo_set %s %d %d", pathArray, ret, zoo_state(zkHandle));
 				if(ZCONNECTIONLOSS == ret)
+				{
 					tryTime++;
+				}
 				else
+				{
 					break;
+				}
 			}while(tryTime < colonyNum);
 		}else if(ret == ZNONODE)
 		{
@@ -385,12 +467,18 @@ int ZookConfig::createForeverPath(const std::string& path, const std::string& va
 			do{
 				ret = zoo_create(zkHandle, pathArray, value.c_str(), valueLen, &ZOO_READ_ACL_UNSAFE, 0, NULL, 0);
 				if(ret == ZOK)
+				{
 					break;
+				}
 				PERROR("zoo_create %s %d %d", pathArray, ret, zoo_state(zkHandle));
 				if(ZCONNECTIONLOSS == ret)
+				{
 					tryTime++;
+				}
 				else
+				{
 					break;
+				}
 			}while(tryTime < colonyNum);
 		}else{
 			PERROR("zoo_exists %s %d %s %d", pathArray, ret, zerror(ret), zoo_state(zkHandle));
@@ -437,7 +525,9 @@ void ZookConfig::configUpdateCallBack(const std::string& key)
 	}
 	
 	if(configCb)
+	{
 		configCb(key, oldValue, newValue);
+	}
 }
 
 void ZookConfig::serverInfoChangeCallBack(const std::string& path)
@@ -483,12 +573,18 @@ int ZookConfig::setConfigKeyValue(const std::string& key, const std::string& val
 		do{
 			ret = zoo_set(zkHandle, path, value.c_str(), len, -1);
 			if(ret == ZOK)
+			{
 				break;
+			}
 			PERROR("zoo_set %s %d %d", path, ret, zoo_state(zkHandle));
 			if(ZCONNECTIONLOSS == ret)
+			{
 				tryTime++;
+			}
 			else
+			{
 				break;
+			}
 		}while(tryTime < colonyNum);
 	}else{
 		PERROR("loadAllKeyValue zkHandle no init");
@@ -505,7 +601,9 @@ int ZookConfig::zookGetPathValue(const std::string& getPath, std::string& value)
 
 	pathcheck = zookeeperPathCheck(getPath.c_str());
 	if(pathcheck <= 0)
+	{
 		return pathcheck;
+	}
 	
 	if (zkHandle)
 	{
@@ -516,12 +614,18 @@ int ZookConfig::zookGetPathValue(const std::string& getPath, std::string& value)
 			len = sizeof(cfg);
 			ret = zoo_get(zkHandle, path, 0, cfg, &len, NULL);
 			if(ret == ZOK)
+			{
 				break;
+			}
 			PERROR("zoo_get on path %s error %d %s %d", path, ret, zerror(ret), zoo_state(zkHandle));
 			if(ZCONNECTIONLOSS == ret)
+			{
 				tryTime++;
+			}
 			else
+			{
 				return ret;
+			}
 		}while(tryTime < colonyNum);
 
 		if(ret == ZOK)
@@ -550,7 +654,9 @@ int ZookConfig::loadAllKeyValue(const char* rootPath)
 
 	pathcheck = zookeeperPathCheck(rootPath);
 	if(pathcheck <= 0)
+	{
 		return pathcheck;
+	}
 	
 	if (zkHandle)
 	{
@@ -559,12 +665,18 @@ int ZookConfig::loadAllKeyValue(const char* rootPath)
 		do{
 			ret = zoo_get_children(zkHandle, rootPath, 0, &brokerlist);
 			if(ret == ZOK)
+			{
 				break;
+			}
 			PERROR("zoo_get_children on path %s error %d %s %d", rootPath, ret, zerror(ret), zoo_state(zkHandle));
 			if(ZCONNECTIONLOSS == ret)
+			{
 				tryTime++;
+			}
 			else
+			{
 				return ret;
+			}
 		}while(tryTime < colonyNum);
 		if(ret != ZOK)
 		{
@@ -577,20 +689,30 @@ int ZookConfig::loadAllKeyValue(const char* rootPath)
 			char path[512] = {0}, cfg[1024] = {0};
 			int len = 0;
 			if(pathcheck == 1)
+			{
 				sprintf(path, "%s%s", rootPath, brokerlist.data[i]);
+			}
 			else
+			{
 				sprintf(path, "%s/%s", rootPath, brokerlist.data[i]);
+			}
 			tryTime = 0;
 			do{
 				len = sizeof(cfg);
 				ret = zoo_get(zkHandle, path, 1, cfg, &len, NULL);
 				if(ret == ZOK)
+				{
 					break;
+				}
 				PERROR("zoo_get on path %s error %d %s %d", rootPath, ret, zerror(ret), zoo_state(zkHandle));
 				if(ZCONNECTIONLOSS == ret)
+				{
 					tryTime++;
+				}
 				else
+				{
 					return ret;
+				}
 			}while(tryTime < colonyNum);
 
 			if(ret == ZOK)
@@ -613,6 +735,7 @@ int ZookConfig::loadAllKeyValue(const char* rootPath)
 				return ret;
 			}
 		}
+		deallocate_String_vector(&brokerlist);
 	}else{
 		PERROR("loadAllKeyValue zkHandle no init");
 		ret = ZOOK_CONFIG_NO_INIT;
@@ -635,12 +758,18 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 		do{
 			ret = zoo_get_children(zkHandle, serverPath, 1, &brokerlist);
 			if(ret == ZOK)
+			{
 				break;
+			}
 			PERROR("zoo_get_children No found child on path %s error %d %s %d", serverPath, ret, zerror(ret), zoo_state(zkHandle));
 			if(ZCONNECTIONLOSS == ret)
+			{
 				tryTime++;
+			}
 			else
+			{
 				return ret;
+			}
 		}while(tryTime < colonyNum);
 		if(ret != ZOK)
 		{
@@ -661,12 +790,18 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 				infoLen = sizeof(infoCfg);
 				ret = zoo_get(zkHandle, infoPath, 0, infoCfg, &infoLen, NULL);
 				if(ret == ZOK)
+				{
 					break;
+				}
 				PERROR("zoo_get on path %s error %d %s %d", infoPath, ret, zerror(ret), zoo_state(zkHandle));
 				if(ZCONNECTIONLOSS == ret)
+				{
 					tryTime++;
+				}
 				else
+				{
 					return ret;
+				}
 			}while(tryTime < colonyNum);
 			
 			if(ret != ZOK)
@@ -685,7 +820,9 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 			
 			char *pServerPort = utilFristChar(infoCfg,':');
 			if(!pServerPort)
+			{
 				return ZOOK_SERVER_INFO_ERROR;
+			}
 			*pServerPort = '\0';
 			
 			std::string serverIp(infoCfg);
@@ -693,12 +830,22 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 
 			pServerPort++;
 			uint16_t serverPort = static_cast<uint16_t>(atoi(pServerPort));
-
 			PDEBUG("serverPort %d",serverPort);
-			TcpServerInfo tcpServerInfo(serverNo, serverPort, serverIp);
-			result++;
-			infoList.push_back(tcpServerInfo);
+
+			char *pSuffix = utilFristChar(pServerPort,':');
+			if(pSuffix)
+			{
+				pSuffix++;
+				TcpServerInfo tcpServerInfo(serverNo, serverPort, serverIp, pSuffix);
+				result++;
+				infoList.push_back(tcpServerInfo);
+			}else{
+				TcpServerInfo tcpServerInfo(serverNo, serverPort, serverIp);
+				result++;
+				infoList.push_back(tcpServerInfo);
+			}
 		}
+		deallocate_String_vector(&brokerlist);
 	}else{
 		PERROR("loadAllKeyValue zkHandle no init");
 		ret = ZOOK_CONFIG_NO_INIT;
@@ -712,7 +859,9 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 int ZookConfig::initialize_zookeeper(const char* zookeeper, const int debug)
 {
 	if(zkHandle)
+	{
 		return ZOOK_CONFIG_ALREADY_INIT;
+	}
 	
 	if (debug)
 	{
@@ -759,13 +908,17 @@ int ZookConfig::zookeeperPathCheck(const char *str)
 	}
 
 	if(len < 0)
+	{
 		return len;
+	}
 
 	len--;
 	str += len;
 
 	if(*str == '/')
+	{
 		return ZOOK_CONFIG_PARAMETER_ERROR;
+	}
 	
 	len++;
 	return len;
@@ -775,13 +928,19 @@ char* ZookConfig::utilFristChar(char *str,const char c)
 {
 	char *p = str;
 	if(!str)
+	{
 		return NULL;
+	}
 	while(*p)
 	{
 		if(*p == c)
+		{
 			return p;
+		}
 		else
+		{
 			p++;
+		}
 	}
 	return NULL;
 }
@@ -790,13 +949,19 @@ const char* ZookConfig::utilFristConstchar(const char *str,const char c)
 {
 	const char *p = str;
 	if(!str)
+	{
 		return NULL;
+	}
 	while(*p)
 	{
 		if(*p == c)
+		{
 			return p;
+		}
 		else
+		{
 			p++;
+		}
 	}
 	return NULL;
 }
@@ -805,14 +970,20 @@ const char* ZookConfig::utilLastConstchar(const char* str, const char c)
 {
 	const char *p = NULL;
 	if(str == NULL)
+	{
 		return NULL;
+	}
 	p = utilEndConstchar(str);
 	while(p >= str)
 	{
 		if(*p == c)
+		{
 			return p;
+		}
 		else
+		{
 			p--;
+		}
 	}
 	return NULL;
 }
@@ -821,7 +992,9 @@ const char* ZookConfig::utilEndConstchar(const char* str)
 {
 	const char *p = str;
 	if(str == NULL)
+	{
 		return NULL;
+	}
 	while(*p != 0)
 	{
 		p++;
@@ -833,7 +1006,9 @@ const char* ZookConfig::utilEndConstchar(const char* str)
 int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr, const std::string& path)
 {
 	if(configPoint)
+	{
 		return ZOOK_CONFIG_ALREADY_INIT;
+	}
 
 	configPoint.reset(new ZookConfig());
 	if(configPoint == nullptr)
@@ -843,10 +1018,14 @@ int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr, const std::
 
 	int ret = configPoint->zookConfigInit(zookAddr);
 	if(ret < 0)
+	{
 		return ret;
+	}
 
 	if(path.empty())
+	{
 		return ret;
+	}
 	
 	ret = configPoint->zookLoadAllConfig(path);
 	return ret;
@@ -855,61 +1034,107 @@ int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr, const std::
 int ZookConfigSingleton::createSessionPath(const std::string& path, const std::string& value)
 {
 	if(configPoint)
+	{
 		return configPoint->createSessionPath(path, value);
+	}
 	else
+	{
 		return ZOOK_CONFIG_NO_INIT;
+	}
 }
+
+int ZookConfigSingleton::createServerInfo(const std::string& path, const std::string& ip, int port, const std::string& suffix)
+{
+	if(configPoint)
+	{
+		char infoValue[512] = {0};
+		if(suffix.empty())
+		{
+			sprintf(infoValue, "%s:%d", ip.c_str(), port);
+		}else{
+			sprintf(infoValue, "%s:%d:%s", ip.c_str(), port, suffix.c_str());
+		}
+		return configPoint->createSessionPath(path, infoValue);
+	}else{
+		return ZOOK_CONFIG_NO_INIT;
+	}
+}
+
 
 int ZookConfigSingleton::zookGetPathValue(const std::string& path, std::string& value)
 {
 	if(configPoint)
+	{
 		return configPoint->zookGetPathValue(path, value);
+	}
 	else
+	{
 		return ZOOK_CONFIG_NO_INIT;
+	}
 }
 
 int ZookConfigSingleton::createForeverPath(const std::string& path, const std::string& value)
 {
 	if(configPoint)
+	{
 		return configPoint->createForeverPath(path,value);
+	}
 	else
+	{
 		return ZOOK_CONFIG_NO_INIT;
+	}
 }
 
 void ZookConfigSingleton::setConfigChangeCall(const ConfigChangeCall& cb)
 {
 	if(configPoint)
+	{
 		configPoint->setConfigChangeCall(cb);
+	}
 }
 
 void ZookConfigSingleton::setServerChangeCall(const TcpServerChangeCall& cb)
 {
 	if(configPoint)
+	{
 		configPoint->setServerChangeCall(cb);
+	}
 }
 
 int ZookConfigSingleton::getConfigKeyValue(const std::string& key, std::string& value)
 {
 	if(configPoint)
+	{
 		return configPoint->getConfigKeyValue(key,value);
+	}
 	else
+	{
 		return ZOOK_CONFIG_NO_INIT;
+	}
 }
 
 int ZookConfigSingleton::setConfigKeyValue(const std::string& key, const std::string& value)
 {
 	if(configPoint)
+	{
 		return configPoint->setConfigKeyValue(key,value);
+	}
 	else
+	{
 		return ZOOK_CONFIG_NO_INIT;
+	}
 }
 
 int ZookConfigSingleton::getTcpServerListInfo(const std::string& serverPath, TcpServerInfoVector& infoList, std::string* serverType)
 {
 	if(configPoint)
+	{
 		return configPoint->getTcpServerListInfo(serverPath, infoList, serverType);
+	}
 	else
+	{
 		return ZOOK_CONFIG_NO_INIT;
+	}
 }
 
 }

@@ -40,6 +40,15 @@ typedef struct __TcpServerInfo
 		:gateNo(no)
 		,port(po)
 		,ipAddr(ip)
+		,suffix()
+	{
+	}
+
+	__TcpServerInfo(int32_t no, int16_t po, const std::string& ip, const std::string& suff)
+		:gateNo(no)
+		,port(po)
+		,ipAddr(ip)
+		,suffix(suff)
 	{
 	}
 
@@ -60,12 +69,14 @@ typedef struct __TcpServerInfo
 		gateNo = that.gateNo;
 		port = that.port;
 		ipAddr = that.ipAddr;
+		suffix = that.suffix;
 		return *this;
 	}
 	
 	int32_t gateNo;
 	int16_t port;
 	std::string ipAddr;
+	std::string suffix;
 }TcpServerInfo;
 
 typedef std::vector<TcpServerInfo> TcpServerInfoVector;
@@ -101,6 +112,9 @@ ZookConfig();
 	
 	//创建临时路径、消息值
 	int createSessionPath(const std::string& path, const std::string& value);
+
+	//创建一个服务信息
+	int createServerInfo(const std::string& path, const std::string& ip, int port, const std::string& suffix = "");
 
 	//创建一个永久路径，消息值
 	int createForeverPath(const std::string& path, const std::string& value);
@@ -194,6 +208,9 @@ public:
 	//path是路径， 末尾一定不能带斜杠
 	//value是值，
 	int createSessionPath(const std::string& path, const std::string& value);
+
+	//创建一个服务信息
+	int createServerInfo(const std::string& path, const std::string& ip, int port, const std::string& suffix = "");
 
 	//获取一个路径对应的值
 	int zookGetPathValue(const std::string& path, std::string& value);
