@@ -532,16 +532,22 @@ void ZookConfig::configUpdateCallBack(const std::string& key)
 
 void ZookConfig::serverInfoChangeCallBack(const std::string& path)
 {
+	PDEBUG("serverInfoChangeCallBack path %s", path.c_str());
 	if(serverCb)
 	{
-		std::string svrType = "";
+		std::string svrType;
 		TcpServerInfoVector serverInfo;
 		const char* pServerType = utilLastConstchar(path.c_str(), '/');
 		if(pServerType)
 		{
+			pServerType++;
 			svrType.assign(pServerType);
-		} 
+		}else{
+			PERROR("serverInfoChangeCallBack no found server type %s ", path.c_str());
+			return;
+		}
 		LoadTcpServerListInfo(path.c_str(), serverInfo);
+		PDEBUG("serverInfoChangeCallBack svrType %s", svrType.c_str());
 		serverCb(serverInfo, svrType);
 	}
 }
@@ -776,7 +782,7 @@ int ZookConfig::LoadTcpServerListInfo(const char* serverPath, TcpServerInfoVecto
 			PERROR("zoo_get_children No found child on path %s error %d %s %d", serverPath, ret, zerror(ret), zoo_state(zkHandle));
 			return ret;
 		}
-
+		PDEBUG("LoadTcpServerListInfo brokerlist.count %d", brokerlist.count);
 		for (int i = 0; i < brokerlist.count; i++)
 		{
 			char infoPath[512] = {0}, infoCfg[1024] = {0};
@@ -1003,14 +1009,23 @@ const char* ZookConfig::utilEndConstchar(const char* str)
 	return p;
 }
 
-int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr, const std::string& path)
+int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr)
 {
-	if(configPoint)
+	if(configPoint == nullptr)
 	{
-		return ZOOK_CONFIG_ALREADY_INIT;
+		return ZOOK_CONFIG_MALLOC_ERROR;
 	}
 
-	configPoint.reset(new ZookConfig());
+	int ret = configPoint->zookConfigInit(zookAddr);
+	if(ret < 0)
+	{
+		return ret;
+	}
+	return 0;
+}
+
+int ZookConfigSingleton::zookConfigInit(const std::string& zookAddr, const std::string& path)
+{
 	if(configPoint == nullptr)
 	{
 		return ZOOK_CONFIG_MALLOC_ERROR;

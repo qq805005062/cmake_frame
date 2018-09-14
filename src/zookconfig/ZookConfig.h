@@ -184,7 +184,7 @@ class ZookConfigSingleton : public noncopyable
 {
 public:
 	ZookConfigSingleton()
-		:configPoint(nullptr)
+		:configPoint(new ZookConfig())
 	{
 	
 }
@@ -197,6 +197,8 @@ public:
 
 	//单实例获取对象接口
 	static ZookConfigSingleton& instance() { return ZOOKCONFIG::Singleton<ZookConfigSingleton>::instance(); }
+
+	int zookConfigInit(const std::string& zookAddr);
 
 	//zookAddr zookeeper 地址
 	//path 结尾不要带斜杠，配置的路径，末尾一定不能带斜杠
