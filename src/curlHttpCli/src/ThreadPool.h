@@ -1,13 +1,13 @@
-#ifndef __COMMON_TREADPOOL_H__
-#define __COMMON_TREADPOOL_H__
-
-#include <common/Condition.h>
-#include <common/Thread.h>
+#ifndef __XIAO_THREAD_POOL_H__
+#define __XIAO_THREAD_POOL_H__
 
 #include <deque>
 #include <vector>
 
-namespace common
+#include "Condition.h"
+#include "Thread.h"
+
+namespace CURL_HTTP_CLI
 {
 
 class ThreadPool : noncopyable
@@ -61,4 +61,5 @@ private:
 
 } // end namespace common
 
-#endif // __COMMON_TREADPOOL_H__
+#endif
+

@@ -1,10 +1,11 @@
-#ifndef __CONDITION_H__
-#define __CONDITION_H__
+#ifndef __XIAO_CONDITION_H__
+#define __XIAO_CONDITION_H__
 
-#include <common/MutexLock.h>
 #include <pthread.h>
 
-namespace common
+#include "MutexLock.h"
+
+namespace CURL_HTTP_CLI
 {
 
 class Condition : noncopyable
@@ -44,6 +45,7 @@ private:
 	pthread_cond_t pcond_;
 };
 
-} // end namepsace common
+} // end namepsace CURL_HTTP_CLI
 
-#endif // __CONDITION_H__
+#endif // __XIAO_CONDITION_H__
+

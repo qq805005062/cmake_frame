@@ -1,11 +1,11 @@
-#ifndef __COMMON_SINGLETON_H__
-#define __COMMON_SINGLETON_H__
+#ifndef __XIAO_SINGLETON_H__
+#define __XIAO_SINGLETON_H__
 
 #include <assert.h>
 #include <pthread.h>
 #include <stdlib.h> // atexit
 
-namespace common
+namespace CURL_HTTP_CLI
 {
 
 template<typename T>
@@ -60,6 +60,7 @@ pthread_once_t Singleton<T>::ponce_ = PTHREAD_ONCE_INIT;
 template<typename T>
 T* Singleton<T>::value_ = NULL;
 
-} // end namespace common
+} // end namespace CURL_HTTP_CLI
 
-#endif // __COMMON_SINGLETON_H__
+#endif // __XIAO_SINGLETON_H__
+

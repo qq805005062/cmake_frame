@@ -1,6 +1,3 @@
-#include <common/Thread.h>
-#include <common/CurrentThread.h>
-#include <common/Exception.h>
 
 #include <assert.h>
 #include <type_traits>
@@ -12,7 +9,11 @@
 #include <sys/types.h>
 #include <linux/unistd.h>
 
-namespace common
+#include "Thread.h"
+#include "CurrentThread.h"
+#include "Exception.h"
+
+namespace CURL_HTTP_CLI
 {
 
 namespace CurrentThread
@@ -80,7 +81,7 @@ struct ThreadData
 			func_();
 			CurrentThread::t_threadName = "finished";
 		}
-		catch (const common::Exception& ex)
+		catch (const Exception& ex)
 		{
 			CurrentThread::t_threadName = "crashed";
 			fprintf(stderr, "exception caught in Thread %s\n", name_.c_str());
@@ -199,5 +200,5 @@ int Thread::join()
 	return pthread_join(pthreadId_, NULL);
 }
 
-} // end namespace common
+}
 

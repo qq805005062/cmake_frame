@@ -1,7 +1,7 @@
-#ifndef __CURL_NONCOPYABLE_H__
-#define __CURL_NONCOPYABLE_H__
+#ifndef __XIAO_NONCOPYABLE_H__
+#define __XIAO_NONCOPYABLE_H__
 
-namespace CURLHTTPCLI
+namespace CURL_HTTP_CLI
 {
 
 class noncopyable
@@ -15,6 +15,7 @@ private:
 	const noncopyable& operator=(const noncopyable& ) = delete;
 };
 
-} // end namespace CURLHTTPCLI
+} // end namespace CURL_HTTP_CLI
 
-#endif // __CURL_NONCOPYABLE_H__
+#endif // __XIAO_NONCOPYABLE_H__
+

@@ -1,5 +1,5 @@
-#ifndef __COMMON_MUTEXLOCK_H__
-#define __COMMON_MUTEXLOCK_H__
+#ifndef __XIAO_MUTEXLOCK_H__
+#define __XIAO_MUTEXLOCK_H__
 
 #include <assert.h>
 #include <pthread.h>
@@ -10,7 +10,7 @@
 #define MCHECK(ret) ({ __typeof__ (ret) errnum = (ret);         \
                        assert(errnum == 0); (void) errnum;})
 
-namespace CURLHTTPCLI
+namespace CURL_HTTP_CLI
 {
 
 class MutexLock : noncopyable
@@ -107,11 +107,12 @@ private:
     MutexLock& mutex_;
 };
 
-} // namespace common
+} // namespace CURL_HTTP_CLI
 
 // Prevent misuse like:
 // MutexLockGuard(mutex_);
 // A tempory object doesn't hold the lock for long!
 #define MutexLockGuard(x) error "Missing guard object name"
 
-#endif  // __COMMON_MUTEXLOCK_H__
+#endif  // __XIAO_MUTEXLOCK_H__
+

@@ -1,16 +1,17 @@
-#ifndef __COMMON_THREAD_H__
-#define __COMMON_THREAD_H__
+#ifndef __XIAO_THREAD_H__
+#define __XIAO_THREAD_H__
 
-#include <common/Atomic.h>
 #include <functional>
 #include <memory>
 #include <pthread.h>
 #include <string>
 
-namespace common
+#include "Atomic.h"
+
+namespace CURL_HTTP_CLI
 {
 
-class Thread : noncopyable
+class Thread : public noncopyable
 {
 public:
 	typedef std::function<void()> ThreadFunc;
@@ -46,6 +47,8 @@ private:
 	static AtomicInt32 numCreated_;
 };
 
-} // end namespace common
+}
 
-#endif // __COMMON_THREAD_H__
+
+#endif
+

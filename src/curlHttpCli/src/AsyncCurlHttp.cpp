@@ -1,11 +1,16 @@
 
 #include <sys/eventfd.h>
 
-#include "Incommon.h"
-#include "HttpRequestQ.h"
-#include "CurlHttpClient.h"
+#include <cstring>
 
-namespace HTTPCLI
+#include "Incommon.h"
+#include "HttpRequestQueue.h"
+#include "NumberAlign.h"
+#include "AsyncCurlHttp.h"
+
+#pragma GCC diagnostic ignored "-Wold-style-cast"
+
+namespace CURL_HTTP_CLI
 {
 
 static int createEventfd()
@@ -13,27 +18,27 @@ static int createEventfd()
 	int evtfd = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
 	if (evtfd < 0)
 	{
-		HTTPCLI_LOG_WARN("Failed in eventfd");
+		WARN("Failed in eventfd");
 	}
 	return evtfd;
 }
 
 static void wakeUpFdcb(int sockFd, short eventType, void *arg)
 {
-	CurlHttpClient *p = static_cast<CurlHttpClient*>(arg);
+	AsyncCurlHttp *p = (AsyncCurlHttp *)arg;
 	p->handleRead();
 }
 
 static void timeUpFdcb(int sockFd, short eventType, void *arg)
 {
-	CurlHttpClient *p = static_cast<CurlHttpClient*>(arg);
+	AsyncCurlHttp *p = (AsyncCurlHttp *)arg;
 	p->timeExpireCb();
 }
 
 /* CURLMOPT_SOCKETFUNCTION */
 static int sockFdcb(CURL *e, curl_socket_t s, int what, void *cbp, void *sockp)
 {
-	CurlHttpClient *p = static_cast<CurlHttpClient*>(cbp);
+	AsyncCurlHttp *p = (AsyncCurlHttp *)cbp;
 	p->curlSockFdCb(e, s, what, sockp);
 	return 0;
 }
@@ -41,14 +46,14 @@ static int sockFdcb(CURL *e, curl_socket_t s, int what, void *cbp, void *sockp)
 /* Update the event timer after curl_multi library calls */
 static int multiTimerCb(CURLM *multi, long timeout_ms, void *arg)
 {
-	CurlHttpClient *p = static_cast<CurlHttpClient*>(arg);
+	AsyncCurlHttp *p = (AsyncCurlHttp *)arg;
 	p->culrMultiTimerCb(timeout_ms);
 	return 0;
 }
 
 static void eventFdcb(int fd, short kind, void *arg)
 {
-	CurlHttpClient *p = static_cast<CurlHttpClient*>(arg);
+	AsyncCurlHttp *p = (AsyncCurlHttp *)arg;
 	p->curlEventFdcb(fd, kind);
 }
 
@@ -56,8 +61,8 @@ static void eventFdcb(int fd, short kind, void *arg)
 static size_t write_cb(void *ptr, size_t size, size_t nmemb, void *data)
 {
 	size_t realsize = size * nmemb;
-	ConnInfo *conn = static_cast<ConnInfo*>(data);
-	HTTPCLI_LOG_DEBUG("write_cb: %s (%ld/%ld)", conn->url, size, nmemb);
+	ConnInfo *conn = (ConnInfo*)data;
+	DEBUG("write_cb: %s (%ld/%ld)", conn->url, size, nmemb);
 	if(conn->rspData)
 	{
 		size_t needLen = strlen(conn->rspData);
@@ -97,39 +102,44 @@ static int prog_cb(void *p, double dltotal, double dlnow, double ult, double uln
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-CurlHttpClient::CurlHttpClient()
+AsyncCurlHttp::AsyncCurlHttp()
 	:isRun(1)
 	,wakeupFd_(createEventfd())
 	,gInfo_(nullptr)
 {
-	PDEBUG("CurlHttpClient init");
+	DEBUG("CurlHttpClient init");
 }
 
-CurlHttpClient::~CurlHttpClient()
+AsyncCurlHttp::~AsyncCurlHttp()
 {
-	PERROR("~CurlHttpClient exit");
+	if(gInfo_)
+	{
+		free(gInfo_);
+	}
+	ERROR("~CurlHttpClient exit");
 }
 
-int CurlHttpClient::curlHttpClientReady()
+int AsyncCurlHttp::curlHttpClientReady()
 {
-	HTTPCLI_LOG_INFO("curlHttpClientReady in");
+	INFO("curlHttpClientReady in");
 	if(wakeupFd_ < 0)
 	{
-		HTTPCLI_LOG_WARN("curlHttpClientReady wakeupFd_ error %d", wakeupFd_);
+		WARN("curlHttpClientReady wakeupFd_ error %d", wakeupFd_);
 		return wakeupFd_;
 	}
 
-	gInfo_.reset(new GlobalInfo());
+	gInfo_ =  (GlobalInfo *)malloc(sizeof(GlobalInfo));
 	if(gInfo_ == nullptr)
 	{
-		HTTPCLI_LOG_WARN("curlHttpClientReady GlobalInfo new error");
+		WARN("curlHttpClientReady GlobalInfo new error");
 		return -1;
 	}
+	memset(gInfo_, 0, sizeof (GlobalInfo));
 
 	gInfo_->evbase = event_base_new();
 	if(gInfo_->evbase == NULL)
 	{
-		HTTPCLI_LOG_WARN("curlHttpClientReady event_base_new new error");
+		WARN("curlHttpClientReady event_base_new new error");
 		return -1;
 	}
 	
@@ -148,7 +158,7 @@ int CurlHttpClient::curlHttpClientReady()
 	/* we don't call any curl_multi_socket*() function yet as we have no handles
      added! */
 	event_base_dispatch(gInfo_->evbase);
-	HTTPCLI_LOG_WARN("event_base_dispatch return");
+	WARN("event_base_dispatch return %p", gInfo_->evbase);
 
 	event_del(&gInfo_->wake_event);
 	close(wakeupFd_);
@@ -158,39 +168,54 @@ int CurlHttpClient::curlHttpClientReady()
 	return 0;
 }
 
-void CurlHttpClient::wakeup()
+void AsyncCurlHttp::wakeup()
 {
 	uint64_t one = 1;
 	ssize_t n = write(wakeupFd_, &one, sizeof one);
 	if (n != sizeof one)
 	{
-		HTTPCLI_LOG_WARN("EventLoop::wakeup() writes %ld bytes instead of 8", n);
+		WARN("EventLoop::wakeup() writes %ld bytes instead of 8", n);
 	}
 }
 
-void CurlHttpClient::handleRead()
+void AsyncCurlHttp::asyncCurlExit()
 {
-	uint64_t one = 1;
-	ssize_t n = read(wakeupFd_, &one, sizeof one);
+	uint32_t one = 1;
+	ssize_t n = write(wakeupFd_, &one, sizeof one);
 	if (n != sizeof one)
 	{
-		HTTPCLI_LOG_WARN("EventLoop::handleRead() reads %ld bytes instead of 8", n);
-		return;
+		WARN("EventLoop::wakeup() writes %ld bytes instead of 4", n);
 	}
+}
 
-	if(one == 4)
+void AsyncCurlHttp::handleRead()
+{
+	char readBuf[512] = {0};
+	ssize_t n = read(wakeupFd_, readBuf, 512);
+	if (n <= 0)
 	{
-		gInfo_->stopped = 1;
-		if(gInfo_->still_running == 0)
-			event_base_loopbreak(gInfo_->evbase);
-		
+		WARN("EventLoop::handleRead() reads %ld bytes instead of 8", n);
 		return;
 	}
 	
-	requetHttpServer();
+	size_t num = n / (sizeof(uint64_t));
+	for(size_t i = 0; i < num; i++)
+	{
+		requetHttpServer();
+	}
+	
+	size_t num_ = n % (sizeof(uint64_t));
+	if(num_ > 0)
+	{
+		gInfo_->stopped = 1;
+		if(gInfo_->still_running == 0)
+		{
+			event_base_loopbreak(gInfo_->evbase);
+		}
+	}
 }
 
-void CurlHttpClient::timeExpireCb()
+void AsyncCurlHttp::timeExpireCb()
 {
 	CURLMcode rc;
 	rc = curl_multi_socket_action(gInfo_->multi,
@@ -200,93 +225,112 @@ void CurlHttpClient::timeExpireCb()
 	check_multi_info();
 }
 
-void CurlHttpClient::curlSockFdCb(CURL *e, curl_socket_t s, int what, void *sockp)
+void AsyncCurlHttp::curlSockFdCb(CURL *e, curl_socket_t s, int what, void *sockp)
 {
 	SockInfo *fdp = static_cast<SockInfo*>(sockp);
 	const char *whatstr[]={ "none", "IN", "OUT", "INOUT", "REMOVE" };
 
-	HTTPCLI_LOG_DEBUG("socket callback: s=%d e=%p what=%s ", s, e, whatstr[what]);
+	DEBUG("socket callback: s=%d e=%p what=%s ", s, e, whatstr[what]);
 	if(what == CURL_POLL_REMOVE)
 	{
-		HTTPCLI_LOG_DEBUG("CURL_POLL_REMOVE");
+		DEBUG("CURL_POLL_REMOVE");
 		remsock(fdp);
 	}
 	else
 	{
 		if(!fdp)
 		{
-			HTTPCLI_LOG_DEBUG("Adding data: %s", whatstr[what]);
-			addsock(s, e, what, gInfo_.get());
+			DEBUG("Adding data: %s", whatstr[what]);
+			addsock(s, e, what, gInfo_);
 		}
 		else
 		{
-			HTTPCLI_LOG_DEBUG("Changing action from %s to %s",
+			DEBUG("Changing action from %s to %s",
 			      whatstr[fdp->action], whatstr[what]);
-			setsock(fdp, s, e, what, gInfo_.get());
+			setsock(fdp, s, e, what, gInfo_);
 		}
 	}
 }
 
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-void CurlHttpClient::requetHttpServer()
+void AsyncCurlHttp::requetHttpServer()
 {
-	ConnInfo *conn;
-	CURLMcode rc;
-
-	CurlHttpRequestPtr reqInfo = HTTPCLI::HttpRequestQ::instance().dealRequest();
+	HttpReqSession *reqInfo = HttpRequestQueue::instance().dealRequest();
 	if(reqInfo == nullptr)
-		return;
-	
-	//conn = static_cast<ConnInfo *>(malloc(sizeof(ConnInfo)));
-	//memset(&conn, 0, sizeof (ConnInfo));
-	conn =  static_cast<ConnInfo *>(calloc(1, sizeof(ConnInfo)));
-	if(conn == NULL)
 	{
-		HTTPCLI_LOG_WARN("requetHttpServer new ConnInfo error");
-		reqInfo->setCurlRspCode(-1);
-		reqInfo->curlRespondCallBack(reqInfo);
 		return;
 	}
+	requetHttpServer(reqInfo);
+}
+
+void AsyncCurlHttp::requetHttpServer(HttpReqSession* reqInfo)
+{
+	ConnInfo *conn = NULL;
+	CURLMcode rc;
+	
+	conn = (ConnInfo *)malloc(sizeof(ConnInfo));
+	//conn = (ConnInfo *)calloc(1, sizeof(ConnInfo));
+	if(conn == NULL)
+	{
+		WARN("requetHttpServer new ConnInfo error");
+		reqInfo->setHttpResponseCode(-1);
+		reqInfo->httpRespondCallBack();
+		return;
+	}
+	memset(conn, 0, sizeof (ConnInfo));
 	conn->error[0]='\0';
 
 	conn->easy = curl_easy_init();
-	if(!conn->easy)
+	if(conn->easy == NULL)
 	{
-		HTTPCLI_LOG_WARN("curl_easy_init() failed, exiting!\n");
-		reqInfo->setCurlRspCode(-1);
-		reqInfo->curlRespondCallBack(reqInfo);
+		WARN("curl_easy_init() failed, exiting!\n");
+		reqInfo->setHttpResponseCode(-1);
+		reqInfo->httpRespondCallBack();
 		free(conn);
 		return;
 	}
-	conn->global = gInfo_.get();
+	conn->global = gInfo_;
 
-	std::string url = reqInfo->curlHttpUrl();
+	std::string url = reqInfo->httpRequestUrl();
 	conn->url = static_cast<char *>(malloc((url.size() + 1)));
 	if(conn->url == NULL)
 	{
-		HTTPCLI_LOG_WARN("curl_easy_init() failed, exiting!\n");
-		reqInfo->setCurlRspCode(-1);
-		reqInfo->curlRespondCallBack(reqInfo);
+		WARN("curl_easy_init() failed, exiting!\n");
+		reqInfo->setHttpResponseCode(-1);
+		reqInfo->httpRespondCallBack();
 		free(conn);
 		return;
 	}
 	memset(conn->url, 0, (url.size() + 1));
 	memcpy(conn->url, url.c_str(), url.size());
 
-	//https
-	if(reqInfo->curlHttpVersion() == HTTPS)
+	CURLcode tRetCode = curl_easy_setopt(conn->easy, CURLOPT_TIMEOUT, reqInfo->httpReqDataoutSecond());
+	if (CURLE_OK != tRetCode)
 	{
-		HTTPCLI_LOG_WARN("curl_easy_init https request");
+		WARN("curl_easy_setopt CURLOPT_TIMEOUT failed!err:%s", curl_easy_strerror(tRetCode));
+	} 
+	tRetCode = curl_easy_setopt(conn->easy, CURLOPT_CONNECTTIMEOUT, reqInfo->httpReqConnoutSecond());
+	if (CURLE_OK != tRetCode)
+	{
+		WARN("curl_easy_setopt CURLOPT_CONNECTTIMEOUT failed!err:%s", curl_easy_strerror(tRetCode));
+	}
+	tRetCode = curl_easy_setopt(conn->easy, CURLOPT_NOSIGNAL, 1);
+	if (CURLE_OK != tRetCode)
+	{
+		WARN("curl_easy_setopt CURLOPT_NOSIGNAL failed!err:%s", curl_easy_strerror(tRetCode));
+	}
+	
+	//https
+	if(reqInfo->httpRequestVer() == HTTPS)
+	{
+		DEBUG("curl_easy_init https request");
 		curl_easy_setopt(conn->easy, CURLOPT_SSL_VERIFYPEER, true);
-    	curl_easy_setopt(conn->easy, CURLOPT_SSL_VERIFYHOST, true);
+		curl_easy_setopt(conn->easy, CURLOPT_SSL_VERIFYHOST, true);
 		curl_easy_setopt(conn->easy, CURLOPT_FOLLOWLOCATION, 1);
 		curl_easy_setopt(conn->easy, CURLOPT_AUTOREFERER, 1);
-    	curl_easy_setopt(conn->easy, CURLOPT_CAINFO, "./cacert.pem");
+		curl_easy_setopt(conn->easy, CURLOPT_CAINFO, "./cacert.pem");
 	}
 
-	switch(reqInfo->curlHttpReqType())
+	switch(reqInfo->httpRequestType())
 	{
 		case HTTP_GET:
 			curl_easy_setopt(conn->easy, CURLOPT_HTTPGET, 1);
@@ -304,23 +348,24 @@ void CurlHttpClient::requetHttpServer()
 			curl_easy_setopt(conn->easy, CURLOPT_CUSTOMREQUEST, "UPDATE");
 			break;
 		default:
-			HTTPCLI_LOG_WARN("reqInfo->curlHttpReqType %d no support now", reqInfo->curlHttpReqType());
-			reqInfo->setCurlRspCode(-2);
-			reqInfo->curlRespondCallBack(reqInfo);
+			WARN("reqInfo->curlHttpReqType %d no support now", reqInfo->httpRequestType());
+			reqInfo->setHttpResponseCode(-2);
+			reqInfo->httpRespondCallBack();
+			free(conn->url);
 			free(conn);
 			return;
 	}
 
-	std::string bodyData = reqInfo->curlHttpData();
+	std::string bodyData = reqInfo->httpRequestData();
 	if(!bodyData.empty())
 	{
-		HTTPCLI_LOG_WARN("curl_easy_init set http body");
+		DEBUG("curl_easy_init set http body");
 		curl_easy_setopt(conn->easy, CURLOPT_POSTFIELDSIZE, bodyData.length());
-    	curl_easy_setopt(conn->easy, CURLOPT_POSTFIELDS, bodyData.c_str());
+		curl_easy_setopt(conn->easy, CURLOPT_POSTFIELDS, bodyData.c_str());
 	}
 
 	char headBuf[1024] = {0};
-	#ifdef XIAOMI_HTTP_TYPE
+#if 0
 	if(reqInfo->curlHttpType() == 0)
 	{
 		//struct curl_slist *headers=NULL; /* init to NULL is important */
@@ -342,20 +387,22 @@ void CurlHttpClient::requetHttpServer()
 
 		conn->headers = curl_slist_append(conn->headers, "Content-Type: application/json;charset=UTF-8");
 		conn->headers = curl_slist_append(conn->headers, "Accept:application/json;charset=UTF-8");
+		conn->headers = curl_slist_append(conn->headers, "Connection: close");
+		//conn->headers = curl_slist_append(conn->headers, "Keep-Alive: 3");
 
 		/* pass our list of custom made headers */
 		//curl_easy_setopt(conn->easy, CURLOPT_HTTPHEADER, conn->headers);
 		
 		//curl_slist_free_all(headers); /* free the header list *///no free herr will be core
 	}
-	#endif
+#endif
 
-	HttpHeadPrivate headV = reqInfo->curlHttpHead();
+	HttpHeadPrivate headV = reqInfo->httpReqPrivateHead();
 	for(size_t i = 0; i < headV.size(); i++)
 	{
 		memset(headBuf, 0, 1024);
 		sprintf(headBuf,"%s", headV[i].c_str());
-		HTTPCLI_LOG_WARN("headers %s ", headBuf);
+		DEBUG("headers %s ", headBuf);
 		conn->headers = curl_slist_append(conn->headers, headBuf);
 	}
 
@@ -376,15 +423,15 @@ void CurlHttpClient::requetHttpServer()
 	curl_easy_setopt(conn->easy, CURLOPT_FOLLOWLOCATION, 1L);
 
 	conn->reqInfo = reqInfo;
-	HTTPCLI_LOG_DEBUG("Adding easy %p to multi %p (%s)", conn->easy, gInfo_->multi, url.c_str());
+	DEBUG("Adding easy %p to multi %p (%s)", conn->easy, gInfo_->multi, url.c_str());
 	rc = curl_multi_add_handle(gInfo_->multi, conn->easy);
 	mcode_or_die("new_conn: curl_multi_add_handle", rc);
 
 	/* note that the add_handle() will set a time-out to trigger very soon so
-	 	that the necessary socket_action() call will be called by this app */
+		that the necessary socket_action() call will be called by this app */
 }
 
-void CurlHttpClient::mcode_or_die(const char *where, CURLMcode code)
+void AsyncCurlHttp::mcode_or_die(const char *where, CURLMcode code)
 {
 	if(CURLM_OK != code)
 	{
@@ -407,26 +454,80 @@ void CurlHttpClient::mcode_or_die(const char *where, CURLMcode code)
 				s = "CURLM_unknown";
 				break;
 			case CURLM_BAD_SOCKET:
-				HTTPCLI_LOG_WARN( "ERROR: %s returns %s\n", where, s);
+				WARN( "ERROR: %s returns %s\n", where, s);
 				/* ignore this error */
 			return;
 		}
-		HTTPCLI_LOG_WARN("ERROR: %s returns %s\n", where, s);
+		WARN("ERROR: %s returns %s\n", where, s);
 		//exit(code);
 	}
 }
 
 /* Check for completed transfers, and remove their easy handles */
-void CurlHttpClient::check_multi_info()
+void AsyncCurlHttp::check_multi_info()
 {
 	char *eff_url;
 	CURLMsg *msg;
 	int msgs_left;
-	ConnInfo *conn;
+	ConnInfo *conn = NULL;
 	CURL *easy;
 	CURLcode res;
 
-	HTTPCLI_LOG_DEBUG("REMAINING: %d", gInfo_->still_running);
+	INFO("REMAINING: %d", gInfo_->still_running);
+	#if 1
+	do{
+		msg = curl_multi_info_read(gInfo_->multi, &msgs_left);
+		INFO("curl_multi_info_read: %d", msgs_left);
+		if(msg && msg->msg == CURLMSG_DONE)
+		{
+			long response_code = 0;
+			easy = msg->easy_handle;
+			res = msg->data.result;
+			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &conn);
+			curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, &eff_url);
+			curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code);
+			INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->error);
+			//curl_easy_getinfo(easy, CURLINFO_REQUEST_SIZE, &response_code);
+			//HTTPCLI_LOG_DEBUG("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->error);
+			//HTTPCLI_LOG_DEBUG("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->rspData);
+
+			if(res)
+			{
+				conn->reqInfo->setHttpResponseCode(static_cast<int>(res));
+				conn->reqInfo->setHttpReqErrorMsg(conn->error);
+			}else{
+				conn->reqInfo->setHttpResponseCode(static_cast<int>(response_code));
+			}
+			
+			if(conn->rspData)
+			{
+				conn->reqInfo->setHttpResponstBody(conn->rspData);
+			}
+			conn->reqInfo->httpRespondCallBack();
+			delete conn->reqInfo;//only free here
+			conn->reqInfo = NULL;
+			curl_multi_remove_handle(gInfo_->multi, easy);
+			if(conn->url)
+			{
+				free(conn->url);
+				conn->url = NULL;
+			}
+			if(conn->rspData)
+			{
+				free(conn->rspData);
+				conn->rspData = NULL;
+			}
+			if(conn->headers)
+			{
+				curl_slist_free_all(conn->headers);
+				conn->headers = NULL;
+			}
+			curl_easy_cleanup(easy);
+			free(conn);
+			conn = NULL;
+		}
+	}while(msg);
+	#else
 	while((msg = curl_multi_info_read(gInfo_->multi, &msgs_left)))
 	{
 		if(msg->msg == CURLMSG_DONE)
@@ -442,12 +543,12 @@ void CurlHttpClient::check_multi_info()
 			//HTTPCLI_LOG_DEBUG("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->error);
 			//HTTPCLI_LOG_DEBUG("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->rspData);
 
-			conn->reqInfo->setCurlRspCode(static_cast<int>(response_code));
+			conn->reqInfo->setHttpResponseCode(static_cast<int>(response_code));
 			if(conn->rspData)
 			{
-				conn->reqInfo->setCurlRspBody(conn->rspData);
+				conn->reqInfo->setHttpResponstBody(conn->rspData);
 			}
-			conn->reqInfo->curlRespondCallBack(conn->reqInfo);
+			conn->reqInfo->httpRespondCallBack();
 			curl_multi_remove_handle(gInfo_->multi, easy);
 			free(conn->url);
 			if(conn->rspData)
@@ -462,17 +563,24 @@ void CurlHttpClient::check_multi_info()
 			free(conn);
 		}
 	}
-	
+	#endif
 	if(gInfo_->still_running == 0 && gInfo_->stopped)
+	{
 		event_base_loopbreak(gInfo_->evbase);
+	}
 }
 
 /* Initialize a new SockInfo structure */
-void CurlHttpClient::addsock(curl_socket_t s, CURL *easy, int action, GlobalInfo *g)
+void AsyncCurlHttp::addsock(curl_socket_t s, CURL *easy, int action, GlobalInfo *g)
 {
-	SockInfo *fdp = static_cast<SockInfo *>(calloc(sizeof(SockInfo), 1));
-	//SockInfo *fdp = static_cast<SockInfo *>(malloc(sizeof(SockInfo)));
-	//memset(fdp , 0 ,sizeof(SockInfo));
+	//SockInfo *fdp = static_cast<SockInfo *>(calloc(sizeof(SockInfo), 1));
+	SockInfo *fdp = (SockInfo *)malloc(sizeof(SockInfo));
+	if(fdp == NULL)
+	{
+		WARN("addsock new SockInfo error");
+		return;
+	}
+	memset(fdp , 0 ,sizeof(SockInfo));
 	
 	fdp->global = g;
 	setsock(fdp, s, easy, action, g);
@@ -480,7 +588,7 @@ void CurlHttpClient::addsock(curl_socket_t s, CURL *easy, int action, GlobalInfo
 }
 
 /* Assign information to a SockInfo structure */
-void CurlHttpClient::setsock(SockInfo *f, curl_socket_t s, CURL *e, int act, GlobalInfo *g)
+void AsyncCurlHttp::setsock(SockInfo *f, curl_socket_t s, CURL *e, int act, GlobalInfo *g)
 {
 	short kind = static_cast<short>((act&CURL_POLL_IN?EV_READ:0)|(act&CURL_POLL_OUT?EV_WRITE:0)|EV_PERSIST);
 
@@ -493,7 +601,7 @@ void CurlHttpClient::setsock(SockInfo *f, curl_socket_t s, CURL *e, int act, Glo
 }
 
 /* Clean up the SockInfo structure */
-void CurlHttpClient::remsock(SockInfo *f)
+void AsyncCurlHttp::remsock(SockInfo *f)
 {
 	if(f)
 	{
@@ -503,7 +611,7 @@ void CurlHttpClient::remsock(SockInfo *f)
 }
 
 /* Called by libevent when we get action on a multi socket */
-void CurlHttpClient::curlEventFdcb(int fd, short kind)
+void AsyncCurlHttp::curlEventFdcb(int fd, short kind)
 {
 	CURLMcode rc;
 
@@ -517,7 +625,7 @@ void CurlHttpClient::curlEventFdcb(int fd, short kind)
 	check_multi_info();
 	if(gInfo_->still_running <= 0)
 	{
-		HTTPCLI_LOG_DEBUG("last transfer done, kill timeout");
+		DEBUG("last transfer done, kill timeout");
 		if(evtimer_pending(&gInfo_->timer_event, NULL))
 		{
 			evtimer_del(&gInfo_->timer_event);
@@ -525,14 +633,14 @@ void CurlHttpClient::curlEventFdcb(int fd, short kind)
 	}
 }
 
-void CurlHttpClient::culrMultiTimerCb(long timeout_ms)
+void AsyncCurlHttp::culrMultiTimerCb(long timeout_ms)
 {
 	struct timeval timeout;
 	CURLMcode rc;
 
 	timeout.tv_sec = timeout_ms/1000;
 	timeout.tv_usec = (timeout_ms%1000)*1000;
-	HTTPCLI_LOG_DEBUG("multi_timer_cb: Setting timeout to %ld ms", timeout_ms);
+	DEBUG("multi_timer_cb: Setting timeout to %ld ms", timeout_ms);
 
 	/* TODO
 	*
@@ -548,13 +656,15 @@ void CurlHttpClient::culrMultiTimerCb(long timeout_ms)
 		mcode_or_die("multi_timer_cb: curl_multi_socket_action", rc);
 	}
 	else if(timeout_ms == -1)
+	{
+		WARN("culrMultiTimerCb delete time");
 		evtimer_del(&gInfo_->timer_event);
+	}
 	else
+	{
 		evtimer_add(&gInfo_->timer_event, &timeout);
+	}
 }
-
-
-
 
 }
 

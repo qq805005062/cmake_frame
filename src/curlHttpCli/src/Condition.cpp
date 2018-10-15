@@ -1,8 +1,9 @@
-#include <common/Condition.h>
 
 #include <errno.h>
 
-bool common::Condition::waitForSeconds(double seconds)
+#include "Condition.h"
+
+bool CURL_HTTP_CLI::Condition::waitForSeconds(double seconds)
 {
 	struct timespec abstime;
 	clock_gettime(CLOCK_REALTIME, &abstime);
@@ -16,3 +17,4 @@ bool common::Condition::waitForSeconds(double seconds)
 	MutexLock::UnassignGuard ug(mutex_);
 	return ETIMEDOUT == pthread_cond_timedwait(&pcond_, mutex_.getPthreadMutex(), &abstime);
 }
+

@@ -1,10 +1,12 @@
-#include <common/ThreadPool.h>
-#include <common/Exception.h>
 
 #include <assert.h>
 #include <stdio.h>
 
-namespace common
+#include "ThreadPool.h"
+#include "Exception.h"
+
+
+namespace CURL_HTTP_CLI
 {
 
 ThreadPool::ThreadPool(const std::string& name)
