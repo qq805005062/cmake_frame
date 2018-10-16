@@ -39,10 +39,46 @@ public:
 		,reqType(HTTP_POST)
 		,connOutSecond(3)
 		,dataOutSecond(6)
+		,reqMicroSecond(0)
+		,rspMicroSecond(0)
 		,rspCode(0)
 		,rspBody()
 		,reqUrl()
 		,reqData()
+		,errorMsg()
+		,headVec()
+		,cb_(nullptr)
+	{
+	}
+
+	HttpReqSession(HTTP_VERSION ver, HTTP_REQUEST_TYPE type, const std::string& url)
+		:httpVer(ver)
+		,reqType(type)
+		,connOutSecond(3)
+		,dataOutSecond(6)
+		,reqMicroSecond(0)
+		,rspMicroSecond(0)
+		,rspCode(0)
+		,rspBody()
+		,reqUrl(url)
+		,reqData()
+		,errorMsg()
+		,headVec()
+		,cb_(nullptr)
+	{
+	}
+
+	HttpReqSession(HTTP_VERSION ver, HTTP_REQUEST_TYPE type, const std::string& url, const std::string& body)
+		:httpVer(ver)
+		,reqType(type)
+		,connOutSecond(3)
+		,dataOutSecond(6)
+		,reqMicroSecond(0)
+		,rspMicroSecond(0)
+		,rspCode(0)
+		,rspBody()
+		,reqUrl(url)
+		,reqData(body)
 		,errorMsg()
 		,headVec()
 		,cb_(nullptr)
@@ -54,6 +90,8 @@ public:
 		,reqType(HTTP_POST)
 		,connOutSecond(3)
 		,dataOutSecond(6)
+		,reqMicroSecond(0)
+		,rspMicroSecond(0)
 		,rspCode(0)
 		,rspBody()
 		,reqUrl()
@@ -73,6 +111,8 @@ public:
 		reqType = that.reqType;
 		connOutSecond = that.connOutSecond;
 		dataOutSecond = that.dataOutSecond;
+		reqMicroSecond = that.reqMicroSecond;
+		rspMicroSecond = that.rspMicroSecond;
 		rspCode = that.rspCode;
 		rspBody = that.rspBody;
 		reqUrl = that.reqUrl;
@@ -80,6 +120,7 @@ public:
 		errorMsg = that.errorMsg;
 		headVec = that.headVec;
 		cb_ = that.cb_;
+		
 		return *this;
 	}
 
@@ -205,12 +246,34 @@ public:
 		return reqType;
 	}
 
+	void setHttpReqMicroSecond(int64_t micro)
+	{
+		reqMicroSecond = micro;
+	}
+
+	void setHttpRspMicroSecond(int64_t micro)
+	{
+		rspMicroSecond = micro;
+	}
+
+	int64_t httpReqMicroSecond()
+	{
+		return reqMicroSecond;
+	}
+
+	int64_t httpRspMicroSecond()
+	{
+		return rspMicroSecond;
+	}
+
 private:
 	HTTP_VERSION httpVer;
 	HTTP_REQUEST_TYPE reqType;
 	
 	long connOutSecond;//连接超时时间，秒钟
 	long dataOutSecond;//数据传输超时时间，秒钟
+	int64_t reqMicroSecond;
+	int64_t rspMicroSecond;
 
 	int rspCode;//响应编码
 	std::string rspBody;//响应报文

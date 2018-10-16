@@ -16,4 +16,6 @@
 #define ERROR(fmt, args...)		fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 
 
+int daemonize(int nochdir, int noclose);
+
 #endif

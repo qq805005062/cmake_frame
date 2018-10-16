@@ -50,7 +50,8 @@ typedef struct _SockInfo
 class AsyncCurlHttp
 {
 public:
-	AsyncCurlHttp();
+	//参数是否计算时间耗时
+	AsyncCurlHttp(int isShow = 0);
 	~AsyncCurlHttp();
 
 	int curlHttpClientReady();
@@ -82,10 +83,12 @@ private:
 	void setsock(SockInfo *f, curl_socket_t s, CURL *e, int act, GlobalInfo *g);
 	
 	void remsock(SockInfo *f);
+
+	int64_t microSecondSinceEpoch();
 	
 	int isRun;
 	int wakeupFd_;
-	
+	int isShowTimeUse;
 	GlobalInfo *gInfo_;
 };
 

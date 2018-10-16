@@ -36,19 +36,34 @@ public:
 
 	void curlHttpCliExit();
 
-	int curlHttpCliInit(int threadNum, int maxQueue);
+	int curlHttpCliInit(int threadNum, int maxQueue, int isShowTimeUse = 0);//最后一个参数在调试并发量的时候才会使用
 
 	int curlHttpRequest(HttpReqSession& curlReq);//阻塞方法，如果队列满了，会一直阻塞
 
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//内部使用，外部使用不需要使用
 	void curlHttpClientWakeup();
+
+	void curlHttpThreadReady();
+
+	int64_t curlHttpEventSeq()
+	{
+		return testEventSeq.incrementAndGet();
+	}
 
 private:
 
 	void httpIoThreadFun(int index);
 
+	void httpStatisticsSecond();
+
 	int threadNum_;
+	int isExit_;
+	int isReady;
+	int isShowtime;
+	AtomicUInt32 readyNum;
 	AtomicUInt32 lastIndex;
+	AtomicInt64  testEventSeq;
 	std::unique_ptr<ThreadPool> httpCliPoolPtr;
 	std::vector<AsyncCurlHttp*> curlCliVect;
 };
