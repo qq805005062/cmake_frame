@@ -46,8 +46,7 @@ class TimeUsedUp : public noncopyable
 {
 public:
 	TimeUsedUp()
-		:isExit(0)
-		,maxMicroSecond(0)
+		:maxMicroSecond(0)
 		,minMicreSecond(0)
 		,allMincroSecond(0)
 		,allNum(0)
@@ -62,11 +61,6 @@ public:
 	}
 
 	static TimeUsedUp& instance() { return Singleton<TimeUsedUp>::instance();}
-
-	void timeUseupExit()
-	{
-		isExit = 1;
-	}
 
 	void requestNumAdd()
 	{
@@ -106,10 +100,6 @@ public:
 	void timeUsedStatistics()
 	{
 		char writeBuf[1024] = {0};
-		if(isExit)
-		{
-			return;
-		}
 		
 		int64_t microSecond_ = 0, allnum_ = 0, maxMicroSecond_ = 0, minMicroSecond_ = 0, averMicroSecond = 0, reqSpeed_ = 0;
 		{
@@ -135,7 +125,6 @@ public:
 	}
 
 private:
-	int isExit;
 	volatile int64_t maxMicroSecond;
 	volatile int64_t minMicreSecond;
 	volatile int64_t allMincroSecond;

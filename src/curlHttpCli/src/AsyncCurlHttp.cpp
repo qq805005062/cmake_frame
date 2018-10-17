@@ -61,32 +61,48 @@ static void eventFdcb(int fd, short kind, void *arg)
 /* CURLOPT_WRITEFUNCTION */
 static size_t write_cb(void *ptr, size_t size, size_t nmemb, void *data)
 {
+	char *pData = (char *)ptr;
 	size_t realsize = size * nmemb;
 	ConnInfo *conn = (ConnInfo*)data;
-	//DEBUG("write_cb: %s (%ld/%ld)", conn->url, size, nmemb);
-	if(conn->rspData)
+	//DEBUG("write_cb: %s (%ld/%ld) %s", conn->url, size, nmemb, pData);
+
+	if(conn->reqInfo->httpResponstCode() == 0)
 	{
-		size_t needLen = strlen(conn->rspData);
-		needLen += realsize;
-		char* tmpP = static_cast<char*>(malloc(needLen));
-		if(tmpP)
+		if(conn->rspData)
 		{
-			memset(tmpP, 0 , needLen);
-			needLen = strlen(conn->rspData) - 1;
-			memcpy(tmpP, conn->rspData, needLen);
-			tmpP += needLen;
-			memcpy(tmpP, ptr, realsize);
-			free(conn->rspData);
-			conn->rspData = tmpP;
-		}
-	}else{
-		size_t needLen = realsize + 1;
-		char* tmpP = static_cast<char*>(malloc(needLen));
-		if(tmpP)
-		{
-			memset(tmpP, 0 , needLen);
-			memcpy(tmpP, ptr, realsize);
-			conn->rspData = tmpP;
+			size_t needLen = strlen(conn->rspData);
+			needLen += realsize + 1;
+			//DEBUG("conn->rspData %p %ld", conn->rspData, needLen);
+			char* tmpP = (char*)malloc(needLen);
+			if(tmpP)
+			{
+				pData = tmpP;
+				memset(tmpP, 0 , needLen);
+				needLen = strlen(conn->rspData);
+				memcpy(tmpP, conn->rspData, needLen);
+				tmpP += needLen;
+				memcpy(tmpP, ptr, realsize);
+				free(conn->rspData);
+				conn->rspData = pData;
+			}else{
+				free(pData);
+				conn->rspData = NULL;
+				conn->reqInfo->setHttpResponseCode(-1);
+				conn->reqInfo->setHttpReqErrorMsg("malloc null");
+			}
+		}else{
+			size_t needLen = realsize + 1;
+			//DEBUG("conn->rspData NULL %ld", needLen);
+			char* tmpP = (char*)malloc(needLen);
+			if(tmpP)
+			{
+				memset(tmpP, 0 , needLen);
+				memcpy(tmpP, ptr, realsize);
+				conn->rspData = tmpP;
+			}else{
+				conn->reqInfo->setHttpResponseCode(-1);
+				conn->reqInfo->setHttpReqErrorMsg("malloc null");
+			}
 		}
 	}
 	return realsize;
@@ -173,9 +189,9 @@ int AsyncCurlHttp::curlHttpClientReady()
 
 void AsyncCurlHttp::wakeup()//唤醒和处理读时间并不是写了多少个字节，就读了多少个字节，这个信号句柄要好好研究一下
 {
-	uint64_t one = CurlHttpCli::instance().curlHttpEventSeq();
+	uint64_t one = 2;
 	ssize_t n = write(wakeupFd_, &one, sizeof one);
-	//INFO("wakeup n one %ld %ld %p", n, one, gInfo_->evbase);
+	INFO("wakeup n one %ld %ld %p", n, one, gInfo_->evbase);
 	if (n != sizeof one)
 	{
 		WARN("EventLoop::wakeup() writes %ld bytes instead of 8", n);
@@ -184,9 +200,9 @@ void AsyncCurlHttp::wakeup()//唤醒和处理读时间并不是写了多少个字节，就读了多少个
 
 void AsyncCurlHttp::asyncCurlExit()
 {
-	uint32_t one = 1;
+	uint64_t one = 1;
 	ssize_t n = write(wakeupFd_, &one, sizeof one);
-	//INFO("wakeup n one %ld %ld %p", n, one, gInfo_->evbase);
+	INFO("wakeup n one %ld %ld %p", n, one, gInfo_->evbase);
 	if (n != sizeof one)
 	{
 		WARN("EventLoop::wakeup() writes %ld bytes instead of 4", n);
@@ -197,17 +213,16 @@ void AsyncCurlHttp::handleRead()
 {
 	uint64_t one = 1;
 	ssize_t n = read(wakeupFd_, &one, sizeof one);
-	if (n <= 0)
+	if (n != sizeof one)
 	{
 		WARN("EventLoop::handleRead() reads %ld bytes instead of 8", n);
 		return;
 	}
-	//INFO("read %ld one %ld %p", n, one, gInfo_->evbase);
+	INFO("handleRead %ld one %ld %p", n, one, gInfo_->evbase);
 	requetHttpServer();
-	#if 0
-	size_t num_ = n % (sizeof(uint64_t));
-	INFO("read %ld num_ %ld %p", n, num_, gInfo_->evbase);
-	if(num_ > 0)
+	//INFO("handleRead %ld one %lu %p", n, one, gInfo_->evbase);
+	uint64_t exit_ = one % 2;
+	if(exit_)
 	{
 		gInfo_->stopped = 1;
 		if(gInfo_->still_running == 0)
@@ -215,7 +230,6 @@ void AsyncCurlHttp::handleRead()
 			event_base_loopbreak(gInfo_->evbase);
 		}
 	}
-	#endif
 	//INFO("handleRead exit");
 }
 
@@ -281,17 +295,20 @@ void AsyncCurlHttp::requetHttpServer(HttpReqSession* reqInfo)
 	{
 		WARN("requetHttpServer new ConnInfo error");
 		reqInfo->setHttpResponseCode(-1);
+		reqInfo->setHttpReqErrorMsg("malloc null");
 		reqInfo->httpRespondCallBack();
 		return;
 	}
 	memset(conn, 0, sizeof (ConnInfo));
-	conn->error[0]='\0';
+	conn->error[0] = '\0';
+	conn->rspData = NULL;
 
 	conn->easy = curl_easy_init();
 	if(conn->easy == NULL)
 	{
 		WARN("curl_easy_init() failed, exiting!\n");
 		reqInfo->setHttpResponseCode(-1);
+		reqInfo->setHttpReqErrorMsg("malloc null");
 		reqInfo->httpRespondCallBack();
 		free(conn);
 		return;
@@ -304,6 +321,7 @@ void AsyncCurlHttp::requetHttpServer(HttpReqSession* reqInfo)
 	{
 		WARN("curl_easy_init() failed, exiting!\n");
 		reqInfo->setHttpResponseCode(-1);
+		reqInfo->setHttpReqErrorMsg("malloc null");
 		reqInfo->httpRespondCallBack();
 		free(conn);
 		return;
@@ -358,6 +376,7 @@ void AsyncCurlHttp::requetHttpServer(HttpReqSession* reqInfo)
 		default:
 			WARN("reqInfo->curlHttpReqType %d no support now", reqInfo->httpRequestType());
 			reqInfo->setHttpResponseCode(-2);
+			reqInfo->setHttpReqErrorMsg("request type unkown");
 			reqInfo->httpRespondCallBack();
 			free(conn->url);
 			free(conn);
@@ -494,7 +513,7 @@ void AsyncCurlHttp::check_multi_info()
 			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &conn);
 			curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, &eff_url);
 			curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code);
-			//INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->error);
+			INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->error);
 			//curl_easy_getinfo(easy, CURLINFO_REQUEST_SIZE, &response_code);
 			//DEBUG("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->error);
 			//DEBUG("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->rspData);

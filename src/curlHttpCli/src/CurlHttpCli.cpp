@@ -14,8 +14,8 @@ CurlHttpCli::CurlHttpCli()
 	,isReady(0)
 	,isShowtime(0)
 	,readyNum()
+	,exitNum()
 	,lastIndex()
-	,testEventSeq()
 	,httpCliPoolPtr(nullptr)
 	,curlCliVect()
 {
@@ -29,8 +29,7 @@ CurlHttpCli::~CurlHttpCli()
 
 void CurlHttpCli::curlHttpCliExit()
 {
-	TimeUsedUp::instance().timeUseupExit();
-	isExit_ = 0;
+	isExit_ = 1;
 	int64_t num = 0;
 	do{
 		num = AsyncQueueNum::instance().asyncQueNum();
@@ -38,10 +37,23 @@ void CurlHttpCli::curlHttpCliExit()
 		{
 			break;
 		}
-		INFO("async queue num %lu", num);
-		//usleep(1000);
-		sleep(5);
+		//INFO("async queue num %lu", num);
+		usleep(1000);
+		//sleep(5);
 	}while(num > 0);
+
+	for(int i = 0; i < threadNum_; i++)
+	{
+		if(curlCliVect[i])
+		{
+			curlCliVect[i]->asyncCurlExit();
+		}
+	}
+	while(isReady)
+	{
+		usleep(1000);
+	}
+	httpCliPoolPtr->stop();
 	return;
 }
 
@@ -58,16 +70,18 @@ int CurlHttpCli::curlHttpCliInit(int threadNum, int maxQueue, int isShowTimeUse)
 	{
 		HttpRequestQueue::instance().setMaxQueueSize(maxQueue);
 	}
-	threadNum_ = threadNum;
+	
 	curlCliVect.resize(threadNum);
 	if(isShowTimeUse)
 	{
 		isShowtime = isShowTimeUse;
 		threadNum++;
+		threadNum_ = threadNum;
 		httpCliPoolPtr->start(threadNum);
 		threadNum--;
 		httpCliPoolPtr->run(std::bind(&CURL_HTTP_CLI::CurlHttpCli::httpStatisticsSecond, this));
 	}else{
+		threadNum_ = threadNum;
 		httpCliPoolPtr->start(threadNum);
 	}
 	for(int i = 0; i < threadNum; i++)
@@ -81,6 +95,12 @@ int CurlHttpCli::curlHttpCliInit(int threadNum, int maxQueue, int isShowTimeUse)
 
 int CurlHttpCli::curlHttpRequest(HttpReqSession& curlReq)
 {
+	if(isExit_)
+	{
+		WARN("curlHttpRequest had been exit");
+		return -2;
+	}
+	
 	if(isReady == 0)
 	{
 		sleep(1);
@@ -127,6 +147,16 @@ void CurlHttpCli::curlHttpThreadReady()
 	}
 }
 
+void CurlHttpCli::curlHttpThreadExit()
+{
+	int num = exitNum.incrementAndGet();
+	if(num == threadNum_)
+	{
+		INFO("curlHttpThreadReady all thread ready");
+		isReady = 0;
+	}
+}
+
 void CurlHttpCli::httpIoThreadFun(int index)
 {
 	while(1)
@@ -143,15 +173,21 @@ void CurlHttpCli::httpIoThreadFun(int index)
 		}
 		try{
 			curlCliVect[index]->curlHttpClientReady();
+			if(isExit_)
+			{
+				break;
+			}
 		}catch (const std::exception& ex)
 		{
 			WARN("httpIoThreadFun exception :: %s",ex.what());
 		}
 	}
+	curlHttpThreadExit();
 }
 
 void CurlHttpCli::httpStatisticsSecond()
 {
+	curlHttpThreadReady();
 	while(1)
 	{
 		sleep(1);
@@ -161,6 +197,7 @@ void CurlHttpCli::httpStatisticsSecond()
 		}
 		TimeUsedUp::instance().timeUsedStatistics();
 	}
+	curlHttpThreadExit();
 }
 
 }

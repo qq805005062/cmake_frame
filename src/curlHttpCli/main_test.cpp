@@ -4,7 +4,11 @@
  *
  *zhaoxiaoxiao
  */
+#include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #include <signal.h>
 #include <unistd.h>
 #include <sys/prctl.h>
@@ -30,6 +34,53 @@ static int sigArray[] = {
 	SIGTTIN,SIGTTOU,SIGURG,SIGXCPU,SIGXFSZ,SIGVTALRM,SIGPROF,SIGWINCH,
 	SIGIO,SIGPWR,SIGSYS
 };
+
+int daemonize_(int nochdir, int noclose)
+{
+    int fd;
+
+    switch (fork()) {
+    case -1:
+        return (-1);
+    case 0:
+        break;
+    default:
+        _exit(EXIT_SUCCESS);
+    }
+
+    if (setsid() == -1)
+        return (-1);
+
+    if (nochdir == 0) {
+        if(chdir("/") != 0) {
+            perror("chdir");
+            return (-1);
+        }
+    }
+
+    if (noclose == 0 && (fd = open("/dev/null", O_RDWR, 0)) != -1) {
+        if(dup2(fd, STDIN_FILENO) < 0) {
+            perror("dup2 stdin");
+            return (-1);
+        }
+        if(dup2(fd, STDOUT_FILENO) < 0) {
+            perror("dup2 stdout");
+            return (-1);
+        }
+        if(dup2(fd, STDERR_FILENO) < 0) {
+            perror("dup2 stderr");
+            return (-1);
+        }
+
+        if (fd > STDERR_FILENO) {
+            if(close(fd) < 0) {
+                perror("close");
+                return (-1);
+            }
+        }
+    }
+    return (0);
+}
 
 inline int sigignore(int sig)
 {
@@ -134,13 +185,18 @@ void* httpReqTest(void* arg)///HTTPÇëÇó
 			break;
 		}
 
-		for(int i = 0; i < 100; i++)
+		for(int i = 0; i < 10000; i++)
 		{
 			ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpRequest(httpreq);
 			if(ret < 0)
 			{
 				PERROR("CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpRequest %d", ret);
 			}
+			if(isExit)
+			{
+				break;
+			
+}
 		}
 		sleep(1);
 		//break;
@@ -166,6 +222,9 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "       ./curlHttpCliTest --version\n");
 		}
 		return ret;
+	}else if(argc == 1)
+	{
+		daemonize_(1,0);
 	}
 
 	ret = IgnoreSig();

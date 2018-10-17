@@ -38,6 +38,8 @@ public:
 
 	int curlHttpCliInit(int threadNum, int maxQueue, int isShowTimeUse = 0);//最后一个参数在调试并发量的时候才会使用
 
+	//程序阻塞，如果malloc失败返回-1
+	//如果程序已经收到退出命令返回-2
 	int curlHttpRequest(HttpReqSession& curlReq);//阻塞方法，如果队列满了，会一直阻塞
 
 	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,24 +48,21 @@ public:
 
 	void curlHttpThreadReady();
 
-	int64_t curlHttpEventSeq()
-	{
-		return testEventSeq.incrementAndGet();
-	}
-
 private:
 
 	void httpIoThreadFun(int index);
 
 	void httpStatisticsSecond();
 
+	void curlHttpThreadExit();
+
 	int threadNum_;
 	int isExit_;
 	int isReady;
 	int isShowtime;
 	AtomicUInt32 readyNum;
+	AtomicUInt32 exitNum;
 	AtomicUInt32 lastIndex;
-	AtomicInt64  testEventSeq;
 	std::unique_ptr<ThreadPool> httpCliPoolPtr;
 	std::vector<AsyncCurlHttp*> curlCliVect;
 };
