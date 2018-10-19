@@ -83,6 +83,9 @@ class AtomicIntegerT : public noncopyable
 
 typedef AtomicIntegerT<int32_t> AtomicInt32;
 typedef AtomicIntegerT<int64_t> AtomicInt64;
+typedef AtomicIntegerT<uint32_t> AtomicUInt32;
+
+
 
 }
 

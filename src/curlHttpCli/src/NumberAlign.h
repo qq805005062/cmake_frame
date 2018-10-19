@@ -46,9 +46,12 @@ class TimeUsedUp : public noncopyable
 {
 public:
 	TimeUsedUp()
-		:maxMicroSecond(0)
-		,minMicreSecond(0)
-		,allMincroSecond(0)
+		:maxRspMicroSecond(0)
+		,minRspMicreSecond(0)
+		,allRspMicroSecond(0)
+		,maxFullMicroSecond(0)
+		,minFullMicroSecond(0)
+		,allFullMicroSecond(0)
 		,allNum(0)
 		,reqSpeedL(0)
 		,reqSpeed()
@@ -67,33 +70,47 @@ public:
 		reqSpeed.increment();
 	}
 	
-	void timeUsedCalculate(int64_t beginMincroSecond, int64_t endMincroSecond)
+	void timeUsedCalculate(int64_t insertMicroSecond, int64_t beginMicroSecond, int64_t endMicroSecond)
 	{
-		int64_t con = endMincroSecond - beginMincroSecond;
-		printf("timeUsedCalculate con %ld %ld %ld\n", beginMincroSecond, endMincroSecond, con);
+		int64_t con = endMicroSecond - beginMicroSecond, allconn = endMicroSecond - insertMicroSecond;
+		printf("timeUsedCalculate insert begin end used all used %ld %ld %ld %ld %ld\n", insertMicroSecond, beginMicroSecond, endMicroSecond, con, allconn);
 		MutexLockGuard lock(mutex_);
 		allNum++;
-		allMincroSecond += con;
-
-		if(maxMicroSecond == 0 && minMicreSecond == 0)
-		{
-			minMicreSecond = con;
-			maxMicroSecond = con;
-			return;
-		}
+		allRspMicroSecond += con;
+		allFullMicroSecond += allconn;
 		
-		if(con > maxMicroSecond)
+		if(maxRspMicroSecond == 0 && minRspMicreSecond == 0)
 		{
-			maxMicroSecond = con;
-			return;
+			maxRspMicroSecond = con;
+			minRspMicreSecond = con;
 		}
 
-		if(con < minMicreSecond)
+		if(maxFullMicroSecond == 0 && minFullMicroSecond == 0)
 		{
-			minMicreSecond = con;
-			return;
+			maxFullMicroSecond = allconn;
+			minFullMicroSecond = allconn;
 		}
 		
+		if(con > maxRspMicroSecond)
+		{
+			maxRspMicroSecond = con;
+		}
+
+		if(con < minRspMicreSecond)
+		{
+			minRspMicreSecond = con;
+		}
+
+		if(allconn > maxFullMicroSecond)
+		{
+			maxFullMicroSecond = allconn;
+		}
+
+		if(allconn < minFullMicroSecond)
+		{
+			minFullMicroSecond = allconn;
+		}
+
 		return;
 	}
 
@@ -101,22 +118,29 @@ public:
 	{
 		char writeBuf[1024] = {0};
 		
-		int64_t microSecond_ = 0, allnum_ = 0, maxMicroSecond_ = 0, minMicroSecond_ = 0, averMicroSecond = 0, reqSpeed_ = 0;
+		int64_t microSecond_ = 0, allnum_ = 0, maxMicroSecond_ = 0, minMicroSecond_ = 0, averMicroSecond = 0, reqSpeed_ = 0, maxFullMicroSecond_ = 0, minFullMicroSecond_ = 0, allFullMicroSecond_ = 0, averFullMicroSecond_ = 0;
 		{
 			MutexLockGuard lock(mutex_);
-			microSecond_ = allMincroSecond;
+			microSecond_ = allRspMicroSecond;
+			allFullMicroSecond = allFullMicroSecond;
 			allnum_ = allNum;
-			maxMicroSecond_ = maxMicroSecond;
-			minMicroSecond_ = minMicreSecond;
+			maxMicroSecond_ = maxRspMicroSecond;
+			minMicroSecond_ = minRspMicreSecond;
+
+			maxFullMicroSecond_ = maxFullMicroSecond;
+			minFullMicroSecond_ = minFullMicroSecond;
+			allFullMicroSecond_ = allFullMicroSecond;
 		}
 		if(allnum_)
 		{
 			averMicroSecond = microSecond_ / allnum_;
+			averFullMicroSecond_ = allFullMicroSecond_ / allnum_;
 		}
 
 		reqSpeed_ = reqSpeed.get();
 		FILE* pFile = fopen("secondSummary","a+");
-		sprintf(writeBuf, "timeUsedStatistics speed allNum maxMicroSecond minMicreSecond averMicroSecond %ld %ld %ld %ld %ld \n", (reqSpeed_ - reqSpeedL), allnum_, maxMicroSecond_, minMicroSecond_, averMicroSecond );
+		sprintf(writeBuf, "timeUsedStatistics speed allNum maxRspMicroSecond minRspMicreSecond averRspMicroSecond %ld %ld %ld %ld %ld maxfullMicroSecond minfullMicreSecond averfullMicroSecond %ld %ld %ld\n", 
+			(reqSpeed_ - reqSpeedL), allnum_, maxMicroSecond_, minMicroSecond_, averMicroSecond, maxFullMicroSecond_, minFullMicroSecond_, averFullMicroSecond_);
 		size_t wLen = strlen(writeBuf);
 		size_t nWri = fwrite( writeBuf, 1, wLen, pFile);
 		fclose(pFile);
@@ -125,9 +149,14 @@ public:
 	}
 
 private:
-	volatile int64_t maxMicroSecond;
-	volatile int64_t minMicreSecond;
-	volatile int64_t allMincroSecond;
+	volatile int64_t maxRspMicroSecond;
+	volatile int64_t minRspMicreSecond;
+	volatile int64_t allRspMicroSecond;
+
+	volatile int64_t maxFullMicroSecond;
+	volatile int64_t minFullMicroSecond;
+	volatile int64_t allFullMicroSecond;
+	
 	volatile int64_t allNum;
 	volatile int64_t reqSpeedL;
 	AtomicInt64 reqSpeed;

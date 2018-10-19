@@ -47,11 +47,15 @@ typedef struct _SockInfo
 	GlobalInfo *global;
 } SockInfo;
 
+int prog_cb(void *p, double dltotal, double dlnow, double ult, double uln);
+
+size_t write_cb(void *ptr, size_t size, size_t nmemb, void *data);
+
 class AsyncCurlHttp
 {
 public:
 	//参数是否计算时间耗时
-	AsyncCurlHttp(int isShow = 0);
+	AsyncCurlHttp(int maxPreSize_);
 	~AsyncCurlHttp();
 
 	int curlHttpClientReady();
@@ -72,7 +76,7 @@ public:
 private:
 	void requetHttpServer();
 
-	void requetHttpServer(HttpReqSession* reqInfo);
+	void requetHttpServer(ConnInfo* conn);
 	
 	void mcode_or_die(const char *where, CURLMcode code);
 
@@ -83,12 +87,11 @@ private:
 	void setsock(SockInfo *f, curl_socket_t s, CURL *e, int act, GlobalInfo *g);
 	
 	void remsock(SockInfo *f);
-
-	int64_t microSecondSinceEpoch();
 	
 	int isRun;
 	int wakeupFd_;
-	int isShowTimeUse;
+	int maxPreSize;
+	volatile int queueSize;
 	GlobalInfo *gInfo_;
 };
 

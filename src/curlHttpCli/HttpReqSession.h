@@ -6,6 +6,8 @@
 #include <string>
 #include <functional>
 
+#include "src/Atomic.h"
+
 typedef enum{
 	HTTP10 = 0,
 	HTTP11,
@@ -39,9 +41,15 @@ public:
 		,reqType(HTTP_POST)
 		,connOutSecond(3)
 		,dataOutSecond(6)
+		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,outSecond(0)
+		,isCallBack()
+		,callbackFlag(0)
 		,rspCode(0)
+		,sslVerifyPeer(0)
+		,sslVeriftHost(0)
 		,rspBody()
 		,reqUrl()
 		,reqData()
@@ -56,9 +64,15 @@ public:
 		,reqType(type)
 		,connOutSecond(3)
 		,dataOutSecond(6)
+		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,outSecond(0)
+		,isCallBack()
+		,callbackFlag(0)
 		,rspCode(0)
+		,sslVerifyPeer(0)
+		,sslVeriftHost(0)
 		,rspBody()
 		,reqUrl(url)
 		,reqData()
@@ -73,9 +87,15 @@ public:
 		,reqType(type)
 		,connOutSecond(3)
 		,dataOutSecond(6)
+		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,outSecond(0)
+		,isCallBack()
+		,callbackFlag(0)
 		,rspCode(0)
+		,sslVerifyPeer(0)
+		,sslVeriftHost(0)
 		,rspBody()
 		,reqUrl(url)
 		,reqData(body)
@@ -90,9 +110,15 @@ public:
 		,reqType(HTTP_POST)
 		,connOutSecond(3)
 		,dataOutSecond(6)
+		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,outSecond(0)
+		,isCallBack()
+		,callbackFlag(0)
 		,rspCode(0)
+		,sslVerifyPeer(0)
+		,sslVeriftHost(0)
 		,rspBody()
 		,reqUrl()
 		,reqData()
@@ -111,9 +137,15 @@ public:
 		reqType = that.reqType;
 		connOutSecond = that.connOutSecond;
 		dataOutSecond = that.dataOutSecond;
+		insertMicroSecond = that.insertMicroSecond;
 		reqMicroSecond = that.reqMicroSecond;
 		rspMicroSecond = that.rspMicroSecond;
+		outSecond = that.outSecond;
+		isCallBack.getAndSet(that.isCallBack.get());
+		callbackFlag = that.callbackFlag;
 		rspCode = that.rspCode;
+		sslVerifyPeer = that.sslVerifyPeer;
+		sslVeriftHost = that.sslVeriftHost;
 		rspBody = that.rspBody;
 		reqUrl = that.reqUrl;
 		reqData = that.reqData;
@@ -188,12 +220,15 @@ public:
 		cb_ = cb;
 	}
 
-	void httpRespondCallBack()
+	uint32_t httpRespondCallBack()
 	{
-		if(cb_)
+		uint32_t call = isCallBack.incrementAndGet();
+		if(cb_ && call == 1)
 		{
 			cb_(this);
 		}
+		callbackFlag = 1;
+		return call;
 	}
 
 	HttpHeadPrivate httpReqPrivateHead()
@@ -266,16 +301,68 @@ public:
 		return rspMicroSecond;
 	}
 
+	void setHttpReqInsertMicroSecond(int64_t micro)
+	{
+		insertMicroSecond = micro;
+	}
+
+	int64_t httpReqInsertMicroSecond()
+	{
+		return insertMicroSecond;
+	}
+
+	void setHttpsSslVerifyPeer(int isNeed)
+	{
+		sslVerifyPeer = isNeed;
+	}
+
+	void setHttpsSslVerifyHost(int isNeed)
+	{
+		sslVeriftHost = isNeed;
+	}
+
+	int httpsSslVerifyPeer()
+	{
+		return sslVerifyPeer;
+	}
+
+	int httpsSslVerifyHost()
+	{
+		return sslVeriftHost;
+	}
+
+	void setHttpOutSecond(int64_t second)
+	{
+		outSecond = second;
+	}
+
+	int64_t httpRequestOutSecond()
+	{
+		return outSecond;
+	}
+
+	int httpResponseCallFlag()
+	{
+		return callbackFlag;
+	}
+	
 private:
 	HTTP_VERSION httpVer;
 	HTTP_REQUEST_TYPE reqType;
 	
 	long connOutSecond;//连接超时时间，秒钟
 	long dataOutSecond;//数据传输超时时间，秒钟
-	int64_t reqMicroSecond;
-	int64_t rspMicroSecond;
+	int64_t insertMicroSecond;//调用接口插入队列时间，微秒
+	int64_t reqMicroSecond;//实际请求时间，微秒
+	int64_t rspMicroSecond;//实际响应时间，微秒
+	int64_t outSecond;
 
+	mutable AtomicUInt32 isCallBack;
+
+	int callbackFlag;
 	int rspCode;//响应编码
+	int sslVerifyPeer;///是否校验对端证书
+	int sslVeriftHost;//是否校验对端主机ip地址
 	std::string rspBody;//响应报文
 	std::string reqUrl;//https://192.169.0.61:8888/hello?dadsadada//http://192.169.0.61:8888/hello?dadsadada
 	std::string reqData;//请求报文

@@ -25,7 +25,7 @@
 #define PDEBUG(fmt, args...)		fprintf(stderr, "%s :: %s() %d: DEBUG " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define PERROR(fmt, args...)		fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 
-static int isExit = 0;
+static int isExit = 0,isStopTest = 0;
 
 //SIGINT,SIGKILL,SIGTERM,SIGSTOP,SIGUSR1,SIGUSR2
 static int sigArray[] = {
@@ -132,15 +132,35 @@ void sig_catch(int sig)
 	{
 		case SIGINT:
 			PERROR("SIGINT :: %d",SIGINT);
+			if(isStopTest == 0)
+			{
+				isStopTest = 1;
+				return;
+			}
 			break;
 		case SIGKILL:
 			PERROR("SIGKILL :: %d",SIGKILL);
+			if(isStopTest == 0)
+			{
+				isStopTest = 1;
+				return;
+			}
 			break;
 		case SIGTERM:
 			PERROR("SIGTERM :: %d",SIGTERM);
+			if(isStopTest == 0)
+			{
+				isStopTest = 1;
+				return;
+			}
 			break;
 		case SIGSTOP:
 			PERROR("SIGSTOP :: %d",SIGSTOP);
+			if(isStopTest == 0)
+			{
+				isStopTest = 1;
+				return;
+			}
 			break;
 		case SIGUSR1://10
 			PERROR("SIGUSR1 :: %d",SIGUSR1);
@@ -162,7 +182,7 @@ void sig_catch(int sig)
 	return;
 }
 
-static void httpReqCallback(CURL_HTTP_CLI::HttpReqSession* rsp)//HTTP响应回调
+static void httpReqCallback(CURL_HTTP_CLI::HttpReqSession* rsp)//HTTP响应回调,不要关系释放内存问题
 {
 	if(rsp->httpResponstCode() == 200)
 	{
@@ -176,30 +196,33 @@ static void httpReqCallback(CURL_HTTP_CLI::HttpReqSession* rsp)//HTTP响应回调
 void* httpReqTest(void* arg)///HTTP请求
 {
 	int ret = 0;
-	CURL_HTTP_CLI::HttpReqSession httpreq(HTTP11, HTTP_GET, "http://192.169.0.61:8889");
+	CURL_HTTP_CLI::HttpReqSession httpreq(HTTP11, HTTP_GET, "http://192.169.0.61:61888");
+	httpreq.addHttpReqPrivateHead("Connection: close");
 	httpreq.setHttpReqCallback(std::bind(&httpReqCallback, std::placeholders::_1));//注册回调
 	while(1)
 	{
-		if(isExit)
+		if(isExit || isStopTest)
 		{
 			break;
 		}
 
-		for(int i = 0; i < 10000; i++)
+		for(int i = 0; i < 50; i++)
 		{
 			ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpRequest(httpreq);
 			if(ret < 0)
 			{
 				PERROR("CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpRequest %d", ret);
 			}
-			if(isExit)
+			if(isExit || isStopTest)
 			{
 				break;
-			
-}
+			}
+		}
+		if(isExit || isStopTest)
+		{
+			break;
 		}
 		sleep(1);
-		//break;
 	}
 	return NULL;
 }
@@ -241,7 +264,7 @@ int main(int argc, char* argv[])
 	(void)signal(SIGUSR1, sig_catch);
 	(void)signal(SIGUSR2, sig_catch);
 	
-	ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpCliInit(4, 50000, 1);//模块初始化
+	ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpCliInit(4, 50000, 10 , 0 ,0 , 1);//模块初始化
 	if(ret < 0)
 	{
 		PERROR("CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpCliInit %d", ret);

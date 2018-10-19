@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <time.h>
+#include <sys/time.h>
+
 #include <string>
 #include <memory>
 
@@ -17,5 +20,25 @@
 
 
 int daemonize(int nochdir, int noclose);
+
+inline int64_t microSecondSinceEpoch(int64_t* second = NULL)
+{
+	 struct timeval tv;
+ 	 gettimeofday(&tv, NULL);
+	 if(second)
+	 {
+	 	*second = tv.tv_sec;
+	 }
+	 int64_t microSeconds = tv.tv_sec * 1000000 + tv.tv_usec;
+	 return microSeconds;
+}
+
+inline int64_t secondSinceEpoch()
+{
+	 struct timeval tv;
+ 	 gettimeofday(&tv, NULL);
+	 int64_t seconds = tv.tv_sec;
+	 return seconds;
+}
 
 #endif
