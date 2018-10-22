@@ -114,7 +114,7 @@ inline int IgnoreSig()
 void sigMyself()
 {
 	pid_t self =  getpid();
-	kill(self,SIGINT);
+	kill(self, SIGINT);
 	return;
 }
 
@@ -196,7 +196,7 @@ static void httpReqCallback(CURL_HTTP_CLI::HttpReqSession* rsp)//HTTP响应回调,不
 void* httpReqTest(void* arg)///HTTP请求
 {
 	int ret = 0;
-	CURL_HTTP_CLI::HttpReqSession httpreq(HTTP11, HTTP_GET, "http://192.169.0.61:61888");
+	CURL_HTTP_CLI::HttpReqSession httpreq(CURLHTTP11, CURLHTTP_GET, "http://192.169.0.61:61888");
 	httpreq.addHttpReqPrivateHead("Connection: close");
 	httpreq.setHttpReqCallback(std::bind(&httpReqCallback, std::placeholders::_1));//注册回调
 	while(1)
@@ -206,18 +206,20 @@ void* httpReqTest(void* arg)///HTTP请求
 			break;
 		}
 
-		for(int i = 0; i < 50; i++)
+		for(int i = 0; i < 200; i++)
 		{
 			ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpRequest(httpreq);
 			if(ret < 0)
 			{
 				PERROR("CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpRequest %d", ret);
 			}
+			
 			if(isExit || isStopTest)
 			{
 				break;
 			}
 		}
+		
 		if(isExit || isStopTest)
 		{
 			break;

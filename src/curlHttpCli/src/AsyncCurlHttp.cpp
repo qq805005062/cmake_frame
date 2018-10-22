@@ -172,7 +172,7 @@ int AsyncCurlHttp::curlHttpClientReady()
 	//curl_multi_setopt(gInfo_->multi, CURLMOPT_MAX_HOST_CONNECTIONS, 10000 );
 	//curl_multi_setopt(gInfo_->multi, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
 	//curl_multi_setopt(gInfo_->multi, CURLMOPT_MAXCONNECTS, 10000 );
-	curl_multi_setopt(gInfo_->multi, CURLMOPT_MAXCONNECTS, 60000); 
+	//curl_multi_setopt(gInfo_->multi, CURLMOPT_MAXCONNECTS, 60000); 
 	
 	/* setup the generic multi interface options we want */
 	curl_multi_setopt(gInfo_->multi, CURLMOPT_SOCKETFUNCTION, sockFdcb);
@@ -259,7 +259,6 @@ void AsyncCurlHttp::handleRead()
 				break;
 			}
 		}
-		
 	}
 
 	num = one % 2;
@@ -392,7 +391,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn)
 	}
 	
 	//https
-	if(reqInfo->httpRequestVer() == HTTPS)
+	if(reqInfo->httpRequestVer() == CURLHTTPS)
 	{
 		//DEBUG("curl_easy_init https request");
 		curl_easy_setopt(conn->easy, CURLOPT_SSL_VERIFYPEER, true);

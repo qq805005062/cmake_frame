@@ -244,7 +244,7 @@ int CurlHttpCli::curlHttpRequest(HttpReqSession& curlReq)
 		curl_easy_setopt(conn->easy, CURLOPT_VERBOSE, 1L);
 
 		//https
-		if(req->httpRequestVer() == HTTPS)
+		if(req->httpRequestVer() == CURLHTTPS)
 		{
 			//DEBUG("curl_easy_init https request");
 			if(req->httpsSslVerifyPeer())
@@ -266,19 +266,19 @@ int CurlHttpCli::curlHttpRequest(HttpReqSession& curlReq)
 
 		switch(req->httpRequestType())
 		{
-			case HTTP_GET:
+			case CURLHTTP_GET:
 				curl_easy_setopt(conn->easy, CURLOPT_HTTPGET, 1);
 				break;
-			case HTTP_POST:
+			case CURLHTTP_POST:
 				curl_easy_setopt(conn->easy, CURLOPT_POST, 1L);
 				break;
-			case HTTP_PUT:
+			case CURLHTTP_PUT:
 				curl_easy_setopt(conn->easy, CURLOPT_CUSTOMREQUEST, "PUT");
 				break;
-			case HTTP_DELETE:
+			case CURLHTTP_DELETE:
 				curl_easy_setopt(conn->easy, CURLOPT_CUSTOMREQUEST, "DELETE");
 				break;
-			case HTTP_UPDATE:
+			case CURLHTTP_UPDATE:
 				curl_easy_setopt(conn->easy, CURLOPT_CUSTOMREQUEST, "UPDATE");
 				break;
 			default:

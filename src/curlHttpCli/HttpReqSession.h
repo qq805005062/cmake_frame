@@ -9,19 +9,19 @@
 #include "src/Atomic.h"
 
 typedef enum{
-	HTTP10 = 0,
-	HTTP11,
-	HTTPS
-}HTTP_VERSION;
+	CURLHTTP10 = 0,
+	CURLHTTP11,
+	CURLHTTPS
+}CURL_HTTP_VERSION;
 
 typedef enum{
-	HTTP_GET = 0,
-	HTTP_POST,
-	HTTP_PUT,
-	HTTP_DELETE,
-	HTTP_UPDATE,
-	HTTP_UNKONOW
-}HTTP_REQUEST_TYPE;
+	CURLHTTP_GET = 0,
+	CURLHTTP_POST,
+	CURLHTTP_PUT,
+	CURLHTTP_DELETE,
+	CURLHTTP_UPDATE,
+	CURLHTTP_UNKONOW
+}CURL_HTTP_REQUEST_TYPE;
 
 typedef std::vector<std::string> HttpHeadPrivate;
 typedef HttpHeadPrivate::iterator HttpHeadPrivateIter;
@@ -37,10 +37,11 @@ class HttpReqSession
 {
 public:
 	HttpReqSession()
-		:httpVer(HTTP11)
-		,reqType(HTTP_POST)
-		,connOutSecond(3)
-		,dataOutSecond(6)
+		:httpVer(CURLHTTP11)
+		,reqType(CURLHTTP_POST)
+		,private_(nullptr)
+		,connOutSecond(30)
+		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
@@ -59,11 +60,12 @@ public:
 	{
 	}
 
-	HttpReqSession(HTTP_VERSION ver, HTTP_REQUEST_TYPE type, const std::string& url)
+	HttpReqSession(CURL_HTTP_VERSION ver, CURL_HTTP_REQUEST_TYPE type, const std::string& url)
 		:httpVer(ver)
 		,reqType(type)
-		,connOutSecond(3)
-		,dataOutSecond(6)
+		,private_(nullptr)
+		,connOutSecond(30)
+		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
@@ -82,11 +84,12 @@ public:
 	{
 	}
 
-	HttpReqSession(HTTP_VERSION ver, HTTP_REQUEST_TYPE type, const std::string& url, const std::string& body)
+	HttpReqSession(CURL_HTTP_VERSION ver, CURL_HTTP_REQUEST_TYPE type, const std::string& url, const std::string& body)
 		:httpVer(ver)
 		,reqType(type)
-		,connOutSecond(3)
-		,dataOutSecond(6)
+		,private_(nullptr)
+		,connOutSecond(30)
+		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
@@ -106,10 +109,11 @@ public:
 	}
 
 	HttpReqSession(const HttpReqSession& that)
-		:httpVer(HTTP11)
-		,reqType(HTTP_POST)
-		,connOutSecond(3)
-		,dataOutSecond(6)
+		:httpVer(CURLHTTP11)
+		,reqType(CURLHTTP_POST)
+		,private_(nullptr)
+		,connOutSecond(30)
+		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
@@ -135,6 +139,7 @@ public:
 
 		httpVer = that.httpVer;
 		reqType = that.reqType;
+		private_ = that.private_;
 		connOutSecond = that.connOutSecond;
 		dataOutSecond = that.dataOutSecond;
 		insertMicroSecond = that.insertMicroSecond;
@@ -160,12 +165,12 @@ public:
 	{
 	}
 
-	void setHttpReqVer(HTTP_VERSION ver)
+	void setHttpReqVer(CURL_HTTP_VERSION ver)
 	{
 		httpVer = ver; 
 	}
 
-	void setHttpReqType(HTTP_REQUEST_TYPE type)
+	void setHttpReqType(CURL_HTTP_REQUEST_TYPE type)
 	{
 		reqType = type;
 	}
@@ -271,12 +276,12 @@ public:
 		return dataOutSecond;
 	}
 
-	HTTP_VERSION httpRequestVer()
+	CURL_HTTP_VERSION httpRequestVer()
 	{
 		return httpVer;
 	}
 
-	HTTP_REQUEST_TYPE httpRequestType()
+	CURL_HTTP_REQUEST_TYPE httpRequestType()
 	{
 		return reqType;
 	}
@@ -345,10 +350,22 @@ public:
 	{
 		return callbackFlag;
 	}
+
+	void setHttReqPrivate(void *p)
+	{
+		private_ = p;
+	}
+
+	void* httpRequestPrivate()
+	{
+		return private_;
+	}
 	
 private:
-	HTTP_VERSION httpVer;
-	HTTP_REQUEST_TYPE reqType;
+	CURL_HTTP_VERSION httpVer;
+	CURL_HTTP_REQUEST_TYPE reqType;
+
+	void *private_;
 	
 	long connOutSecond;//连接超时时间，秒钟
 	long dataOutSecond;//数据传输超时时间，秒钟
