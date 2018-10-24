@@ -33,6 +33,7 @@ set(CURLHTTPCLI_TEST_FILE
 set(CURLHTTPCLI_TEST_LIB
   curlhttpcli
   curl
+  crypto
   event_core
   event_pthreads
   pthread

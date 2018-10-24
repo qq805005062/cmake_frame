@@ -34,7 +34,7 @@ public:
 
 	void httpRequest(ConnInfo* conn)
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		while (isFull())
 	    {
 	    	notFull_.wait();
@@ -45,7 +45,7 @@ public:
 
 	ConnInfo* dealRequest()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		ConnInfo *conn = NULL;
 		if (!queue_.empty())
 		{
@@ -61,7 +61,7 @@ public:
 
 	size_t queueSize()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
   		return queue_.size();
 	}
 	
@@ -96,13 +96,13 @@ public:
 
 	void stopExit()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		notEmpty_.notifyAll();
 	}
 
 	void httpAsyncInsert(ConnInfo* conn)
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		queue_.push_back(conn);
 		//queue_.push_back(std::move(req));
 		notEmpty_.notify();
@@ -110,7 +110,7 @@ public:
 
 	ConnInfo* httpAsyncQueueFirst()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		if (queue_.empty())
 		{
 			notEmpty_.wait();
@@ -126,13 +126,13 @@ public:
 
 	void httpAsyncQueueErase()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		queue_.pop_front();
 	}
 	
 	size_t queueSize()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
   		return queue_.size();
 	}
 	
@@ -161,14 +161,14 @@ public:
 
 	void stopExit()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		notEmpty_.notifyAll();
 	}
 	
 	void httpResponseQueue(ConnInfo* conn)
 	{
 		DEBUG("httpResponseQueue ");
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		queue_.push_back(conn);
 		//queue_.push_back(std::move(req));
 		notEmpty_.notify();
@@ -176,7 +176,7 @@ public:
 
 	ConnInfo* httpResponseQueueTake()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		if (queue_.empty())
 		{
 			notEmpty_.wait();
@@ -194,7 +194,7 @@ public:
 	
 	size_t queueSize()
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
   		return queue_.size();
 	}
 	

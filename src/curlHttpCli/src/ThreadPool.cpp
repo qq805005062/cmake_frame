@@ -51,7 +51,7 @@ void ThreadPool::start(int numThreads)
 void ThreadPool::stop()
 {
 	{
-	MutexLockGuard lock(mutex_);
+	SafeMutexLock lock(mutex_);
 	running_ = false;
 	notEmpty_.notifyAll();
 	}
@@ -63,7 +63,7 @@ void ThreadPool::stop()
 
 size_t ThreadPool::queueSize() const
 {
-	MutexLockGuard lock(mutex_);
+	SafeMutexLock lock(mutex_);
 	return queue_.size();
 }
 
@@ -75,7 +75,7 @@ void ThreadPool::run(const Task& task)
 	}
 	else
 	{
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		while (isFull())
 		{
 			notFull_.wait();
@@ -95,7 +95,7 @@ bool ThreadPool::TryRun(const Task& task)
   }
   else
   {
-    MutexLockGuard lock(mutex_);
+    SafeMutexLock lock(mutex_);
     if (isFull())
     {
       return false;
@@ -117,7 +117,7 @@ void ThreadPool::run(Task&& task)
   }
   else
   {
-    MutexLockGuard lock(mutex_);
+    SafeMutexLock lock(mutex_);
     while (isFull())
     {
       notFull_.wait();
@@ -137,7 +137,7 @@ bool ThreadPool::TryRun(Task&& task)
   }
   else
   {
-    MutexLockGuard lock(mutex_);
+    SafeMutexLock lock(mutex_);
     if (isFull())
     {
       return false;
@@ -154,7 +154,7 @@ bool ThreadPool::TryRun(Task&& task)
 
 ThreadPool::Task ThreadPool::take()
 {
-	MutexLockGuard lock(mutex_);
+	SafeMutexLock lock(mutex_);
 	while (queue_.empty() && running_)
 	{
 		notEmpty_.wait();

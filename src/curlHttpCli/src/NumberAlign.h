@@ -74,7 +74,7 @@ public:
 	{
 		int64_t con = endMicroSecond - beginMicroSecond, allconn = endMicroSecond - insertMicroSecond;
 		printf("timeUsedCalculate insert begin end used all used %ld %ld %ld %ld %ld\n", insertMicroSecond, beginMicroSecond, endMicroSecond, con, allconn);
-		MutexLockGuard lock(mutex_);
+		SafeMutexLock lock(mutex_);
 		allNum++;
 		allRspMicroSecond += con;
 		allFullMicroSecond += allconn;
@@ -120,7 +120,7 @@ public:
 		
 		int64_t microSecond_ = 0, allnum_ = 0, maxMicroSecond_ = 0, minMicroSecond_ = 0, averMicroSecond = 0, reqSpeed_ = 0, maxFullMicroSecond_ = 0, minFullMicroSecond_ = 0, allFullMicroSecond_ = 0, averFullMicroSecond_ = 0;
 		{
-			MutexLockGuard lock(mutex_);
+			SafeMutexLock lock(mutex_);
 			microSecond_ = allRspMicroSecond;
 			allFullMicroSecond = allFullMicroSecond;
 			allnum_ = allNum;

@@ -90,15 +90,15 @@ private:
     pid_t holder_;
 };
 
-class MutexLockGuard : noncopyable
+class SafeMutexLock : noncopyable
 {
 public:
-    explicit MutexLockGuard(MutexLock& mutex) : mutex_(mutex)
+    explicit SafeMutexLock(MutexLock& mutex) : mutex_(mutex)
     {
         mutex_.lock();
     }
 
-    ~MutexLockGuard()
+    ~SafeMutexLock()
     {
         mutex_.unlock();
     }
@@ -110,9 +110,9 @@ private:
 } // namespace CURL_HTTP_CLI
 
 // Prevent misuse like:
-// MutexLockGuard(mutex_);
+// SafeMutexLock(mutex_);
 // A tempory object doesn't hold the lock for long!
-#define MutexLockGuard(x) error "Missing guard object name"
+#define SafeMutexLock(x) error "Missing guard object name"
 
 #endif  // __XIAO_MUTEXLOCK_H__
 

@@ -27,6 +27,54 @@ int main(int argc, char* argv[])
 
 #include "../ZooKfkTopicsPop.h"
 
+
+#endif
+
+ZOOKEEPERKAFKA::ZooKfkTopicsPop pop;
+void* startConsumerThread(void* obj)
+{
+	while(1)
+	{
+		int64_t offsetNum = 0;
+		int32_t parationNum = 0;
+		std::string topicName, dataStr, keyStr;
+		int ret = pop.pop(topicName, dataStr, &keyStr, &offsetNum, &parationNum);
+		if(ret < 0)
+		{
+			printf("pop.pop return ret %d \n", ret);
+		}else{
+			if(!topicName.empty())
+			{
+				printf("pop.pop topicName parationNum offset %s %d %lu\n", topicName.c_str(), parationNum, offsetNum);
+			}
+		}
+	}
+
+	return NULL;
+}
+
+int main(int argc, char* argv[])
+{
+	pthread_t pthreadId_;
+	//pop.zookInit("192.169.6.66:2181,192.169.6.67:2181,192.169.6.68:2181","pu_cmd_topic","248");
+	pop.kfkInit("192.169.6.66:9092,192.169.6.67:9092,192.169.6.68:9092","pu_cmd_topic","adsadsada");
+	if (pthread_create(&pthreadId_, NULL, &startConsumerThread, NULL))
+	{
+		printf("startConsumerThread init error \n");
+		return 0;
+	}
+	while(1)
+	{
+		sleep(60);
+	}
+}
+
+#if 0
+#include <iostream>
+#include <pthread.h>
+
+#include "../ZooKfkTopicsPop.h"
+
 ZOOKEEPERKAFKA::ZooKfkTopicsPop pop;
 void* startConsumerThread(void* obj)
 {

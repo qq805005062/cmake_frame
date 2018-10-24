@@ -382,7 +382,7 @@ void CurlHttpCli::httpCliIoThread(int index)
 			delete curlCliVect[index];
 			curlCliVect[index] = NULL;
 		}
-		curlCliVect[index] = new AsyncCurlHttp(isShowtime);
+		curlCliVect[index] = new AsyncCurlHttp(maxNewConns_);
 		if(curlCliVect[index] == nullptr)
 		{
 			WARN("xiaomibiz http client new curl object error");
