@@ -6,8 +6,6 @@
 #include <string>
 #include <functional>
 
-#include "src/Atomic.h"
-
 typedef enum{
 	CURLHTTP10 = 0,
 	CURLHTTP11,
@@ -30,8 +28,9 @@ namespace CURL_HTTP_CLI
 {
 
 class HttpReqSession;
-typedef std::function<void(CURL_HTTP_CLI::HttpReqSession* curlReq)> CurlRespondCallBack;
-
+typedef std::shared_ptr<HttpReqSession> HttpReqSessionPtr;
+//typedef std::function<void(CURL_HTTP_CLI::HttpReqSession* curlReq)> CurlRespondCallBack;
+typedef std::function<void(CURL_HTTP_CLI::HttpReqSessionPtr curlReq)> CurlRespondCallBack;
 
 class HttpReqSession
 {
@@ -45,38 +44,11 @@ public:
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
-		,outSecond(0)
-		,isCallBack()
-		,callbackFlag(0)
 		,rspCode(0)
 		,sslVerifyPeer(0)
 		,sslVeriftHost(0)
 		,rspBody()
 		,reqUrl()
-		,reqData()
-		,errorMsg()
-		,headVec()
-		,cb_(nullptr)
-	{
-	}
-
-	HttpReqSession(CURL_HTTP_VERSION ver, CURL_HTTP_REQUEST_TYPE type, const std::string& url)
-		:httpVer(ver)
-		,reqType(type)
-		,private_(nullptr)
-		,connOutSecond(30)
-		,dataOutSecond(60)
-		,insertMicroSecond(0)
-		,reqMicroSecond(0)
-		,rspMicroSecond(0)
-		,outSecond(0)
-		,isCallBack()
-		,callbackFlag(0)
-		,rspCode(0)
-		,sslVerifyPeer(0)
-		,sslVeriftHost(0)
-		,rspBody()
-		,reqUrl(url)
 		,reqData()
 		,errorMsg()
 		,headVec()
@@ -93,9 +65,6 @@ public:
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
-		,outSecond(0)
-		,isCallBack()
-		,callbackFlag(0)
 		,rspCode(0)
 		,sslVerifyPeer(0)
 		,sslVeriftHost(0)
@@ -117,9 +86,6 @@ public:
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
-		,outSecond(0)
-		,isCallBack()
-		,callbackFlag(0)
 		,rspCode(0)
 		,sslVerifyPeer(0)
 		,sslVeriftHost(0)
@@ -145,9 +111,6 @@ public:
 		insertMicroSecond = that.insertMicroSecond;
 		reqMicroSecond = that.reqMicroSecond;
 		rspMicroSecond = that.rspMicroSecond;
-		outSecond = that.outSecond;
-		isCallBack.getAndSet(that.isCallBack.get());
-		callbackFlag = that.callbackFlag;
 		rspCode = that.rspCode;
 		sslVerifyPeer = that.sslVerifyPeer;
 		sslVeriftHost = that.sslVeriftHost;
@@ -175,6 +138,11 @@ public:
 		reqType = type;
 	}
 
+	void setHttReqPrivate(void *p)
+	{
+		private_ = p;
+	}
+
 	void setHttpReqConnoutSecond(int second)
 	{
 		connOutSecond = second;
@@ -185,9 +153,34 @@ public:
 		dataOutSecond = second;
 	}
 
+	void setHttpReqInsertMicroSecond(int64_t micro)
+	{
+		insertMicroSecond = micro;
+	}
+
+	void setHttpReqMicroSecond(int64_t micro)
+	{
+		reqMicroSecond = micro;
+	}
+
+	void setHttpRspMicroSecond(int64_t micro)
+	{
+		rspMicroSecond = micro;
+	}
+	
 	void setHttpResponseCode(int code)
 	{
 		rspCode = code;
+	}
+
+	void setHttpsSslVerifyPeer(int isNeed)
+	{
+		sslVerifyPeer = isNeed;
+	}
+
+	void setHttpsSslVerifyHost(int isNeed)
+	{
+		sslVeriftHost = isNeed;
 	}
 
 	void setHttpResponstBody(const std::string& body)
@@ -225,57 +218,6 @@ public:
 		cb_ = cb;
 	}
 
-	uint32_t httpRespondCallBack()
-	{
-		uint32_t call = isCallBack.incrementAndGet();
-		if(cb_ && call == 1)
-		{
-			cb_(this);
-		}
-		callbackFlag = 1;
-		return call;
-	}
-
-	HttpHeadPrivate httpReqPrivateHead()
-	{
-		return headVec;
-	}
-
-	std::string httpReqErrorMsg()
-	{
-		return errorMsg;
-	}
-
-	std::string httpRequestData()
-	{
-		return reqData;
-	}
-
-	std::string httpRequestUrl()
-	{
-		return reqUrl;
-	}
-
-	std::string httpResponseData()
-	{
-		return rspBody;
-	}
-
-	int httpResponstCode()
-	{
-		return rspCode;
-	}
-
-	long httpReqConnoutSecond()
-	{
-		return connOutSecond;
-	}
-
-	long httpReqDataoutSecond()
-	{
-		return dataOutSecond;
-	}
-
 	CURL_HTTP_VERSION httpRequestVer()
 	{
 		return httpVer;
@@ -286,14 +228,25 @@ public:
 		return reqType;
 	}
 
-	void setHttpReqMicroSecond(int64_t micro)
+	void* httpRequestPrivate()
 	{
-		reqMicroSecond = micro;
+		return private_;
 	}
 
-	void setHttpRspMicroSecond(int64_t micro)
+	long httpReqConnoutSecond()
 	{
-		rspMicroSecond = micro;
+		return connOutSecond;
+	
+	}
+
+	long httpReqDataoutSecond()
+	{
+		return dataOutSecond;
+	}
+
+	int64_t httpReqInsertMicroSecond()
+	{
+		return insertMicroSecond;
 	}
 
 	int64_t httpReqMicroSecond()
@@ -306,24 +259,9 @@ public:
 		return rspMicroSecond;
 	}
 
-	void setHttpReqInsertMicroSecond(int64_t micro)
+	int httpResponstCode()
 	{
-		insertMicroSecond = micro;
-	}
-
-	int64_t httpReqInsertMicroSecond()
-	{
-		return insertMicroSecond;
-	}
-
-	void setHttpsSslVerifyPeer(int isNeed)
-	{
-		sslVerifyPeer = isNeed;
-	}
-
-	void setHttpsSslVerifyHost(int isNeed)
-	{
-		sslVeriftHost = isNeed;
+		return rspCode;
 	}
 
 	int httpsSslVerifyPeer()
@@ -336,50 +274,57 @@ public:
 		return sslVeriftHost;
 	}
 
-	void setHttpOutSecond(int64_t second)
+	std::string httpResponseData()
 	{
-		outSecond = second;
+		return rspBody;
 	}
 
-	int64_t httpRequestOutSecond()
+	std::string httpRequestUrl()
 	{
-		return outSecond;
+		return reqUrl;
 	}
 
-	int httpResponseCallFlag()
+	std::string httpRequestData()
 	{
-		return callbackFlag;
+		return reqData;
 	}
 
-	void setHttReqPrivate(void *p)
+	std::string httpReqErrorMsg()
 	{
-		private_ = p;
+		return errorMsg;
 	}
 
-	void* httpRequestPrivate()
+	HttpHeadPrivate httpReqPrivateHead()
 	{
-		return private_;
+		return headVec;
 	}
 	
-private:
+	void httpRespondCallBack()
+	{
+		HttpReqSessionPtr myself(this);
+		if(cb_)
+		{
+			cb_(myself);
+		}
+		return ;
+	}
+	
+private:
 	CURL_HTTP_VERSION httpVer;
 	CURL_HTTP_REQUEST_TYPE reqType;
 
 	void *private_;
-	
+
 	long connOutSecond;//连接超时时间，秒钟
 	long dataOutSecond;//数据传输超时时间，秒钟
-	int64_t insertMicroSecond;//调用接口插入队列时间，微秒
+	int64_t insertMicroSecond;//调用接口插入队列时间，微秒，所有的时间都是有内部插入，方便外部统计耗时使用
 	int64_t reqMicroSecond;//实际请求时间，微秒
 	int64_t rspMicroSecond;//实际响应时间，微秒
-	int64_t outSecond;
 
-	mutable AtomicUInt32 isCallBack;
-
-	int callbackFlag;
 	int rspCode;//响应编码
 	int sslVerifyPeer;///是否校验对端证书
 	int sslVeriftHost;//是否校验对端主机ip地址
+
 	std::string rspBody;//响应报文
 	std::string reqUrl;//https://192.169.0.61:8888/hello?dadsadada//http://192.169.0.61:8888/hello?dadsadada
 	std::string reqData;//请求报文

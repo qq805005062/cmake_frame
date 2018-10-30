@@ -82,8 +82,7 @@ add_subdirectory(src/rediscluster)
 add_subdirectory(src/zookafka)
 add_subdirectory(src/redislibevent)
 add_subdirectory(src/redisSync)
-
-
+add_subdirectory(src/zookconfig)
 add_subdirectory(src/curlHttpCli)
 
 if(NOT CMAKE_BUILD_NO_EXAMPLES)
