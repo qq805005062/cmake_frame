@@ -2,8 +2,9 @@
 #include "Incommon.h"
 #include "ThreadPool.h"
 #include "NumberAlign.h"
-#include "AsyncCurlHttp.h"
+#include "ConnInfo.h"
 #include "HttpCliQueue.h"
+#include "AsyncCurlHttp.h"
 #include "../CurlHttpCli.h"
 
 namespace CURL_HTTP_CLI
@@ -11,7 +12,7 @@ namespace CURL_HTTP_CLI
 
 static std::unique_ptr<ThreadPool> httpCliIoPoolPtr;
 static std::unique_ptr<Thread> httpCliCallPtr;
-static std::unique_ptr<Thread> httpCliOutCallPtr;
+static std::unique_ptr<Thread> httpIoWakePtr;
 static std::vector<AsyncCurlHttpPtr> asyncCurlHttpPtrVect;
 
 CurlHttpCli::CurlHttpCli()
@@ -22,6 +23,7 @@ CurlHttpCli::CurlHttpCli()
 	,isKeepAlive(0)
 	,lastIndex(0)
 	,ioThreadNum(0)
+	,ioMaxConns(0)
 	,mutex_()
 {
 	DEBUG("HttpClient init");
@@ -54,19 +56,19 @@ void CurlHttpCli::curlHttpCliExit()
 		sleep(5);
 	}while(num > 0);
 
+	threadExit = 1;
+	if(httpIoWakePtr)
+	{
+		httpIoWakePtr->join();
+		httpIoWakePtr.reset();
+	}
+
 	for(size_t i = 0; i < ioThreadNum; i++)
 	{
 		if(asyncCurlHttpPtrVect[i])
 		{
 			asyncCurlHttpPtrVect[i]->asyncCurlExit();
 		}
-	}
-	threadExit = 1;
-
-	if(httpCliOutCallPtr)
-	{
-		httpCliOutCallPtr->join();
-		httpCliOutCallPtr.reset();
 	}
 
 	CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponseExit();
@@ -125,17 +127,17 @@ int CurlHttpCli::curlHttpCliInit(unsigned int threadNum, unsigned int maxQueue, 
 	}
 	httpCliCallPtr->start();
 
-	httpCliOutCallPtr.reset(new Thread(std::bind(&CURL_HTTP_CLI::CurlHttpCli::httpOutRspCallBackThread, this), "httcliOut"));
-	if(httpCliOutCallPtr == nullptr)
+	httpIoWakePtr.reset(new Thread(std::bind(&CURL_HTTP_CLI::CurlHttpCli::httpIoWakeThread, this), "httioWake"));
+	if(httpIoWakePtr == nullptr)
 	{
-		WARN("xiaomibiz http client httpCliOutCallPtr thread new error");
+		WARN("xiaomibiz http client httpIoWakePtr thread new error");
 		return -1;
 	}
-	httpCliOutCallPtr->start();
+	httpIoWakePtr->start();
 	
 	if(maxConns)
 	{
-		CURL_HTTP_CLI::HttpConnInfoQueue::instance().setMaxQueueSize(maxConns);
+		ioMaxConns = maxConns / threadNum;
 	}
 
 	asyncCurlHttpPtrVect.resize(threadNum);
@@ -173,6 +175,7 @@ int CurlHttpCli::curlHttpRequest(HttpReqSession& curlReq)
 		AsyncQueueNum::instance().asyncReq();
 		CURL_HTTP_CLI::HttpRequestQueue::instance().httpRequest(req);
 		curlHttpClientWakeup();
+		return 0;
 	}
 	return -1;
 }
@@ -193,7 +196,10 @@ void CurlHttpCli::curlHttpClientWakeup()
 		if(asyncCurlHttpPtrVect[index])
 		{
 			asyncCurlHttpPtrVect[index]->wakeup();
-		}	
+			break;
+		}else{
+			WARN("curlHttpClientWakeup error index %d", index);
+		}
 	}
 }
 
@@ -208,7 +214,7 @@ void CurlHttpCli::httpCliIoThread(size_t index)
 	int ret = 0;
 	while(1)
 	{
-		asyncCurlHttpPtrVect[index].reset(new AsyncCurlHttp());
+		asyncCurlHttpPtrVect[index].reset(new AsyncCurlHttp(ioMaxConns));
 		if(asyncCurlHttpPtrVect[index] == nullptr)
 		{
 			WARN("xiaomibiz http client new curl object error");
@@ -221,6 +227,8 @@ void CurlHttpCli::httpCliIoThread(size_t index)
 			break;
 		}
 	}
+	std::lock_guard<std::mutex> lock(mutex_);
+	exitIothread++;
 }
 
 void CurlHttpCli::httpRspCallBackThread()
@@ -238,16 +246,20 @@ void CurlHttpCli::httpRspCallBackThread()
 			break;
 		}
 	}
-	std::lock_guard<std::mutex> lock(mutex_);
-	exitIothread++;
 }
 
-void CurlHttpCli::httpOutRspCallBackThread()
+void CurlHttpCli::httpIoWakeThread()
 {
 	while(1)
 	{
 		sleep(1);
-		CURL_HTTP_CLI::HttpConnInfoVector::instance().httpcliConnForEach();
+		for(size_t i = 0; i < ioThreadNum; i++)
+		{
+			if(asyncCurlHttpPtrVect[i])
+			{
+				asyncCurlHttpPtrVect[i]->wakeup();
+			}
+		}
 		if(threadExit)
 		{
 			break;
@@ -255,26 +267,22 @@ void CurlHttpCli::httpOutRspCallBackThread()
 	}
 }
 
-void HttpConnInfoVector::httpcliConnForEach()
+void HttpConnInfoVector::httpcliConnForEach(HttpConnInfoQueuePtr& connInfoQue)
 {
-	uint32_t removeFlag = 0;
 	int64_t seconds = 0;
 	microSecondSinceEpoch(&seconds);
 	//SafeMutexLock lock(mutex_);
 	size_t allsize = vectorSize();
 	for(size_t i = 0; i < allsize; i++)
 	{
-		if(vector_[i])
+		if(vector_[i] && vector_[i]->connInfoOutSecond())
 		{
 			if((seconds - vector_[i]->connInfoOutSecond()) > ABSOLUTELY_OUT_HTTP_SECOND)
 			{
-				removeFlag = vector_[i]->connMultiRemoveHandle();
-				if(removeFlag == 1)
-				{
-					CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(vector_[i]->connInfoReqinfo());
-					vector_[i]->connInfoReinit();
-					HttpConnInfoQueue::instance().httpcliConnInsert(vector_[i].get());
-				}
+				vector_[i]->connMultiRemoveHandle();
+				CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(vector_[i]->connInfoReqinfo());
+				vector_[i]->connInfoReinit();
+				connInfoQue->httpcliConnInsert(vector_[i].get());
 			}
 		}
 	}

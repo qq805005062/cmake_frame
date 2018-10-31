@@ -10,8 +10,8 @@
 #include "MutexLock.h"
 #include "Condition.h"
 
+#include "ConnInfo.h"
 #include "../HttpReqSession.h"
-#include "AsyncCurlHttp.h"
 
 //#include "HttpCliQueue.h"
 
@@ -149,11 +149,58 @@ private:
 
 };
 
-class HttpConnInfoVector : public noncopyable
+class HttpConnInfoQueue
+{
+public:
+	HttpConnInfoQueue()
+		:mutex_()
+		,queue_()
+	{
+	}
+
+	~HttpConnInfoQueue()
+	{
+	}
+
+	void httpcliConnInsert(ConnInfo* conn)
+	{
+		SafeMutexLock lock(mutex_);
+		queue_.push_back(conn);
+		//queue_.push_back(std::move(req));
+		//HTTPCLI::HttpClient::instance().httpClientWakeup();
+	}
+
+	ConnInfo* httpcliConnPop()
+	{
+		SafeMutexLock lock(mutex_);
+		ConnInfo* conn = NULL;
+		if (!queue_.empty())
+		{
+			conn = queue_.front();
+			queue_.pop_front();
+		}
+		return conn;
+	}
+
+	size_t queueSize()
+	{
+		SafeMutexLock lock(mutex_);
+  		return queue_.size();
+	}
+	
+private:
+	
+	MutexLock mutex_;
+	std::deque<ConnInfo*> queue_;
+};
+typedef std::shared_ptr<HttpConnInfoQueue> HttpConnInfoQueuePtr;
+
+class HttpConnInfoVector
 {
 public:
 	HttpConnInfoVector()
-		:mutex_()
+		:maxSize_(0)
+		,mutex_()
 		,vector_()
 	{
 	}
@@ -162,8 +209,9 @@ public:
 	{
 	}
 
-	static HttpConnInfoVector& instance() { return Singleton<HttpConnInfoVector>::instance();}
-
+	void setMaxVectorSize(size_t maxSize)
+	{ maxSize_ = maxSize; }
+	
 	void httpcliConnAdd(ConnInfo* conn)
 	{
 		ConnInfoPtr connptr(conn);
@@ -177,85 +225,25 @@ public:
 		vector_.push_back(conn);
 	}
 
-	void httpcliConnForEach();
+	void httpcliConnForEach(HttpConnInfoQueuePtr& connInfoQue);
 
 	size_t vectorSize()
 	{
 		SafeMutexLock lock(mutex_);
   		return vector_.size();
 	}
+
+	bool isFull()
+	{
+		SafeMutexLock lock(mutex_);
+		return maxSize_ > 0 && vector_.size() >= maxSize_;
+	}
 private:
+	size_t maxSize_;
 	MutexLock mutex_;
 	std::vector<ConnInfoPtr> vector_;
 };
-
-class HttpConnInfoQueue : public noncopyable
-{
-public:
-	HttpConnInfoQueue()
-		:maxSize_(0)
-		,insertSize_(0)
-		,mutex_()
-		,queue_()
-	{
-	}
-
-	~HttpConnInfoQueue()
-	{
-	}
-
-	static HttpConnInfoQueue& instance() { return Singleton<HttpConnInfoQueue>::instance();}
-
-	void setMaxQueueSize(int maxSize) { maxSize_ = maxSize; }
-
-	void httpcliConnInsert(ConnInfo* conn, int sizeAdd = 0)
-	{
-		SafeMutexLock lock(mutex_);
-		queue_.push_back(conn);
-		if(sizeAdd)
-		{
-			insertSize_++;
-			CURL_HTTP_CLI::HttpConnInfoVector::instance().httpcliConnAdd(conn);
-		}
-		//queue_.push_back(std::move(req));
-		//HTTPCLI::HttpClient::instance().httpClientWakeup();
-	}
-
-	ConnInfo* httpcliConnPop(bool &isCanAdd)
-	{
-		isCanAdd = false;
-		SafeMutexLock lock(mutex_);
-		ConnInfo* conn = NULL;
-		if (!queue_.empty())
-		{
-			conn = queue_.front();
-			queue_.pop_front();
-		}else{
-			if(!isFull())
-			{
-				isCanAdd = true;
-			}
-		}
-		return conn;
-	}
-
-	size_t queueSize()
-	{
-		SafeMutexLock lock(mutex_);
-  		return queue_.size();
-	}
-	
-private:
-	bool isFull() const
-	{
-		return maxSize_ > 0 && insertSize_ >= maxSize_;
-	}
-	
-	size_t maxSize_;
-	size_t insertSize_;
-	MutexLock mutex_;
-	std::deque<ConnInfo*> queue_;
-};
+typedef std::shared_ptr<HttpConnInfoVector> HttpConnInfoVectorPtr;
 
 }
 

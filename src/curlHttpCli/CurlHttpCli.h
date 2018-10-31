@@ -32,11 +32,12 @@ public:
 	//默认构造函数
 	CurlHttpCli();
 
+	//默认析构函数
 	~CurlHttpCli();
 
 	static CurlHttpCli& instance() { return Singleton<CurlHttpCli>::instance();}
 
-	//程序退出时调用方法，会清楚所有异步数据之后退出，阻塞方法，返回则表示数据已经清除了
+	//程序退出时调用方法，会清楚所有异步数据之后退出，阻塞方法，返回则表示数据已经清除了，并且数据结构已经全部析构
 	void curlHttpCliExit();
 
 	//第一个参数为IO线程数，内部会启动1个线程，回调在另外一个线程处理,同时处理超时无响应的连接，建议 2
@@ -58,12 +59,6 @@ public:
 
 	void curlHttpThreadReady();
 
-	size_t httpIoThreadNum()
-	{
-		size_t num = static_cast<size_t>(ioThreadNum);
-		return num;
-	}
-
 	unsigned int httpIsKeepAlive()
 	{
 		return isKeepAlive;
@@ -74,7 +69,7 @@ private:
 
 	void httpRspCallBackThread();
 
-	void httpOutRspCallBackThread();
+	void httpIoWakeThread();
 
 	int isExit;
 	int threadExit;
@@ -83,6 +78,7 @@ private:
 	unsigned int isKeepAlive;
 	unsigned int lastIndex;
 	unsigned int ioThreadNum;
+	unsigned int ioMaxConns;
 	
 	std::mutex mutex_;
 };

@@ -9,23 +9,22 @@ set(CURLHTTPCLI_SOURCES_FILE
 )
 
 set(CURLHTTPCLI_TEST_FILE
-  src/CurlHttpCli.cpp
-  src/AsyncCurlHttp.cpp
-  src/ThreadPool.cpp
-  src/Thread.cpp
-  src/Condition.cpp
   src/Exception.cpp
+  src/Condition.cpp
+  src/Thread.cpp
+  src/ThreadPool.cpp
+  src/AsyncCurlHttp.cpp
+  src/CurlHttpCli.cpp
   main_test.cpp
 )
 
 set(CURLHTTPCLI_TEST_LIB
-  curlhttpcli
   curl
-  crypto
   event_core
   event_pthreads
   pthread
   ssl
+  crypto
   z
   dl
   rt
@@ -33,7 +32,7 @@ set(CURLHTTPCLI_TEST_LIB
 
 add_library(curlhttpcli ${CURLHTTPCLI_SOURCES_FILE})
 
-#add_executable(curlHttpCliTest ${CURLHTTPCLI_TEST_FILE})
-#target_link_libraries(curlHttpCliTest ${CURLHTTPCLI_TEST_LIB})
-#install(TARGETS curlHttpCliTest DESTINATION bin)
+add_executable(curlHttpCliTest ${CURLHTTPCLI_TEST_FILE})
+target_link_libraries(curlHttpCliTest ${CURLHTTPCLI_TEST_LIB})
+install(TARGETS curlHttpCliTest DESTINATION bin)
 
