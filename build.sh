@@ -10,6 +10,7 @@ INSTALL_DIR=${INSTALL_DIR:-../${BUILD_TYPE}-install}
 BUILD_NO_EXAMPLES=${BUILD_NO_EXAMPLES:-1}
 
 mkdir -p $BUILD_DIR/$BUILD_TYPE \
+  && mkdir -p $BUILD_DIR/$BUILD_TYPE/bin \
   && cd $BUILD_DIR/$BUILD_TYPE \
   && cmake \
            -DCMAKE_BUILD_TYPE=$BUILD_TYPE \
