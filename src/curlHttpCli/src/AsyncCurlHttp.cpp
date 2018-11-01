@@ -474,7 +474,12 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		        WARN("curl_easy_setopt CURLOPT_AUTOREFERER failed!err:%s", curl_easy_strerror(tRetCode));
 		    }
 			
-	    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
+	    	if(sess->httpsCacerFile().empty())
+			{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
+			}else{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, sess->httpsCacerFile().c_str());
+			}
 			if (CURLE_OK != tRetCode)
 		    {
 		        WARN("curl_easy_setopt CURLOPT_CAINFO failed!err:%s", curl_easy_strerror(tRetCode));
@@ -652,8 +657,13 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 				{
 					WARN("curl_easy_setopt CURLOPT_AUTOREFERER failed!err:%s", curl_easy_strerror(tRetCode));
 				}
-				
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
+
+				if(sess->httpsCacerFile().empty())
+				{
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
+				}else{
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, sess->httpsCacerFile().c_str());
+				}
 				if (CURLE_OK != tRetCode)
 				{
 					WARN("curl_easy_setopt CURLOPT_CAINFO failed!err:%s", curl_easy_strerror(tRetCode));

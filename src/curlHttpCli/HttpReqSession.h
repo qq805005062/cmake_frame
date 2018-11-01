@@ -51,6 +51,7 @@ public:
 		,reqUrl()
 		,reqData()
 		,errorMsg()
+		,cacertFile()
 		,headVec()
 		,cb_(nullptr)
 	{
@@ -72,6 +73,7 @@ public:
 		,reqUrl(url)
 		,reqData(body)
 		,errorMsg()
+		,cacertFile()
 		,headVec()
 		,cb_(nullptr)
 	{
@@ -93,6 +95,7 @@ public:
 		,reqUrl()
 		,reqData()
 		,errorMsg()
+		,cacertFile()
 		,headVec()
 		,cb_(nullptr)
 	{
@@ -118,6 +121,7 @@ public:
 		reqUrl = that.reqUrl;
 		reqData = that.reqData;
 		errorMsg = that.errorMsg;
+		cacertFile = that.cacertFile;
 		headVec = that.headVec;
 		cb_ = that.cb_;
 		
@@ -308,6 +312,16 @@ public:
 		}
 		return;
 	}
+
+	void setHttpsCacertFile(const std::string& file)
+	{
+		cacertFile.assign(file);
+	}
+
+	std::string httpsCacerFile()
+	{
+		return cacertFile;
+	}
 	
 private:
 	CURL_HTTP_VERSION httpVer;
@@ -329,6 +343,7 @@ private:
 	std::string reqUrl;//https://192.169.0.61:8888/hello?dadsadada//http://192.169.0.61:8888/hello?dadsadada
 	std::string reqData;//请求报文
 	std::string errorMsg;//错误信息
+	std::string cacertFile;//HTTPS证书全路径
 	HttpHeadPrivate headVec;//私有头信息，完整一行，直接按行加在头中
 	CurlRespondCallBack cb_;//每个请求的回调函数
 };
