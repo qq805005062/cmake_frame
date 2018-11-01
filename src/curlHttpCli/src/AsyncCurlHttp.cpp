@@ -444,53 +444,75 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		    }
 		}
 
-		if(sess->httpRequestVer() == CURLHTTPS)
+		if(sess->httpsSslVerifyPeer())
 		{
-			if(sess->httpsSslVerifyPeer())
-			{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 1L);
-			}else{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 0L);
-			}
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_SSL_VERIFYPEER failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-
-			if(sess->httpsSslVerifyHost())
-			{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 1L);
-			}else{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 0L);
-			}
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_SSL_VERIFYHOST failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-
-			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_AUTOREFERER, 1);
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_AUTOREFERER failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-			
-	    	if(sess->httpsCacerFile().empty())
-			{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
-			}else{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, sess->httpsCacerFile().c_str());
-			}
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_CAINFO failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-			
-			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_COOKIESESSION, 1);
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_COOKIESESSION failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 1L);
+		}else{
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 0L);
 		}
+		if (CURLE_OK != tRetCode)
+	    {
+	        WARN("curl_easy_setopt CURLOPT_SSL_VERIFYPEER failed!err:%s", curl_easy_strerror(tRetCode));
+	    }
+
+		if(sess->httpsSslVerifyHost())
+		{
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 1L);
+		}else{
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 0L);
+		}
+		if (CURLE_OK != tRetCode)
+	    {
+	        WARN("curl_easy_setopt CURLOPT_SSL_VERIFYHOST failed!err:%s", curl_easy_strerror(tRetCode));
+	    }
+
+		tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_AUTOREFERER, 1);
+		if (CURLE_OK != tRetCode)
+	    {
+	        WARN("curl_easy_setopt CURLOPT_AUTOREFERER failed!err:%s", curl_easy_strerror(tRetCode));
+	    }
+		
+    	if(sess->httpsCacerFile().empty())
+		{
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
+		}else{
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, sess->httpsCacerFile().c_str());
+		}
+		if (CURLE_OK != tRetCode)
+	    {
+	        WARN("curl_easy_setopt CURLOPT_CAINFO failed!err:%s", curl_easy_strerror(tRetCode));
+	    }
+		
+		tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_COOKIESESSION, 1);
+		if (CURLE_OK != tRetCode)
+	    {
+	        WARN("curl_easy_setopt CURLOPT_COOKIESESSION failed!err:%s", curl_easy_strerror(tRetCode));
+	    }
+
+		switch(sess->httpRequestVer())
+		{
+			case CURLHTTP10:
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
+				break;
+			case CURLHTTP11:
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+				break;
+			case CURLHTTP20:
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+				break;
+			case CURLHTTP2TLS:
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+				break;
+			case CURLHTTPNONE:
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_NONE);
+				break;
+			default:
+				break;
+		}
+		if (CURLE_OK != tRetCode)
+	    {
+	        WARN("curl_easy_setopt CURLOPT_HTTP_VERSION failed!err:%s", curl_easy_strerror(tRetCode));
+	    }
 
 		switch(sess->httpRequestType())
 		{
@@ -499,6 +521,20 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 				break;
 			case CURLHTTP_POST:
 				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POST, 1L);
+				if(!sess->httpRequestData().empty())
+				{
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDSIZE, sess->httpRequestData().length());
+					if (CURLE_OK != tRetCode)
+				    {
+				        WARN("curl_easy_setopt CURLOPT_POSTFIELDSIZE failed!err:%s", curl_easy_strerror(tRetCode));
+				    }
+					
+			    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDS, sess->httpRequestData().c_str());
+					if (CURLE_OK != tRetCode)
+				    {
+				        WARN("curl_easy_setopt CURLOPT_POSTFIELDS failed!err:%s", curl_easy_strerror(tRetCode));
+				    }
+				}
 				break;
 			case CURLHTTP_PUT:
 				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CUSTOMREQUEST, "PUT");
@@ -522,22 +558,6 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 	    {
 	        WARN("curl_easy_setopt CURLOPT_CUSTOMREQUEST failed!err:%s", curl_easy_strerror(tRetCode));
 	    }
-
-		std::string bodyData = sess->httpRequestData();
-		if(!bodyData.empty())
-		{
-			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDSIZE, bodyData.length());
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_POSTFIELDSIZE failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-			
-	    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDS, bodyData.c_str());
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_POSTFIELDS failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-		}
 
 		char headBuf[1024] = {0};
 		HttpHeadPrivate headV = sess->httpReqPrivateHead();
@@ -628,53 +648,75 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		        WARN("curl_easy_setopt CURLOPT_CONNECTTIMEOUT failed!err:%s", curl_easy_strerror(tRetCode));
 		    }
 
-			if(sess->httpRequestVer() == CURLHTTPS)
+			if(sess->httpsSslVerifyPeer())
 			{
-				if(sess->httpsSslVerifyPeer())
-				{
-					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 1L);
-				}else{
-					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 0L);
-				}
-				if (CURLE_OK != tRetCode)
-				{
-					WARN("curl_easy_setopt CURLOPT_SSL_VERIFYPEER failed!err:%s", curl_easy_strerror(tRetCode));
-				}
-	
-				if(sess->httpsSslVerifyHost())
-				{
-					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 1L);
-				}else{
-					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 0L);
-				}
-				if (CURLE_OK != tRetCode)
-				{
-					WARN("curl_easy_setopt CURLOPT_SSL_VERIFYHOST failed!err:%s", curl_easy_strerror(tRetCode));
-				}
-	
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_AUTOREFERER, 1);
-				if (CURLE_OK != tRetCode)
-				{
-					WARN("curl_easy_setopt CURLOPT_AUTOREFERER failed!err:%s", curl_easy_strerror(tRetCode));
-				}
-
-				if(sess->httpsCacerFile().empty())
-				{
-					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
-				}else{
-					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, sess->httpsCacerFile().c_str());
-				}
-				if (CURLE_OK != tRetCode)
-				{
-					WARN("curl_easy_setopt CURLOPT_CAINFO failed!err:%s", curl_easy_strerror(tRetCode));
-				}
-				
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_COOKIESESSION, 1);
-				if (CURLE_OK != tRetCode)
-				{
-					WARN("curl_easy_setopt CURLOPT_COOKIESESSION failed!err:%s", curl_easy_strerror(tRetCode));
-				}
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 1L);
+			}else{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYPEER, 0L);
 			}
+			if (CURLE_OK != tRetCode)
+			{
+				WARN("curl_easy_setopt CURLOPT_SSL_VERIFYPEER failed!err:%s", curl_easy_strerror(tRetCode));
+			}
+
+			if(sess->httpsSslVerifyHost())
+			{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 1L);
+			}else{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_SSL_VERIFYHOST, 0L);
+			}
+			if (CURLE_OK != tRetCode)
+			{
+				WARN("curl_easy_setopt CURLOPT_SSL_VERIFYHOST failed!err:%s", curl_easy_strerror(tRetCode));
+			}
+
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_AUTOREFERER, 1);
+			if (CURLE_OK != tRetCode)
+			{
+				WARN("curl_easy_setopt CURLOPT_AUTOREFERER failed!err:%s", curl_easy_strerror(tRetCode));
+			}
+
+			if(sess->httpsCacerFile().empty())
+			{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, "./cacert.pem");
+			}else{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CAINFO, sess->httpsCacerFile().c_str());
+			}
+			if (CURLE_OK != tRetCode)
+			{
+				WARN("curl_easy_setopt CURLOPT_CAINFO failed!err:%s", curl_easy_strerror(tRetCode));
+			}
+			
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_COOKIESESSION, 1);
+			if (CURLE_OK != tRetCode)
+			{
+				WARN("curl_easy_setopt CURLOPT_COOKIESESSION failed!err:%s", curl_easy_strerror(tRetCode));
+			}
+
+			switch(sess->httpRequestVer())
+			{
+				case CURLHTTP10:
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
+					break;
+				case CURLHTTP11:
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+					break;
+				case CURLHTTP20:
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+					break;
+				case CURLHTTP2TLS:
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2TLS);
+					break;
+				case CURLHTTPNONE:
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_NONE);
+					break;
+				default:
+					break;
+			}
+			if (CURLE_OK != tRetCode)
+		    {
+		        WARN("curl_easy_setopt CURLOPT_HTTP_VERSION failed!err:%s", curl_easy_strerror(tRetCode));
+		    }
 			
 			switch(sess->httpRequestType())
 			{
@@ -683,6 +725,20 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 					break;
 				case CURLHTTP_POST:
 					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POST, 1L);
+					if(!sess->httpRequestData().empty())
+					{
+						tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDSIZE, sess->httpRequestData().length());
+						if (CURLE_OK != tRetCode)
+					    {
+					        WARN("curl_easy_setopt CURLOPT_POSTFIELDSIZE failed!err:%s", curl_easy_strerror(tRetCode));
+					    }
+						
+				    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDS, sess->httpRequestData().c_str());
+						if (CURLE_OK != tRetCode)
+					    {
+					        WARN("curl_easy_setopt CURLOPT_POSTFIELDS failed!err:%s", curl_easy_strerror(tRetCode));
+					    }
+					}
 					break;
 				case CURLHTTP_PUT:
 					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_CUSTOMREQUEST, "PUT");
@@ -730,22 +786,6 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		    {
 		        WARN("curl_easy_setopt CURLOPT_URL failed!err:%s", curl_easy_strerror(tRetCode));
 	    	}
-		}
-
-		std::string bodyData = sess->httpRequestData();
-		if(!bodyData.empty())
-		{
-			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDSIZE, bodyData.length());
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_POSTFIELDSIZE failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
-			
-	    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDS, bodyData.c_str());
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_POSTFIELDS failed!err:%s", curl_easy_strerror(tRetCode));
-		    }
 		}
 
 		conn->connInfoSetReqinfo(sess);
@@ -819,7 +859,7 @@ void AsyncCurlHttp::check_multi_info()
 			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &conn);
 			curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, &eff_url);
 			curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code);
-			//INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->connInfoErrorMsg());
+			INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->connInfoErrorMsg());
 
 			conn->connMultiRemoveHandle();
 			if(res)

@@ -51,9 +51,9 @@ void CurlHttpCli::curlHttpCliExit()
 		{
 			break;
 		}
-		//DEBUG("async queue num %lu", num);
-		usleep(1000);
-		//sleep(5);
+		DEBUG("async queue num %lu", num);
+		//usleep(1000);
+		sleep(5);
 	}while(num > 0);
 
 	threadExit = 1;
