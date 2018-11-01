@@ -306,7 +306,7 @@ public:
 		{
 			cb_(myself);
 		}
-		return ;
+		return;
 	}
 	
 private:

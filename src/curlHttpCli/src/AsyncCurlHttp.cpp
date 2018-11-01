@@ -117,7 +117,7 @@ static size_t write_cb(void *ptr, size_t size, size_t nmemb, void *data)
 	ConnInfo *conn = (ConnInfo*)data;
 	//DEBUG("write_cb: %s (%ld/%ld) %s", conn->url, size, nmemb, pData);
 
-	if(conn->connInfoReqinfo()->httpResponstCode() == 0)
+	if(conn->connInfoReqinfo() && conn->connInfoReqinfo()->httpResponstCode() == 0)
 	{
 		if(conn->connInfoRspBody().empty())
 		{
@@ -248,7 +248,7 @@ void AsyncCurlHttp::wakeup()
 {
 	uint64_t one = 2;
 	ssize_t n = write(wakeupFd_, &one, sizeof one);
-	INFO("wakeup n one %ld %ld %p", n, one, gInfo_->evbase);
+	//INFO("wakeup n one %ld %ld %p", n, one, gInfo_->evbase);
 	if (n != sizeof one)
 	{
 		WARN("EventLoop::wakeup() writes %ld bytes instead of 8", n);
@@ -275,7 +275,7 @@ void AsyncCurlHttp::handleRead()
 		WARN("EventLoop::handleRead() reads %ld bytes instead of 8", n);
 		return;
 	}
-	INFO("handleRead n one %ld %ld :: %p", n, one, gInfo_->evbase);
+	//INFO("handleRead n one %ld %ld :: %p", n, one, gInfo_->evbase);
 	uint64_t num = one / 2;
 	queueSize += static_cast<size_t>(num);
 
@@ -330,20 +330,21 @@ void AsyncCurlHttp::curlSockFdCb(CURL *e, curl_socket_t s, int what, void *sockp
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 void AsyncCurlHttp::requetHttpServer()
 {
-	for(size_t i = 0; i < queueSize; i++)
+	size_t reqNum = queueSize;
+	for(size_t i = 0; i < reqNum; i++)
 	{
 		ConnInfo* conn = connQueuePtr->httpcliConnPop();
 		if(conn == NULL && connVectPtr->isFull())
 		{
-			return;
+			break;
+		}
+		if(queueSize)
+		{
+			queueSize--;
 		}
 		HttpReqSession* req = CURL_HTTP_CLI::HttpRequestQueue::instance().dealRequest();
 		if(req)
 		{
-			if(queueSize)
-			{
-				queueSize--;
-			}
 			requetHttpServer(conn, req);
 		}else{
 			if(conn)
@@ -370,7 +371,6 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 			sess->setHttpResponseCode(-1);
 			sess->setHttpReqErrorMsg("malloc connInfo nullptr");
 			CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(sess);
-			delete conn;
 			return;
 		}
 		
@@ -510,8 +510,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 				sess->setHttpResponseCode(-2);
 				sess->setHttpReqErrorMsg("connInfo httpRequestType no support");
 				CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(sess);
-				connQueuePtr->httpcliConnInsert(conn);
-				connVectPtr->httpcliConnAdd(conn);
+				delete conn;
 				return;
 		}
 		if (CURLE_OK != tRetCode)
@@ -708,15 +707,13 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 				//DEBUG("headers %s ", headBuf);
 				headers = curl_slist_append(headers, headBuf);
 			}
-			if(headers)
-			{
-				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTPHEADER, headers);
-				if (CURLE_OK != tRetCode)
-			    {
-			        WARN("curl_easy_setopt CURLOPT_HTTPHEADER failed!err:%s", curl_easy_strerror(tRetCode));
-			    }
-				conn->connInfoSetHeader(headers);
-			}
+
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_HTTPHEADER, headers);
+			if (CURLE_OK != tRetCode)
+		    {
+		        WARN("curl_easy_setopt CURLOPT_HTTPHEADER failed!err:%s", curl_easy_strerror(tRetCode));
+		    }
+			conn->connInfoSetHeader(headers);
 
 			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_URL, conn->connInfoReqUrl());
 			if (CURLE_OK != tRetCode)
@@ -812,7 +809,7 @@ void AsyncCurlHttp::check_multi_info()
 			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &conn);
 			curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, &eff_url);
 			curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &response_code);
-			INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->connInfoErrorMsg());
+			//INFO("DONE: %s => (%d) %ld %s", eff_url, res, response_code, conn->connInfoErrorMsg());
 
 			conn->connMultiRemoveHandle();
 			if(res)

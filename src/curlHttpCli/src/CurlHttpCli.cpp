@@ -51,9 +51,9 @@ void CurlHttpCli::curlHttpCliExit()
 		{
 			break;
 		}
-		DEBUG("async queue num %lu", num);
-		//usleep(1000);
-		sleep(5);
+		//DEBUG("async queue num %lu", num);
+		usleep(1000);
+		//sleep(5);
 	}while(num > 0);
 
 	threadExit = 1;
@@ -144,7 +144,7 @@ int CurlHttpCli::curlHttpCliInit(unsigned int threadNum, unsigned int maxQueue, 
 	httpCliIoPoolPtr->start(threadNum);
 	for(size_t i = 0; i < threadNum; i++)
 	{
-		asyncCurlHttpPtrVect[i] = nullptr;
+		asyncCurlHttpPtrVect[i].reset();
 		httpCliIoPoolPtr->run(std::bind(&CURL_HTTP_CLI::CurlHttpCli::httpCliIoThread, this, i));
 	}
 
