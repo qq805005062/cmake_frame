@@ -636,6 +636,23 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 	}else{
 		if(CURL_HTTP_CLI::CurlHttpCli::instance().httpIsKeepAlive() == 0)
 		{
+			ret = conn->connInfoSetReqUrl(sess->httpRequestUrl());
+			if(ret < 0)
+			{
+				WARN("requetHttpServer new request url error");
+				sess->setHttpResponseCode(-1);
+				sess->setHttpReqErrorMsg("connInfo req url error");
+				CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(sess);
+				conn->connInfoReinit();
+				connQueuePtr->httpcliConnInsert(conn);
+				return;
+			}
+			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_URL, conn->connInfoReqUrl());
+			if (CURLE_OK != tRetCode)
+		    {
+		        WARN("curl_easy_setopt CURLOPT_URL failed!err:%s", curl_easy_strerror(tRetCode));
+		    }
+			
 			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_TIMEOUT, sess->httpReqDataoutSecond());
 			if (CURLE_OK != tRetCode)
 		    {
@@ -755,6 +772,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 					sess->setHttpResponseCode(-2);
 					sess->setHttpReqErrorMsg("connInfo httpRequestType no support");
 					CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(sess);
+					conn->connInfoReinit();
 					connQueuePtr->httpcliConnInsert(conn);
 					return;
 			}
@@ -781,11 +799,6 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		    }
 			conn->connInfoSetHeader(headers);
 
-			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_URL, conn->connInfoReqUrl());
-			if (CURLE_OK != tRetCode)
-		    {
-		        WARN("curl_easy_setopt CURLOPT_URL failed!err:%s", curl_easy_strerror(tRetCode));
-	    	}
 		}
 
 		conn->connInfoSetReqinfo(sess);
