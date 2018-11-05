@@ -799,6 +799,24 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		    }
 			conn->connInfoSetHeader(headers);
 
+		}else{
+			if(sess->httpRequestType() == CURLHTTP_POST)
+			{
+				if(!sess->httpRequestData().empty())
+				{
+					tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDSIZE, sess->httpRequestData().length());
+					if (CURLE_OK != tRetCode)
+				    {
+				        WARN("curl_easy_setopt CURLOPT_POSTFIELDSIZE failed!err:%s", curl_easy_strerror(tRetCode));
+				    }
+					
+			    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDS, sess->httpRequestData().c_str());
+					if (CURLE_OK != tRetCode)
+				    {
+				        WARN("curl_easy_setopt CURLOPT_POSTFIELDS failed!err:%s", curl_easy_strerror(tRetCode));
+				    }
+				}
+			}
 		}
 
 		conn->connInfoSetReqinfo(sess);
