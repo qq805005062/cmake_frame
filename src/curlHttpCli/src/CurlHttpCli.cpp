@@ -110,7 +110,7 @@ int CurlHttpCli::curlHttpCliInit(unsigned int threadNum, unsigned int maxQueue, 
 	httpCliIoPoolPtr.reset(new ThreadPool("httcliIo"));
 	if(httpCliIoPoolPtr == nullptr)
 	{
-		WARN("xiaomibiz http client thread pool new error");
+		WARN("curlHttpCliInit thread pool new error");
 		return -1;
 	}
 
@@ -122,7 +122,7 @@ int CurlHttpCli::curlHttpCliInit(unsigned int threadNum, unsigned int maxQueue, 
 	httpCliCallPtr.reset(new Thread(std::bind(&CURL_HTTP_CLI::CurlHttpCli::httpRspCallBackThread, this), "httcliCall"));
 	if(httpCliCallPtr == nullptr)
 	{
-		WARN("xiaomibiz http client httpCliCallPtr thread new error");
+		WARN("CurlHttpCli http client curlHttpCliInit thread new error");
 		return -1;
 	}
 	httpCliCallPtr->start();
@@ -130,7 +130,7 @@ int CurlHttpCli::curlHttpCliInit(unsigned int threadNum, unsigned int maxQueue, 
 	httpIoWakePtr.reset(new Thread(std::bind(&CURL_HTTP_CLI::CurlHttpCli::httpIoWakeThread, this), "httioWake"));
 	if(httpIoWakePtr == nullptr)
 	{
-		WARN("xiaomibiz http client httpIoWakePtr thread new error");
+		WARN("CurlHttpCli http client httpIoWakePtr thread new error");
 		return -1;
 	}
 	httpIoWakePtr->start();
@@ -217,18 +217,24 @@ void CurlHttpCli::httpCliIoThread(size_t index)
 		asyncCurlHttpPtrVect[index].reset(new AsyncCurlHttp(ioMaxConns));
 		if(asyncCurlHttpPtrVect[index] == nullptr)
 		{
-			WARN("xiaomibiz http client new curl object error");
+			WARN("CurlHttpCli http client new httpCliIoThread error");
 			continue;
 		}
 		asyncCurlHttpPtrVect[index]->asyncCurlReady();
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
+			readyIothread--;
+		}
 		INFO("asyncCurlHttpPtrVect[index]->asyncCurlReady ret %d", ret);
 		if(isExit)
 		{
 			break;
 		}
 	}
-	std::lock_guard<std::mutex> lock(mutex_);
-	exitIothread++;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		exitIothread++;
+	}
 }
 
 void CurlHttpCli::httpRspCallBackThread()
