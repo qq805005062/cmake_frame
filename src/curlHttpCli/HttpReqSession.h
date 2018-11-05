@@ -32,7 +32,7 @@ namespace CURL_HTTP_CLI
 class HttpReqSession;
 typedef std::shared_ptr<HttpReqSession> HttpReqSessionPtr;
 //typedef std::function<void(CURL_HTTP_CLI::HttpReqSession* curlReq)> CurlRespondCallBack;
-typedef std::function<void(CURL_HTTP_CLI::HttpReqSessionPtr curlReq)> CurlRespondCallBack;
+typedef std::function<void(CURL_HTTP_CLI::HttpReqSessionPtr& curlReq)> CurlRespondCallBack;
 
 class HttpReqSession
 {
