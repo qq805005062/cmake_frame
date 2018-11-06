@@ -62,20 +62,20 @@ static void TcpClientOnEvent(struct bufferevent *bev, short event, void *arg)
 	TcpClient *pClient = static_cast<TcpClient*>(arg);
 	if (event & BEV_EVENT_EOF)
 	{
-		INFO("TcpClientOnEvent :: %s:%d connection closed", pClient->tcpServerIp(), pClient->tcpServerPort());
+		INFO("TcpClientOnEvent :: %s:%d  %lu connection closed", pClient->tcpServerIp(), pClient->tcpServerPort(), pClient->tcpCliUniqueNum());
 		pClient->disConnect();
-		LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), false, pClient->tcpServerIp(), pClient->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), false, pClient->tcpServerIp(), pClient->tcpServerPort());
 	}
     else if (event & BEV_EVENT_ERROR)
     {
-		INFO("TcpClientOnEvent :: %s:%d some other error connection closed", pClient->tcpServerIp(), pClient->tcpServerPort());
+		INFO("TcpClientOnEvent :: %s:%d  %lu some other error connection closed", pClient->tcpServerIp(), pClient->tcpServerPort(), pClient->tcpCliUniqueNum());
 		pClient->disConnect();
-		LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), false, pClient->tcpServerIp(), pClient->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), false, pClient->tcpServerIp(), pClient->tcpServerPort());
     }
     else if( event & BEV_EVENT_CONNECTED)  
     {
-		INFO("TcpClientOnEvent :: %s:%d had connected to server", pClient->tcpServerIp(), pClient->tcpServerPort());   
-		LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), true, pClient->tcpServerIp(), pClient->tcpServerPort());
+		INFO("TcpClientOnEvent :: %s:%d  %lu had connected to server", pClient->tcpServerIp(), pClient->tcpServerPort(), pClient->tcpCliUniqueNum());   
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), true, pClient->tcpServerIp(), pClient->tcpServerPort());
     }
 }
 
@@ -154,7 +154,7 @@ int TcpClient::connectServer(struct event_base* eBase)
 	}
 	lastRecvSecond_ = secondSinceEpoch();
 	sockfd_ = bufferevent_getfd(bev_);
-	DEBUG("connectServer ip port sockfd %s %d %d", ipaddr_.c_str(), port_, sockfd_);
+	DEBUG("connectServer ip port sockfd %s:%d %d  %lu", ipaddr_.c_str(), port_, sockfd_, uniqueNum_);
 	return sockfd_;
 }
 

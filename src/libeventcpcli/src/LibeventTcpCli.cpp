@@ -22,6 +22,8 @@ LibeventTcpCli::LibeventTcpCli()
 	,uniquId_(0)
 	,ioThreadNum(0)
 	,lastIndex(0)
+	,readyIothread(0)
+	,exitIothread(0)
 	,connCb(nullptr)
 	,msgCb(nullptr)
 	,mutex_()
@@ -37,11 +39,46 @@ LibeventTcpCli::~LibeventTcpCli()
 void LibeventTcpCli::libeventTcpCliExit()
 {
 	isExit = 1;
+
+	DEBUG("libeventTcpCliExit");
+
+	while(ioThreadNum == 0)
+	{
+		usleep(1000);
+	}
+
+	for(size_t i = 0; i < ioThreadNum; i++)
+	{
+		if(libeventIoPtrVect[i])
+		{
+			libeventIoPtrVect[i]->libeventIoExit();
+		}
+	}
+
+	while(exitIothread != ioThreadNum)
+	{
+		usleep(1000);
+	}
+
+	for(size_t i = 0; i < ioThreadNum; i++)
+	{
+		if(libeventIoPtrVect[i])
+		{
+			libeventIoPtrVect[i].reset();
+		}
+	}
+
+	if(eventIoPoolPtr)
+	{
+		eventIoPoolPtr->stop();
+		eventIoPoolPtr.reset();
+	}
 }
 
-int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int threadNum, const TcpConnectCallback& connCb_, const TcpOnMessageCallback& msgCb)
+int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int threadNum, const TcpConnectCallback& connCb_, const TcpOnMessageCallback& msgCb_)
 {
 	INFO("libventTcpCliInit init");
+	
 	eventIoPoolPtr.reset(new ThreadPool("eventIo"));
 	if(eventIoPoolPtr == nullptr)
 	{
@@ -57,6 +94,8 @@ int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int thread
 		eventIoPoolPtr->run(std::bind(&LIBEVENT_TCP_CLI::LibeventTcpCli::libeventIoThread, this, i));
 	}
 
+	connCb = connCb_;
+	msgCb = msgCb_;
 	uniquId_ = uniquId;
 	ioThreadNum = threadNum;
 	return 0;
@@ -84,6 +123,7 @@ int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void
 		index = static_cast<int>(index % ioThreadNum);
 		
 		uint64_t uuid = uniqueNumId(uniquId_);
+		DEBUG("uniqueNumId %lu", uuid);
 		TcpClientPtr client(new TcpClient(index, uuid, ipaddr, port, priv, outSecond));
 		if(client)
 		{
@@ -145,12 +185,15 @@ int LibeventTcpCli::libeventTcpCliSendMsg(uint64_t unid, const char* msg, size_t
 				libeventIoPtrVect[client->inIoThreadIndex()]->libeventIoOrder(node);
 				return 0;
 			}else{
+				WARN("libeventTcpCliSendMsg libeventIoOrder error index %ld", client->inIoThreadIndex());
 				return -1;
 			}
 		}else{
+			WARN("libeventTcpCliSendMsg new order node nullptr ");
 			return -1;
 		}
 	}else{
+		WARN("libeventTcpCliSendMsg conn had been exprie and will be disconnect %lu", unid);
 		client->disConnect();
 		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), false, client->tcpServerIp(), client->tcpServerPort());
 		return -3;
@@ -183,7 +226,22 @@ int LibeventTcpCli::libeventTcpCliDisconnect(uint64_t unid)
 		client = iter->second;
 	}
 
-	client->disConnect();
+	OrderNodePtr node(new OrderNode(client));
+	if(node)
+	{
+		if(libeventIoPtrVect[client->inIoThreadIndex()])
+		{
+			libeventIoPtrVect[client->inIoThreadIndex()]->libeventIoOrder(node);
+			return 0;
+		}else{
+			WARN("libeventTcpCliDisconnect libeventIoOrder error index %ld", client->inIoThreadIndex());
+			return -1;
+		}
+	}else{
+		WARN("libeventTcpCliDisconnect new order node nullptr ");
+		return -1;
+	}
+
 	LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), false, client->tcpServerIp(), client->tcpServerPort());
 	return 0;
 }
@@ -205,7 +263,7 @@ void LibeventTcpCli::libeventIoThread(size_t index)
 			WARN("LibeventTcpCli new io Thread object error");
 			continue;
 		}
-		libeventIoPtrVect[index]->libeventIoReady();
+		ret = libeventIoPtrVect[index]->libeventIoReady();
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
 			readyIothread--;
@@ -220,10 +278,12 @@ void LibeventTcpCli::libeventIoThread(size_t index)
 		std::lock_guard<std::mutex> lock(mutex_);
 		exitIothread++;
 	}
+	return;
 }
 
 void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, bool isConn, const std::string& ipaddr, int port)
 {
+	DEBUG("tcpServerConnect");
 	if(connCb)
 	{
 		connCb(unid, priv, isConn, ipaddr, port);
@@ -247,7 +307,7 @@ size_t LibeventTcpCli::tcpServerOnMessage(uint64_t unid, void* priv, const char*
 	{
 		return msgCb(unid, priv, msg, msglen, ipaddr, port);
 	}
-	return 0;
+	return msglen;
 }
 
 
