@@ -78,6 +78,12 @@ void LibeventTcpCli::libeventTcpCliExit()
 int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int threadNum, const TcpConnectCallback& connCb_, const TcpOnMessageCallback& msgCb_)
 {
 	INFO("libventTcpCliInit init");
+
+	if(ioThreadNum > 0)
+	{
+		INFO("libeventTcpCliInit had been init already");
+		return 0;
+	}
 	
 	eventIoPoolPtr.reset(new ThreadPool("eventIo"));
 	if(eventIoPoolPtr == nullptr)

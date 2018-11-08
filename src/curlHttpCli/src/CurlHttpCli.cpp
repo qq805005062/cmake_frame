@@ -106,7 +106,12 @@ int CurlHttpCli::curlHttpCliInit(unsigned int threadNum, unsigned int maxQueue, 
 	CURLcode code = curl_global_init(CURL_GLOBAL_ALL);
 	char* crulVersion = curl_version();
 	INFO("curlHttpCliInit curl_global_init %d %s", code, crulVersion);
-	
+
+	if(ioThreadNum > 0)
+	{
+		INFO("curlHttpCliInit had been init already");
+		return 0;
+	}
 	httpCliIoPoolPtr.reset(new ThreadPool("httcliIo"));
 	if(httpCliIoPoolPtr == nullptr)
 	{

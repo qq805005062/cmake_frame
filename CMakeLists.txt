@@ -84,6 +84,7 @@ add_subdirectory(src/redislibevent)
 add_subdirectory(src/redisSync)
 add_subdirectory(src/zookconfig)
 add_subdirectory(src/curlHttpCli)
+add_subdirectory(src/libeventcpcli)
 
 if(NOT CMAKE_BUILD_NO_EXAMPLES)
   add_subdirectory(examples)
