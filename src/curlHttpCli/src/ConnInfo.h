@@ -240,7 +240,7 @@ public:
 		}else{
 			if(url.length() >= urlSize)
 			{
-				delete[] error;
+				delete[] reqUrl;
 				urlSize = url.length() + 1;
 				reqUrl = static_cast<char *>(malloc(urlSize));
 				if(reqUrl == NULL)
