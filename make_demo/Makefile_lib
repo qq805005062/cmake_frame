@@ -1,0 +1,22 @@
+
+GXX = g++
+MAKELIB = ar crv
+DEBUGFLAG= -g -std=c++11# -Wall -Wsign-compare -Wsign-compare -Wunused-variable -Wunused-but-set-variable
+
+INCLUDE = -I../../dep/hiredis -I../hashkit
+LIBDIRS =
+LIBS =
+
+HIREDIS_CLUSTER_OBJS = cluster_hiredis.o ../../dep/hiredis/libhiredis.a ../hashkit/libhashkit.a
+
+HIREDIS_CLUSTER_TARGET = libclusterhiredis.a
+
+$(HIREDIS_CLUSTER_TARGET):$(HIREDIS_CLUSTER_OBJS)
+	$(MAKELIB) $(HIREDIS_CLUSTER_TARGET) $^ $(LIBDIRS) $(LIBS)
+
+%.o:%.cpp
+	$(GXX) $(DEBUGFLAG) -c $< -o $@ $(INCLUDE)
+
+.PHONY: clean
+clean:
+	rm -f $(HIREDIS_CLUSTER_TARGET) $(HIREDIS_CLUSTER_OBJS)

@@ -1,0 +1,40 @@
+
+GCC = gcc
+GXX = g++
+
+DEBUGFLAG= -g -Wall
+
+INCLUDE = -I../dep/hiredis
+LIBDIRS =
+LIBS =
+
+HIREDIS_MSLAVE_OBJS = inifile_malloc.o example.o mslave_hiredis.o
+
+HIREDIS_MSLAVE_TARGET = hiredis_mslave
+
+default:$(HIREDIS_MSLAVE_TARGET)
+
+persist-settings:
+	-(cd ../dep/hiredis && $(MAKE))
+
+.make-prerequisites:
+	@touch $@
+
+.make-prerequisites: persist-settings
+
+
+$(HIREDIS_MSLAVE_TARGET):$(HIREDIS_MSLAVE_OBJS) ../dep/hiredis/libhiredis.a
+	$(GCC) -o $(HIREDIS_MSLAVE_TARGET) $^ $(LIBDIRS) $(LIBS)
+
+%.o: %.c .make-prerequisites
+	$(GCC) $(DEBUGFLAG) -fPIC -c $< -o $@ $(INCLUDE)
+
+.PHONY: clean
+clean: 
+	rm -f $(HIREDIS_MSLAVE_TARGET) $(HIREDIS_MSLAVE_OBJS)
+	rm -f .make-*
+
+.PHONY: distclean
+
+distclean: clean
+	-(cd ../dep/hiredis && $(MAKE) clean)
