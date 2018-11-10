@@ -290,10 +290,6 @@ void LibeventTcpCli::libeventIoThread(size_t index)
 void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, bool isConn, const std::string& ipaddr, int port)
 {
 	DEBUG("tcpServerConnect");
-	if(connCb)
-	{
-		connCb(unid, priv, isConn, ipaddr, port);
-	}
 
 	if(isConn == false)
 	{
@@ -303,8 +299,18 @@ void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, bool isConn, co
 		{
 			return;
 		}
+
+		if(connCb)
+		{
+			connCb(unid, priv, isConn, ipaddr, port);
+		}
 		tcpClientConnMap.erase(iter);
-	}
+	}else{
+		if(connCb)
+		{
+			connCb(unid, priv, isConn, ipaddr, port);
+		}
+	}
 }
 
 size_t LibeventTcpCli::tcpServerOnMessage(uint64_t unid, void* priv, const char* msg, size_t msglen, const std::string& ipaddr, int port)
