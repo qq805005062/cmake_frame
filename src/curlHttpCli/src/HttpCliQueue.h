@@ -104,7 +104,7 @@ public:
 	void httpResponseExit()
 	{
 		isExit_ = 1;
-		notEmpty_.notify();
+		notEmpty_.notifyAll();
 	}
 
 	void httpResponse(HttpReqSession* req)
