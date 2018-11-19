@@ -40,8 +40,8 @@ set(ZOOKAFKA_TEST_LIBS
   rdkafka++
   rdkafka
   jansson
-  crypto
   ssl
+  crypto
   sasl2
   pthread
   dl

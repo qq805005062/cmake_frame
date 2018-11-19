@@ -21,6 +21,7 @@
 namespace LIBEVENT_TCP_CLI
 {
 
+//连接回调，因为内部会通知断开或者连接上，其中断开包括没有连接成功和从连接成功之后端口两种情况。上层要注意区分
 typedef std::function<void(uint64_t uniqueid, void* priv, bool isConn, const std::string& ipaddr, int port)> TcpConnectCallback;
 //IO线程不要做阻塞操作，尽快返回
 
