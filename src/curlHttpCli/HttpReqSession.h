@@ -41,11 +41,14 @@ public:
 		:httpVer(CURLHTTP11)
 		,reqType(CURLHTTP_POST)
 		,private_(nullptr)
+		,connInfo_(nullptr)
+		,maxconns_(0)
 		,connOutSecond(30)
 		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,isKeepAlive_(0)
 		,rspCode(0)
 		,sslVerifyPeer(0)
 		,sslVeriftHost(0)
@@ -63,11 +66,14 @@ public:
 		:httpVer(ver)
 		,reqType(type)
 		,private_(nullptr)
+		,connInfo_(nullptr)
+		,maxconns_(0)
 		,connOutSecond(30)
 		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,isKeepAlive_(0)
 		,rspCode(0)
 		,sslVerifyPeer(0)
 		,sslVeriftHost(0)
@@ -85,11 +91,14 @@ public:
 		:httpVer(CURLHTTP11)
 		,reqType(CURLHTTP_POST)
 		,private_(nullptr)
+		,connInfo_(nullptr)
+		,maxconns_(0)
 		,connOutSecond(30)
 		,dataOutSecond(60)
 		,insertMicroSecond(0)
 		,reqMicroSecond(0)
 		,rspMicroSecond(0)
+		,isKeepAlive_(0)
 		,rspCode(0)
 		,sslVerifyPeer(0)
 		,sslVeriftHost(0)
@@ -111,11 +120,14 @@ public:
 		httpVer = that.httpVer;
 		reqType = that.reqType;
 		private_ = that.private_;
+		connInfo_ = that.connInfo_;
+		maxconns_ = that.maxconns_;
 		connOutSecond = that.connOutSecond;
 		dataOutSecond = that.dataOutSecond;
 		insertMicroSecond = that.insertMicroSecond;
 		reqMicroSecond = that.reqMicroSecond;
 		rspMicroSecond = that.rspMicroSecond;
+		isKeepAlive_ = that.isKeepAlive_;
 		rspCode = that.rspCode;
 		sslVerifyPeer = that.sslVerifyPeer;
 		sslVeriftHost = that.sslVeriftHost;
@@ -324,19 +336,53 @@ public:
 	{
 		return cacertFile;
 	}
+
+	void setHttpConnInfo(void *conn)
+	{
+		connInfo_ = conn;
+	}
+
+	void* httpConnInfo()
+	{
+		return connInfo_;
+	}
+
+	void setHttpUrlMaxConns(size_t max)
+	{
+		maxconns_ = max;
+	}
+
+	size_t httpUrlmaxConns()
+	{
+		return maxconns_;
+	}
+
+	void setHttpUrlKeepAlive(int isKeep)
+	{
+		isKeepAlive_ = isKeep;
+	}
+
+	int httpUrlIskeepAlive()
+	{
+		return isKeepAlive_;
+	
+}
 	
 private:
 	CURL_HTTP_VERSION httpVer;
 	CURL_HTTP_REQUEST_TYPE reqType;
 
-	void *private_;
+	void *private_;//外部请求携带的私有数据
+	void *connInfo_;//内部使用，外部不要关心，更不要设值
 
+	size_t maxconns_;//当请求的URL为内部前几次请求的时候，这个值一定要设置
 	long connOutSecond;//连接超时时间，秒钟
 	long dataOutSecond;//数据传输超时时间，秒钟
 	int64_t insertMicroSecond;//调用接口插入队列时间，微秒，所有的时间都是有内部插入，方便外部统计耗时使用
 	int64_t reqMicroSecond;//实际请求时间，微秒
 	int64_t rspMicroSecond;//实际响应时间，微秒
 
+	int isKeepAlive_;//是否保持长连接，这个参数随URL保持一致。中间不可修改
 	int rspCode;//响应编码
 	int sslVerifyPeer;///是否校验对端证书
 	int sslVeriftHost;//是否校验对端主机ip地址

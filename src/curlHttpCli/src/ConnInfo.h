@@ -45,13 +45,15 @@ typedef struct _SockInfo
 class ConnInfo
 {
 public:
-	ConnInfo()
-		:easy(nullptr)
+	ConnInfo(size_t subIndex)
+		:isNew_(true)
+		,easy(nullptr)
 		,global(nullptr)
 		,headers(nullptr)
 		,reqInfo(nullptr)
 		,error(nullptr)
 		,reqUrl(nullptr)
+		,subIndex_(subIndex)
 		,urlSize(0)
 		,outSecond(0)
 		,rspdata()
@@ -127,20 +129,6 @@ public:
 		memset(error, 0, CURL_ERROR_SIZE);
 		global = NULL;
 		rspdata.assign("");
-		
-		if(CURL_HTTP_CLI::CurlHttpCli::instance().httpIsKeepAlive() == 0)
-		{
-			if(reqUrl)
-			{
-				memset(reqUrl, 0, urlSize);
-			}
-			
-			if(headers)
-			{
-				curl_slist_free_all(headers);
-				headers = NULL;
-			}
-		}
 		
 		return 0;
 	}
@@ -261,13 +249,34 @@ public:
 	{
 		return reqUrl;
 	}
+
+	size_t ioThreadSubindex()
+	{
+		return subIndex_;
+	}
+
+	void setIoThreadSubindex(size_t subIndex)
+	{
+		subIndex_ = subIndex;
+	}
+
+	bool connInfoIsNew()
+	{
+		bool ret = isNew_;
+		isNew_ = false;
+		return ret;
+	
+}
 private:
+	bool isNew_;
 	CURL *easy;
 	GlobalInfo *global;
 	struct curl_slist *headers;
 	HttpReqSession* reqInfo;
 	char *error;
 	char *reqUrl;
+	
+	size_t subIndex_;
 	size_t urlSize;
 	
 	int64_t outSecond;

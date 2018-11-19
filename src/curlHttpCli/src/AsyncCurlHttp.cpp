@@ -141,14 +141,15 @@ static int prog_cb(void *p, double dltotal, double dlnow, double ult, double uln
 	return 0;
 }
 
-AsyncCurlHttp::AsyncCurlHttp(size_t maxConns)
+AsyncCurlHttp::AsyncCurlHttp(size_t subIndex, size_t maxqueue)
 	:isExit(0)
 	,wakeupFd_(createEventfd())
 	,queueSize(0)
-	,maxConnSize(maxConns)
+	,ioThreadIndex(subIndex)
+	,maxQueueSize_(maxqueue)
 	,gInfo_(nullptr)
+	,reqQueuePtr(nullptr)
 	,connVectPtr(nullptr)
-	,connQueuePtr(nullptr)
 {
 	DEBUG("CurlHttpClient init");
 }
@@ -165,9 +166,9 @@ AsyncCurlHttp::~AsyncCurlHttp()
 		connVectPtr.reset();
 	}
 
-	if(connQueuePtr)
+	if(reqQueuePtr)
 	{
-		connQueuePtr.reset();
+		reqQueuePtr.reset();
 	}
 	ERROR("~CurlHttpClient exit");
 }
@@ -187,12 +188,11 @@ int AsyncCurlHttp::asyncCurlReady()
 		WARN("curlHttpClientReady connVectPtr new error");
 		return -1;
 	}
-	connVectPtr->setMaxVectorSize(maxConnSize);
 
-	connQueuePtr.reset(new HttpConnInfoQueue());
-	if(connQueuePtr == nullptr)
+	reqQueuePtr.reset(new HttpRequestQueue(maxQueueSize_));
+	if(reqQueuePtr == nullptr)
 	{
-		WARN("curlHttpClientReady connQueuePtr new error");
+		WARN("curlHttpClientReady reqQueuePtr new error");
 		return -1;
 	}
 	
@@ -242,6 +242,16 @@ int AsyncCurlHttp::asyncCurlReady()
 	event_base_free(gInfo_->evbase);
 	curl_multi_cleanup(gInfo_->multi);
 	return 0;
+}
+
+int AsyncCurlHttp::curlhttpRequest(HttpReqSession* req)
+{
+	if(reqQueuePtr)
+	{
+		reqQueuePtr->httpRequest(req);
+		return 0;
+	}
+	return -1;
 }
 
 void AsyncCurlHttp::wakeup()
@@ -333,29 +343,26 @@ void AsyncCurlHttp::requetHttpServer()
 	size_t reqNum = queueSize;
 	for(size_t i = 0; i < reqNum; i++)
 	{
-		ConnInfo* conn = connQueuePtr->httpcliConnPop();
-		if(conn == NULL && connVectPtr->isFull())
-		{
-			break;
-		}
 		if(queueSize)
 		{
 			queueSize--;
 		}
-		HttpReqSession* req = CURL_HTTP_CLI::HttpRequestQueue::instance().dealRequest();
+		HttpReqSession* req = reqQueuePtr->dealRequest();
 		if(req)
 		{
+			ConnInfo* conn = static_cast<ConnInfo*>(req->httpConnInfo());
+			if(conn == NULL)
+			{
+				break;
+			}
+		
 			requetHttpServer(conn, req);
 		}else{
-			if(conn)
-			{
-				connQueuePtr->httpcliConnInsert(conn);
-			}
 			break;
 		}
 	}
 
-	connVectPtr->httpcliConnForEach(connQueuePtr);
+	connVectPtr->httpcliConnForEach();
 }
 
 void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
@@ -364,7 +371,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 	CURLcode tRetCode = CURLE_OK;
 	if(conn == NULL)
 	{
-		conn = new ConnInfo();
+		conn = new ConnInfo(ioThreadIndex);
 		if(conn == NULL)
 		{
 			WARN("requetHttpServer new ConnInfo error");
@@ -413,7 +420,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 	        WARN("curl_easy_setopt CURLOPT_NOSIGNAL failed!err:%s", curl_easy_strerror(tRetCode));
 	    }
 
-		if(CURL_HTTP_CLI::CurlHttpCli::instance().httpIsKeepAlive() == 0)
+		if(sess->httpUrlIskeepAlive() == 0)
 		{
 			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_FRESH_CONNECT, 1);
 			if (CURLE_OK != tRetCode)
@@ -634,7 +641,8 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 		conn->connInfoSetGlobal(gInfo_);
 		connVectPtr->httpcliConnAdd(conn);
 	}else{
-		if(CURL_HTTP_CLI::CurlHttpCli::instance().httpIsKeepAlive() == 0)
+#if 0
+		if(sess->httpUrlIskeepAlive() == 0)
 		{
 			ret = conn->connInfoSetReqUrl(sess->httpRequestUrl());
 			if(ret < 0)
@@ -644,7 +652,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 				sess->setHttpReqErrorMsg("connInfo req url error");
 				CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(sess);
 				conn->connInfoReinit();
-				connQueuePtr->httpcliConnInsert(conn);
+				HttpUrlConnInfo::instance().returnUrlConnInfo(sess->httpRequestUrl(), conn, conn->connInfoIsNew());
 				return;
 			}
 			tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_URL, conn->connInfoReqUrl());
@@ -729,7 +737,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 					break;
 				default:
 					break;
-			}
+						}
 			if (CURLE_OK != tRetCode)
 		    {
 		        WARN("curl_easy_setopt CURLOPT_HTTP_VERSION failed!err:%s", curl_easy_strerror(tRetCode));
@@ -773,7 +781,7 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 					sess->setHttpReqErrorMsg("connInfo httpRequestType no support");
 					CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(sess);
 					conn->connInfoReinit();
-					connQueuePtr->httpcliConnInsert(conn);
+					HttpUrlConnInfo::instance().returnUrlConnInfo(sess->httpRequestUrl(), conn, conn->connInfoIsNew());
 					return;
 			}
 			if (CURLE_OK != tRetCode)
@@ -818,6 +826,25 @@ void AsyncCurlHttp::requetHttpServer(ConnInfo* conn, HttpReqSession* sess)
 				}
 			}
 		}
+#else
+		if(sess->httpRequestType() == CURLHTTP_POST)
+		{
+			if(!sess->httpRequestData().empty())
+			{
+				tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDSIZE, sess->httpRequestData().length());
+				if (CURLE_OK != tRetCode)
+			    {
+			        WARN("curl_easy_setopt CURLOPT_POSTFIELDSIZE failed!err:%s", curl_easy_strerror(tRetCode));
+			    }
+				
+		    	tRetCode = curl_easy_setopt(conn->connInfoEasy(), CURLOPT_POSTFIELDS, sess->httpRequestData().c_str());
+				if (CURLE_OK != tRetCode)
+			    {
+			        WARN("curl_easy_setopt CURLOPT_POSTFIELDS failed!err:%s", curl_easy_strerror(tRetCode));
+			    }
+			}
+		}
+#endif
 
 		conn->connInfoSetReqinfo(sess);
 		conn->connInfoSetGlobal(gInfo_);
@@ -911,7 +938,7 @@ void AsyncCurlHttp::check_multi_info()
 			CURL_HTTP_CLI::HttpResponseQueue::instance().httpResponse(conn->connInfoReqinfo());
 
 			conn->connInfoReinit();
-			connQueuePtr->httpcliConnInsert(conn);
+			HttpUrlConnInfo::instance().returnUrlConnInfo(eff_url, conn, conn->connInfoIsNew());
 		}
 	}while(msg);
 

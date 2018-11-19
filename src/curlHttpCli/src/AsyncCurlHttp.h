@@ -16,7 +16,7 @@ namespace CURL_HTTP_CLI
 class AsyncCurlHttp
 {
 public:
-	AsyncCurlHttp(size_t maxConns = 0);
+	AsyncCurlHttp(size_t subIndex, size_t maxqueue);
 	
 	~AsyncCurlHttp();
 
@@ -35,6 +35,8 @@ public:
 	void culrMultiTimerCb(long timeout_ms);
 
 	void curlEventFdcb(int fd, short kind);
+
+	int curlhttpRequest(HttpReqSession* req);
 
 private:
 	
@@ -56,11 +58,12 @@ private:
 	int wakeupFd_;
 	
 	volatile size_t queueSize;
-	size_t maxConnSize;
+	size_t ioThreadIndex;
+	size_t maxQueueSize_;
 	
 	GlobalInfo *gInfo_;
+	HttpRequestQueuePtr reqQueuePtr;
 	HttpConnInfoVectorPtr connVectPtr;
-	HttpConnInfoQueuePtr connQueuePtr;
 };
 
 typedef std::shared_ptr<AsyncCurlHttp> AsyncCurlHttpPtr;

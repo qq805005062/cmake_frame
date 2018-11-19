@@ -318,7 +318,7 @@ int main(int argc, char* argv[])
 	(void)signal(SIGUSR1, sig_catch);
 	(void)signal(SIGUSR2, sig_catch);
 
-	ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpCliInit(4, 50000, 0, 200, 0);//模块初始化
+	ret = CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpCliInit(4, 50000, 0);//模块初始化
 	if(ret < 0)
 	{
 		PERROR("CURL_HTTP_CLI::CurlHttpCli::instance().curlHttpCliInit %d", ret);
