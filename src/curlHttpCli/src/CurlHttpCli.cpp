@@ -171,8 +171,10 @@ int CurlHttpCli::curlHttpRequest(HttpReqSession& curlReq)
 		ConnInfo *pConninf = CURL_HTTP_CLI::HttpUrlConnInfo::instance().connInfoFromUrl(req->httpRequestUrl());
 		if(pConninf)
 		{
+			INFO("pConninf->ioThreadSubindex() %ld", pConninf->ioThreadSubindex());
 			ret = curlHttpClientWakeup(pConninf->ioThreadSubindex(), req);
 		}else{
+			INFO("req->httpRequestUrl() %s  req->httpUrlmaxConns() %ld", req->httpRequestUrl().c_str(), req->httpUrlmaxConns());
 			ret = CURL_HTTP_CLI::HttpUrlConnInfo::instance().addUrlConnInfo(req->httpRequestUrl(), req->httpUrlmaxConns());
 			if(ret >= 0)
 			{
@@ -182,6 +184,8 @@ int CurlHttpCli::curlHttpRequest(HttpReqSession& curlReq)
 	}
 	if(ret < 0)
 	{
+		WARN("curlHttpRequest ret %d", ret);
+		AsyncQueueNum::instance().asyncRsp();
 		delete req;
 	}
 	return ret;
@@ -192,7 +196,7 @@ int CurlHttpCli::curlHttpClientWakeup(size_t ioIndex, HttpReqSession *req)
 	int ret = 0;
 	size_t index = 0;
 	unsigned int subIndex = 0;
-
+	INFO("curlHttpClientWakeup %ld %p", ioIndex, req);
 	if(ioIndex == ioThreadNum)
 	{
 		{

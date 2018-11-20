@@ -319,7 +319,7 @@ public:
 	
 	void httpRespondCallBack()
 	{
-		HttpReqSessionPtr myself(this);
+		HttpReqSessionPtr myself(this);//这个地方必须要严格注意，这个对象必须是new出来的，否则会core的
 		if(cb_)
 		{
 			cb_(myself);

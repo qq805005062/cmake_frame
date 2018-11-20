@@ -248,6 +248,7 @@ int AsyncCurlHttp::curlhttpRequest(HttpReqSession* req)
 {
 	if(reqQueuePtr)
 	{
+		INFO("curlhttpRequest %p %p", req, gInfo_->evbase);
 		reqQueuePtr->httpRequest(req);
 		return 0;
 	}
@@ -348,14 +349,11 @@ void AsyncCurlHttp::requetHttpServer()
 			queueSize--;
 		}
 		HttpReqSession* req = reqQueuePtr->dealRequest();
+		INFO("requetHttpServer %p %p", req, gInfo_->evbase);
 		if(req)
 		{
 			ConnInfo* conn = static_cast<ConnInfo*>(req->httpConnInfo());
-			if(conn == NULL)
-			{
-				break;
-			}
-		
+			INFO("requetHttpServer %p %p %p", conn, req, gInfo_->evbase);
 			requetHttpServer(conn, req);
 		}else{
 			break;

@@ -242,10 +242,15 @@ void* httpReqTest(void* arg)///HTTP«Î«Û
 \"bizUrl\":\"http://121.15.130.220:6868/logo/montnets_logo.png\",\"sendType\":\"TXT\",\"content\":\"123\",\"timeoutMs\":100000,\"bizMsgId\":\"2689300768280282162,-6257623307954063616\",\
 \"bizExtra\":\"{\"ecid\":\"100037\",\"simuid\":\"9843599155660\",\"smsgwno\":\"6003\",\"mtexdata\":\"e029eabe59ddf83da9b005eaa066b5a5\",\"brandid\":\"41\"}\"}", phoneVect[0].c_str());
 
-					CURL_HTTP_CLI::HttpReqSession httpreq(CURLHTTPNONE, CURLHTTP_POST, "https://mixin.chat.xiaomi.net/api/mixin/push/singlemessage", reqbuf);
+					//CURL_HTTP_CLI::HttpReqSession httpreq(CURLHTTPNONE, CURLHTTP_POST, "https://mixin.chat.xiaomi.net/api/mixin/push/singlemessage", reqbuf);
+					
 
-					//CURL_HTTP_CLI::HttpReqSession httpreq(CURLHTTP11, CURLHTTP_GET, "http://192.169.1.98:8888/", "313213213123");
-					httpreq.addHttpReqPrivateHead("Connection: close");
+					CURL_HTTP_CLI::HttpReqSession httpreq(CURLHTTP11, CURLHTTP_GET, "http://192.169.6.211/", "313213213123");
+					//httpreq.setHttpUrlKeepAlive(0);
+					httpreq.setHttpUrlKeepAlive(1);
+					httpreq.setHttpUrlMaxConns(200);
+					
+					//httpreq.addHttpReqPrivateHead("Connection: close");
 					httpreq.addHttpReqPrivateHead("Content-Type: application/json;charset=UTF-8");
 					httpreq.addHttpReqPrivateHead("Accept:application/json;charset=UTF-8");
 					httpreq.addHttpReqPrivateHead("appId:2882303761517851136");
