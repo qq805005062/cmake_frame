@@ -122,7 +122,7 @@ void LibeventIo::handleRead()
 				int ret = node->orderNodeTcpcli()->connectServer(evbase);
 				if(ret < 0)
 				{
-					LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(node->orderNodeTcpcli()->tcpCliUniqueNum(),  node->orderNodeTcpcli()->tpcClientPrivate(), false,  node->orderNodeTcpcli()->tcpServerIp(), node->orderNodeTcpcli()->tcpServerPort());
+					LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(node->orderNodeTcpcli()->tcpCliUniqueNum(),  node->orderNodeTcpcli()->tpcClientPrivate(), CONN_FAILED,  node->orderNodeTcpcli()->tcpServerIp(), node->orderNodeTcpcli()->tcpServerPort());
 				}
 			}else{
 				std::string sendmsg = node->orderNodeWrimsg();

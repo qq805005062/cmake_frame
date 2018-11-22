@@ -248,7 +248,12 @@ int LibeventTcpCli::libeventTcpCliDisconnect(uint64_t unid)
 		return -1;
 	}
 
-	LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), false, client->tcpServerIp(), client->tcpServerPort());
+	if(client->tcpCliState() == CONN_FAILED)
+	{
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), CONN_FAILED, client->tcpServerIp(), client->tcpServerPort());
+	}else{
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), DIS_CONNECT, client->tcpServerIp(), client->tcpServerPort());
+	}
 	return 0;
 }
 
@@ -287,11 +292,10 @@ void LibeventTcpCli::libeventIoThread(size_t index)
 	return;
 }
 
-void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, bool isConn, const std::string& ipaddr, int port)
+void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, int state, const std::string& ipaddr, int port)
 {
 	DEBUG("tcpServerConnect");
 
-	if(isConn == false)
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 		TcpClientConnMapIter iter = tcpClientConnMap.find(unid);
@@ -299,18 +303,12 @@ void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, bool isConn, co
 		{
 			return;
 		}
-
-		if(connCb)
-		{
-			connCb(unid, priv, isConn, ipaddr, port);
-		}
 		tcpClientConnMap.erase(iter);
-	}else{
-		if(connCb)
-		{
-			connCb(unid, priv, isConn, ipaddr, port);
-		}
+	}	if(connCb)
+	{
+		connCb(unid, priv, state, ipaddr, port);
 	}
+		
 }
 
 size_t LibeventTcpCli::tcpServerOnMessage(uint64_t unid, void* priv, const char* msg, size_t msglen, const std::string& ipaddr, int port)

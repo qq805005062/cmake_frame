@@ -63,11 +63,23 @@ public:
 	{
 		return sockfd_;
 	}
+
+	int tcpCliState()
+	{
+		return state_;
+	}
+
+	void tcpClieSetconn()
+	{
+		
+state_ = CONN_SUCCESS;
+	}
 	
 private:
 	int port_;
 	int sockfd_;
 	int outSecond_;
+	int state_;// 0是初始状态，未连接成功， 1 是连接成功， 2是连接成功之后断开
 	
 	size_t ioIndex_;
 	size_t outbufLen_;
