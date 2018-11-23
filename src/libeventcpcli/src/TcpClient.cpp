@@ -15,6 +15,17 @@
 namespace LIBEVENT_TCP_CLI
 {
 
+static void connectTimeout(evutil_socket_t fd, short event, void *arg)
+{
+	TcpClient *pClient = static_cast<TcpClient*>(arg);
+	if(pClient->tcpCliState() == CONN_FAILED)
+	{
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());
+		pClient->disConnect();
+	
+}
+}
+
 static void TcpClientOnMessage(struct bufferevent *bev, void *arg)
 {
 	TcpClient *pClient = static_cast<TcpClient*>(arg);
@@ -109,6 +120,7 @@ TcpClient::TcpClient(size_t ioIndex, uint64_t uniqueNum, const std::string& ipad
 	,uniqueNum_(uniqueNum)
 	,lastRecvSecond_(0)
 	,priv_(priv)
+	,timev_(nullptr)
 	,base_(nullptr)
 	,bev_(nullptr)
 	,ipaddr_(ipaddr)
@@ -122,6 +134,11 @@ TcpClient::~TcpClient()
 
 	priv_ = NULL;
 	base_ = NULL;
+	if(timev_)
+	{
+		evtimer_del(timev_);
+		timev_ = nullptr;
+	}
 	if(bev_)
 	{
 		bufferevent_free(bev_);
@@ -139,8 +156,14 @@ int TcpClient::connectServer(struct event_base* eBase)
 		ERROR("connectServer parameter error");
 		return -3;
 	}
-
 	base_ = eBase;
+	
+	timev_ = evtimer_new(base_, connectTimeout, static_cast<void*>(this));
+	if(timev_ == nullptr)
+	{
+		ERROR("evtimer_new malloc null");
+		return -1;
+	}
 	bev_ = bufferevent_socket_new(base_, -1, BEV_OPT_CLOSE_ON_FREE);
 	if(bev_ == NULL)
 	{
@@ -159,18 +182,23 @@ int TcpClient::connectServer(struct event_base* eBase)
 		return ret;
 	}
 
-	const struct timeval read_tv = { outSecond_, 0 };
-	const struct timeval write_tv = { outSecond_, 0 };
+	struct timeval read_tv = { outSecond_, 0 };
+	struct timeval write_tv = { outSecond_, 0 };
 	bufferevent_set_timeouts(bev_, &read_tv, &write_tv);
 
 	memset(&server_addr, 0, sizeof(server_addr) );  
     server_addr.sin_family = AF_INET;  
     server_addr.sin_port = htons(port_);  
     inet_aton(ipaddr_.c_str(), &server_addr.sin_addr);
+
+	struct timeval connSecondOut = {TCP_CONNECT_OUT_SECOND, 0};
+	evtimer_add(timev_, &connSecondOut);// call back outtime check
 	ret = bufferevent_socket_connect(bev_, (struct sockaddr*)&server_addr, sizeof(server_addr));
 	if(ret < 0)
 	{
 		ERROR("TcpClient bufferevent_socket_connect failed : %p  %d", base_, ret);
+		evtimer_del(timev_);
+		timev_ = nullptr;
 		return ret;
 	}
 	lastRecvSecond_ = secondSinceEpoch();
@@ -181,6 +209,11 @@ int TcpClient::connectServer(struct event_base* eBase)
 
 void TcpClient::disConnect()
 {
+	if(timev_)
+	{
+		evtimer_del(timev_);
+		timev_ = nullptr;
+	}
 	if(bev_)
 	{
 		bufferevent_free(bev_);

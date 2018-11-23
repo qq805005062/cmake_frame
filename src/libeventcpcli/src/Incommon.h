@@ -18,6 +18,7 @@
 #define WARN(fmt, args...)		fprintf(stderr, "%s :: %s() %d: WARN " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define ERROR(fmt, args...)		fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 
+#define TCP_CONNECT_OUT_SECOND	3
 
 enum TcpClientState
 {

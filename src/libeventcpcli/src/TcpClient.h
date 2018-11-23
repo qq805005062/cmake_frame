@@ -71,6 +71,11 @@ public:
 
 	void tcpClieSetconn()
 	{
+		if(timev_)
+		{
+			evtimer_del(timev_);
+			timev_ = nullptr;
+		}
 		
 state_ = CONN_SUCCESS;
 	}
@@ -87,8 +92,9 @@ private:
 	uint64_t uniqueNum_;
 	uint64_t lastRecvSecond_;
 	void* priv_;
+	struct event *timev_;
 	struct event_base *base_;
-	struct bufferevent* bev_;
+	struct bufferevent *bev_;
 
 	std::string ipaddr_;
 };
