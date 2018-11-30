@@ -235,7 +235,7 @@ int TcpClient::isKeepAlive()
 {
 	int ret = 1;
 	uint64_t second = secondSinceEpoch();
-	DEBUG("tcp cli ip port sockfd %s %d %d %ld", ipaddr_.c_str(), port_, sockfd_, outbufLen_);
+	DEBUG("tcp cli ip port sockfd %s %d %d %ld second %ld %ld %d", ipaddr_.c_str(), port_, sockfd_, outbufLen_ , second, lastRecvSecond_, outSecond_);
 	if((second - lastRecvSecond_) > outSecond_)
 	{
 		ERROR("tcp cli ip port sockfd %s %d %d %ld had been expire", ipaddr_.c_str(), port_, sockfd_, outbufLen_);
