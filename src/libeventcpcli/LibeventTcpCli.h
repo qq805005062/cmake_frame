@@ -63,6 +63,11 @@ public:
 	//发送消息的长度，
 	int libeventTcpCliSendMsg(uint64_t unid, const char* msg, size_t msglen);
 
+	//重置TCP连接的私有数据。这个操作要注意，
+	//首先私有数据都是在io线程回调的，所以这个方法最好在io回调中调用。保证线程安全
+	//同时要注意上层其他地方保留的数据对应关系
+	int libeventTcpCliResetPrivate(uint64_t unid, void* priv = NULL);
+
 	//会触发回调，但是不在IO线程回调，也可以做成不触发回调//可能会有一点危险性，不知道libevent内部如何处理，如果我析构了bufevent，但是有后续信号还会不会被调用，如果会被调用，可能会core。
 	//但是如果内部处理好的话，应该就没问题，慎用
 	int libeventTcpCliDisconnect(uint64_t unid);

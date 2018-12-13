@@ -20,7 +20,7 @@ static void connectTimeout(evutil_socket_t fd, short event, void *arg)
 	TcpClient *pClient = static_cast<TcpClient*>(arg);
 	if(pClient->tcpCliState() == CONN_FAILED)
 	{
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());
 		pClient->disConnect();
 	
 }
@@ -39,24 +39,24 @@ static void TcpClientOnMessage(struct bufferevent *bev, void *arg)
 		size_t ret = evbuffer_copyout(msgBuf, resMsg, allLen);
 		if(ret == allLen)
 		{
-			ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerOnMessage(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), resMsg, allLen, pClient->tcpServerIp(), pClient->tcpServerPort());
+			ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerOnMessage(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), resMsg, allLen, pClient->tcpServerIp(), pClient->tcpServerPort());
 			int result = evbuffer_drain(msgBuf, ret);
 			if(result < 0)
 			{
 				ERROR("TcpClientOnMessage :: %s:%d evbuffer_drain result %d", pClient->tcpServerIp(), pClient->tcpServerPort(), result);
 				pClient->disConnect();
-				LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+				LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
 			}
 		}else{
 			ERROR("TcpClientOnMessage :: %s:%d evbuffer_copyout ret %ld", pClient->tcpServerIp(), pClient->tcpServerPort(), ret);
 			pClient->disConnect();
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
 		}
 		delete[] resMsg;
 	}else{
 		ERROR("TcpClientOnMessage :: %s:%d new recv msg buff nullptr", pClient->tcpServerIp(), pClient->tcpServerPort());
 		pClient->disConnect();
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
 	}
 }
 
@@ -77,9 +77,9 @@ static void TcpClientOnEvent(struct bufferevent *bev, short event, void *arg)
 		pClient->disConnect();
 		if(pClient->tcpCliState() == CONN_FAILED)
 		{
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());
 		}else{
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
 		}
 	}
     else if (event & BEV_EVENT_ERROR)
@@ -88,24 +88,24 @@ static void TcpClientOnEvent(struct bufferevent *bev, short event, void *arg)
 		pClient->disConnect();
 		if(pClient->tcpCliState() == CONN_FAILED)
 		{
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());	
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());	
 		}else{
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
 		}
     }
     else if( event & BEV_EVENT_CONNECTED)  
     {
     	pClient->tcpClieSetconn();
 		INFO("TcpClientOnEvent :: %s:%d  %lu had connected to server", pClient->tcpServerIp(), pClient->tcpServerPort(), pClient->tcpCliUniqueNum());   
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), 1, pClient->tcpServerIp(), pClient->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), 1, pClient->tcpServerIp(), pClient->tcpServerPort());
     }else{
     	INFO("TcpClientOnEvent :: %s:%d  %lu %d some other error connection closed", pClient->tcpServerIp(), pClient->tcpServerPort(), pClient->tcpCliUniqueNum(), event);
 		pClient->disConnect();
 		if(pClient->tcpCliState() == CONN_FAILED)
 		{
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());	
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), CONN_FAILED, pClient->tcpServerIp(), pClient->tcpServerPort());	
 		}else{
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tpcClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
 		}
     }
 }

@@ -202,10 +202,38 @@ int LibeventTcpCli::libeventTcpCliSendMsg(uint64_t unid, const char* msg, size_t
 	}else{
 		WARN("libeventTcpCliSendMsg conn had been exprie and will be disconnect %lu", unid);
 		client->disConnect();
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), DIS_CONNECT, client->tcpServerIp(), client->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tcpClientPrivate(), DIS_CONNECT, client->tcpServerIp(), client->tcpServerPort());
 		return -3;
 	}
 	
+	return 0;
+}
+
+int LibeventTcpCli::libeventTcpCliResetPrivate(uint64_t unid, void* priv)
+{
+	if(isExit)
+	{
+		WARN("LibeventTcpCli had been exit");
+		return -2;
+	}
+	
+	while(ioThreadNum == 0 || readyIothread != ioThreadNum)
+	{
+		usleep(1000);
+	}
+
+	TcpClientPtr client(nullptr);
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		TcpClientConnMapIter iter = tcpClientConnMap.find(unid);
+		if(iter == tcpClientConnMap.end())
+		{
+			return -3;
+		}
+		client = iter->second;
+	}
+
+	client->setTcpCliPrivate(priv);
 	return 0;
 }
 
@@ -251,9 +279,9 @@ int LibeventTcpCli::libeventTcpCliDisconnect(uint64_t unid)
 
 	if(client->tcpCliState() == CONN_FAILED)
 	{
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), CONN_FAILED, client->tcpServerIp(), client->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tcpClientPrivate(), CONN_FAILED, client->tcpServerIp(), client->tcpServerPort());
 	}else{
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tpcClientPrivate(), DIS_CONNECT, client->tcpServerIp(), client->tcpServerPort());
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tcpClientPrivate(), DIS_CONNECT, client->tcpServerIp(), client->tcpServerPort());
 	}
 	return 0;
 }

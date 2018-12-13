@@ -25,9 +25,14 @@ public:
 
 	void sendMsg(const void* msg, size_t len);
 
-	void* tpcClientPrivate()
+	void* tcpClientPrivate()
 	{
 		return priv_;
+	}
+
+	void setTcpCliPrivate(void* p)
+	{
+		priv_ = p;
 	}
 
 	int isKeepAlive();
