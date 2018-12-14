@@ -29,7 +29,14 @@ static void connectTimeout(evutil_socket_t fd, short event, void *arg)
 static void TcpClientOnMessage(struct bufferevent *bev, void *arg)
 {
 	TcpClient *pClient = static_cast<TcpClient*>(arg);
-	pClient->setRecvSecond();
+	int second = pClient->setRecvSecond();
+	if(second < 0)
+	{
+		ERROR("TcpClientOnMessage :: %s:%d outtime will be disconnect", pClient->tcpServerIp(), pClient->tcpServerPort());
+		pClient->disConnect();
+		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(pClient->tcpCliUniqueNum(), pClient->tcpClientPrivate(), DIS_CONNECT, pClient->tcpServerIp(), pClient->tcpServerPort());
+		return;
+	}
 	
 	struct evbuffer* msgBuf= bufferevent_get_input(bev);
 	size_t allLen = evbuffer_get_length(msgBuf);
@@ -231,21 +238,29 @@ void TcpClient::sendMsg(const void* msg, size_t len)
 	}
 }
 
-int TcpClient::isKeepAlive()
+bool TcpClient::isKeepAlive()
 {
-	int ret = 1;
-	uint64_t second = secondSinceEpoch();
-	DEBUG("tcp cli ip port sockfd %s %d %d %ld second %ld %ld %d", ipaddr_.c_str(), port_, sockfd_, outbufLen_ , second, lastRecvSecond_, outSecond_);
-	if((second - lastRecvSecond_) > outSecond_)
+	bool result = true;
+	int ret = setRecvSecond();
+	if(ret < 0)
 	{
+		result = false;
 		ERROR("tcp cli ip port sockfd %s %d %d %ld had been expire", ipaddr_.c_str(), port_, sockfd_, outbufLen_);
-		return 0;
+	}else{
+		;
 	}
-	return ret;
+	return result;
 }
 
-void TcpClient::setRecvSecond()
+int TcpClient::setRecvSecond()
 {
-	lastRecvSecond_ = secondSinceEpoch();
+	uint64_t second = secondSinceEpoch();
+
+	if((second - lastRecvSecond_) > outSecond_)
+	{
+		return -1;
+	}
+	lastRecvSecond_ = second;
+	return 0;
 }
 }

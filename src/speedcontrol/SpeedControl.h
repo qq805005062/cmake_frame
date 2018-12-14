@@ -5,54 +5,97 @@
 
 #include "Singleton.h"
 #include "noncopyable.h"
-#include "Atomic.h"
+#include "ControlData.h"
 
 namespace SPEED_CONTROL
 {
 
-typedef AtomicIntegerT<uint32_t> AtomicUInt32;
 /*
- *计算速度和控速模块
+ *速度与控速模块，
+ *此模块支持多个地方控制速度和计算速度
+ *上层自己控制下标位置，不要重复，重复就会出问题，
+ *控制速度和计数下标可以重复
+ *上层必须要每隔一段时间去复位一下控速模块中的方法
+ *每隔一段时间获取计数和总数方法
+ *如果控速或者计算速度是单秒，就需要每隔一秒执行一次。
+ *首先初始好各个模块，规划好各个下标
  *
- *此模块
- *可以计算输出一个接口单秒调用速度
+ *上层自己控制好取的间隔
  *
- *可以控制一个接口单秒最大调用速度
- *
- *使用方法，首先调用spdItfaceIden 或者spdCtlItfaceIden 为每个计速或者控速接口生产唯一一个编号，返回值小于0为错误
- *生产唯一编号之后，每次调用接口调用speedConunt 或者speedControl即可
- *
- *如果接口小于一秒一次的话，就不会有速度
  */
-class SpeedControl : public noncopyable
+class DataStatistics : public noncopyable
 {
 public:
-	SpeedControl();
+	DataStatistics();
 
-	~SpeedControl();
+	~DataStatistics();
 
-	static SpeedControl& instance() { return Singleton<SpeedControl>::instance();}
+	static DataStatistics& instance() { return Singleton<DataStatistics>::instance(); }
 
-	//返回值小于0是内部malloc错误
-	//计算速度生产编号接口
-	int spdItfaceIden();
+	//上层自己控制不要重复下标，一个模块控速一个下标
+	int speedControlIndexInit(int index, int maxSpeed);
 
-	//传入此接口最大速度
-	//返回值小于0是内部malloc错误
-	int spdCtlItfaceIden(uint32_t maxSpeed);
+	//上层自己控制不要重复下标，一个模块计速度一个下标
+	int speedDataIndexInit(int index);
 
-	//返回等于0是未统计速度，此接口没隔一秒会返回一次速度值，大于0.
-	//返回-2是内部未初始化对应参数标识
-	int speedConunt(int iden);
+	//模块速度每执行一次，调用一次
+	void speedDataAdd(int index);
 
-	//返回值-1是超速
-	//返回值-2是内部未初始化
-	int speedControl(int iden);
-	
+	//控制速度模块没执行一次，调用一次
+	int controlSpeedAdd(int index);
+
+	//每隔一段时间获取一次速度和总量
+	int currentSpeed(int index, uint64_t *allnum);
+
+#if 0
+	//示例方法
+	//这个方法上层必须每秒调用一次，复位速度控制的每个下标
+	void everySecondStatistics()
+	{
+		int offset = 0;
+		char speedInfo[2048] = {0}, *pChar = speedInfo;
+
+		if(exit_)
+		{
+			return;
+		}
+		offset = sprintf(pChar, "\ntmt queue size %ld mt queue size %ld\n", TMtProtocolQueue::instance().queueSize(),  MtProtocolQueue::instance().queueSize());
+		pChar += offset;
+		for(size_t i = 0; i < SMSFWD::ConfigFile::instance().fwdsmsProtocolNum(); i++)
+		{
+			offset = sprintf(pChar, "mo queue index %ld size %ld\n", i, MoProQueuePtrVecObject::instance().moProQueuePtrVecQuSize(i));
+			pChar += offset;
+		}
+		{
+			uint64_t spdbSms = 0, spdbReport = 0, spdbUpsms = 0;
+			int spdbSpeed = 0, spdbRepSpeed = 0, spdbUpsmsSpeed = 0;
+
+			spdbSpeed = currentSpeed(SPDB_DOWN_SMS_SPEED_INDEX, &spdbSms);
+			spdbRepSpeed = currentSpeed(SPDB_UP_REPORT_SPEED_INDEX, &spdbReport);
+			spdbUpsmsSpeed = currentSpeed(SPDB_UP_SMS_SPEED_INDEX, &spdbUpsms);
+			
+			offset = sprintf(pChar, "spdb down sms %d::%ld up report %d::%ld up sms %d::%ld\n", spdbSpeed, spdbSms, spdbRepSpeed, spdbReport, spdbUpsmsSpeed, spdbUpsms);
+			pChar += offset;
+		}
+		{
+			uint64_t unionSms = 0, unionReport = 0, unionUpsms = 0;
+			int unionSpeed = 0, unionRepSpeed = 0, unionUpsmsSpeed = 0;
+
+			unionSpeed = currentSpeed(UNION_DOWN_SMS_SPEED_INDEX, &unionSms);
+			unionRepSpeed = currentSpeed(UNION_UP_REPORT_SPEED_INDEX, &unionReport);
+			unionUpsmsSpeed = currentSpeed(UNION_UP_SMS_SPEED_INDEX, &unionUpsms);
+			
+			offset = sprintf(pChar, "union down sms %d::%ld up report %d::%ld up sms %d::%ld\n-----------------------", unionSpeed, unionSms, unionRepSpeed, unionReport, unionUpsmsSpeed, unionUpsms);
+			pChar += offset;
+		}
+		SPEED_LOG_INFO("%s", speedInfo);
+	}
+#endif
 private:
+
+	ControlSpeedPtrVector controlSpeedVec;
+	SpeedDataPtrVect speedDataVec;
 	
-	AtomicUInt32 spdNum;
-	AtomicUInt32 spdCtlNum;
 };
 
 }

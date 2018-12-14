@@ -1,6 +1,7 @@
 
 #include <map>
 
+#include "Thread.h"
 #include "ThreadPool.h"
 #include "Incommon.h"
 #include "UniqueNum.h"
@@ -15,6 +16,7 @@ typedef TcpClientConnMap::iterator TcpClientConnMapIter;
 
 static TcpClientConnMap tcpClientConnMap;
 static std::unique_ptr<ThreadPool> eventIoPoolPtr;
+static std::unique_ptr<Thread> expirThread;
 static std::vector<LibeventIoPtr> libeventIoPtrVect;
 
 LibeventTcpCli::LibeventTcpCli()
@@ -73,6 +75,12 @@ void LibeventTcpCli::libeventTcpCliExit()
 		eventIoPoolPtr->stop();
 		eventIoPoolPtr.reset();
 	}
+
+	if(expirThread)
+	{
+		expirThread->join();
+		expirThread.reset();
+	}
 }
 
 int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int threadNum, const TcpConnectCallback& connCb_, const TcpOnMessageCallback& msgCb_)
@@ -91,6 +99,14 @@ int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int thread
 		WARN("libeventTcpCliInit thread pool new error");
 		return -1;
 	}
+
+	expirThread.reset(new Thread(std::bind(&LIBEVENT_TCP_CLI::LibeventTcpCli::libeventIoExpireThread, this), "ioexprie"));
+	if(expirThread == nullptr)
+	{
+		WARN("libeventTcpCliInit ioexprie thread new error");
+		return -1;
+	}
+	expirThread->start();
 	
 	libeventIoPtrVect.resize(threadNum);
 	eventIoPoolPtr->start(threadNum);
@@ -290,6 +306,46 @@ void LibeventTcpCli::libeventIoThreadReady()
 {
 	std::lock_guard<std::mutex> lock(mutex_);
 	readyIothread++;
+}
+
+void LibeventTcpCli::libeventIoExpireThread()
+{
+	while(1)
+	{
+		if(isExit)
+		{
+			break;
+		}
+		
+		TcpClientPtrVector vector;
+		{
+			std::lock_guard<std::mutex> lock(mutex_);
+			for(TcpClientConnMapIter iter = tcpClientConnMap.begin(); iter != tcpClientConnMap.end(); )
+			{
+				if(iter->second->isKeepAlive())
+				{
+					iter++;
+				}else{
+					WARN("libeventTcpCliSendMsg conn had been exprie and will be disconnect %lu", iter->first);
+					TcpClientPtr client = iter->second;
+					vector.push_back(client);
+					tcpClientConnMap.erase(iter);
+				}
+			}
+		}
+		
+		for(size_t i = 0; i < vector.size(); i++)
+		{
+			vector[i]->disConnect();
+			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(vector[i]->tcpCliUniqueNum(), vector[i]->tcpClientPrivate(), DIS_CONNECT, vector[i]->tcpServerIp(), vector[i]->tcpServerPort());
+		}
+		
+		if(isExit)
+		{
+			break;
+		}
+		sleep(1);
+	}
 }
 
 void LibeventTcpCli::libeventIoThread(size_t index)

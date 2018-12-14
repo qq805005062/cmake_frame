@@ -1,6 +1,7 @@
 #ifndef __LIBEVENT_TCPCLI_CLIENT_H__
 #define __LIBEVENT_TCPCLI_CLIENT_H__
 
+#include <vector>
 #include <event.h>
 //#include <event2/event.h>
 #include <event2/bufferevent.h>  
@@ -35,7 +36,7 @@ public:
 		priv_ = p;
 	}
 
-	int isKeepAlive();
+	bool isKeepAlive();
 
 	uint64_t tcpCliUniqueNum()
 	{
@@ -47,7 +48,7 @@ public:
 		return ioIndex_;
 	}
 
-	void setRecvSecond();
+	int setRecvSecond();
 
 	const char* tcpServerIp() const
 	{
@@ -105,5 +106,6 @@ private:
 };
 
 typedef std::shared_ptr<TcpClient> TcpClientPtr;
+typedef std::vector<TcpClientPtr> TcpClientPtrVector;
 }
 #endif

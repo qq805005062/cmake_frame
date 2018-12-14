@@ -16,8 +16,6 @@
 #define PDEBUG(fmt, args...)		fprintf(stderr, "%s :: %s() %d: DEBUG " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define PERROR(fmt, args...)		fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 
-#define SPEED(fmt, args...)
-
 inline int64_t secondSinceEpoch()
 {
 	 struct timeval tv;

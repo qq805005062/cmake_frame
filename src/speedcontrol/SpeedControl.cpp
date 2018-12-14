@@ -6,52 +6,100 @@
 namespace SPEED_CONTROL
 {
 
-SpeedControl::SpeedControl()
-	:spdNum()
-	,spdCtlNum()
+DataStatistics::DataStatistics()
+	:controlSpeedVec()
+	,speedDataVec()
 {
-	PDEBUG("SpeedControl init");
+	PDEBUG("DataStatistics init");
 }
 
-SpeedControl::~SpeedControl()
+DataStatistics::~DataStatistics()
 {
-	PERROR("~SpeedControl exit");
+	PERROR("~DataStatistics exit");
 }
 
-int SpeedControl::spdItfaceIden()
+int DataStatistics::speedControlIndexInit(int index, int maxSpeed)
 {
-	int ret = 0;
-	uint32_t num = spdNum.incrementAndGet();
-	ret = SpeedDataVector::instance().speedDataVectorAdd(num);
-	if(ret < 0)
+	int vectSize = static_cast<int>(controlSpeedVec.size());
+	if(vectSize <= index)
 	{
-		return ret;
+		vectSize = index - vectSize + 1;
 	}
-	return static_cast<int>(num);
-}
-
-int SpeedControl::spdCtlItfaceIden(uint32_t maxSpeed)
-{
-	int ret = 0;
-	uint32_t num = spdCtlNum.incrementAndGet();
-	ret = ControlSpeedVector::instance().controlSpeedVctAdd(num, maxSpeed);
-	if(ret < 0)
+	for(int i = 0; i < vectSize; i++)
 	{
-		return ret;
+		controlSpeedVec.push_back(nullptr);
 	}
-	return static_cast<int>(num);
+
+	controlSpeedVec[index].reset(new ControlSpeed(maxSpeed));
+
+	if(controlSpeedVec[index] == nullptr)
+	{
+		return -1;
+	}
+
+	return 0;
 }
 
-int SpeedControl::speedConunt(int iden)
+int DataStatistics::speedDataIndexInit(int index)
 {
-	uint32_t num = static_cast<uint32_t>(iden);
-	return SpeedDataVector::instance().speedDataAdd(num);
+	int vectSize = static_cast<int>(speedDataVec.size());
+	if(vectSize <= index)
+	{
+		vectSize = index - vectSize + 1;
+	}
+	for(int i = 0; i < vectSize; i++)
+	{
+		speedDataVec.push_back(nullptr);
+	}
+
+	speedDataVec[index].reset(new SpeedData());
+	if(speedDataVec[index] == nullptr)
+	{
+		return -1;
+	}
+
+	return 1;
 }
 
-int SpeedControl::speedControl(int iden)
+void DataStatistics::speedDataAdd(int index)
 {
-	uint32_t num = static_cast<uint32_t>(iden);
-	return ControlSpeedVector::instance().controlSpeedAdd(num);
+	size_t vectIndex = static_cast<size_t>(index);
+	if(speedDataVec.size() <= vectIndex)
+	{
+		return;
+	}
+	if(speedDataVec[vectIndex])
+	{
+		speedDataVec[vectIndex]->speedCount();
+	}
+}
+
+int DataStatistics::controlSpeedAdd(int index)
+{
+	size_t vectIndex = static_cast<size_t>(index);
+	if(controlSpeedVec.size() <= vectIndex)
+	{
+		return -1;
+	}
+	if(controlSpeedVec[vectIndex])
+	{
+		return controlSpeedVec[vectIndex]->speedCount();
+	}
+	return -1;
+}
+
+int DataStatistics::currentSpeed(int index, uint64_t *allnum)
+{
+	size_t vectIndex = static_cast<size_t>(index);
+	if(speedDataVec.size() <= vectIndex)
+	{
+		return 0;
+	}
+	if(speedDataVec[vectIndex])
+	{
+		return speedDataVec[vectIndex]->everySecondSpeed(allnum);
+	}
+	return 0;
 }
 
 }

@@ -15,78 +15,16 @@ namespace SPEED_CONTROL
 
 typedef AtomicIntegerT<uint64_t> AtomicUInt64;
 
-class SpeedData
-{
-public:
-	SpeedData(uint32_t num)
-		:moduleNum(num)
-		,lastSecond(0)
-		,lastSpeed(0)
-		,speed()
-		,mutex_()
-	{
-		PDEBUG("SpeedData init");
-	}
-
-	~SpeedData()
-	{
-		PERROR("~SpeedData exit");
-	}
-
-	int speedAdd()
-	{
-		uint64_t nowSpeed = speed.incrementAndGet();
-		int64_t second = secondSinceEpoch();
-		if(lastSecond == 0)
-		{
-			lastSecond = second;
-			return 0;
-		}
-
-		if(second == lastSecond)
-		{
-			return 0;
-		}
-
-		std::lock_guard<std::mutex> lock(mutex_);
-		if(second - lastSecond == 1)
-		{
-			uint64_t curr = nowSpeed - lastSpeed;
-			PDEBUG("module num %d speed %ld", moduleNum, curr);
-			lastSpeed = nowSpeed;
-			lastSecond = second;
-			return static_cast<int>(curr);
-		}
-
-		if(lastSecond != second)
-		{
-			lastSpeed = nowSpeed;
-			lastSecond = second;
-		}
-		return 0;
-	}
-
-private:
-	uint32_t moduleNum;
-	volatile int64_t lastSecond;
-	volatile uint64_t lastSpeed;
-	AtomicUInt64 speed;
-	std::mutex mutex_;
-};
-typedef std::shared_ptr<SpeedData> SpeedDataPtr;
-
 class ControlSpeed
 {
 public:
-	ControlSpeed(uint32_t num, uint32_t maxSpeed)
-		:moduleNum(num)
-		,lastSecond(0)
-		,maxSpd(maxSpeed)
-		,lastSpeed(0)
-		,speed()
-		,mutex_()
+	ControlSpeed(int maxSpeed)
+		:maxSpeed_(0)
+		,lastCounNum_(0)
+		,allCountNum_()
 	{
 		PDEBUG("ControlSpeed init");
+		maxSpeed_ = static_cast<uint64_t>(maxSpeed);
 	}
 
 	~ControlSpeed()
@@ -94,138 +32,72 @@ public:
 		PERROR("~ControlSpeed exit");
 	}
 
-	int controlAdd()
+	int speedCount()
 	{
-		uint64_t nowSpeed = speed.incrementAndGet();
-		int64_t second = secondSinceEpoch();
-		if(lastSecond == 0)
+		uint64_t nowCount = allCountNum_.incrementAndGet();
+		uint64_t nowSpeed = nowCount - lastCounNum_;
+		if(maxSpeed_ && (nowSpeed > maxSpeed_))
 		{
-			lastSecond = second;
-			if(nowSpeed > maxSpd)
-			{
-				return -1;
-			}
-			return 0;
-		}
-		
-		if(second == lastSecond)
-		{
-			uint64_t curr = nowSpeed - lastSpeed;
-			if(curr > maxSpd)
-			{
-				return -1;
-			}
-			return 0;
-		}
-		
-		std::lock_guard<std::mutex> lock(mutex_);
-		if(nowSpeed < lastSpeed)
-		{
-			lastSpeed = nowSpeed;
+			return -1;
 		}
-		lastSecond = second; 
 		return 0;
 	}
 
+	//每秒必须要调用一次，不然会影响控速模块
+	void everySeondReset()
+	{
+		lastCounNum_ = allCountNum_.get();
+	}
 private:
-	uint32_t moduleNum;
-	volatile int64_t lastSecond;
-	uint64_t maxSpd;
-	volatile uint64_t lastSpeed;
-	AtomicUInt64 speed;
-	std::mutex mutex_;
-
+	uint64_t maxSpeed_;
+	uint64_t lastCounNum_;
+	AtomicUInt64 allCountNum_;
+	
 };
+
 typedef std::shared_ptr<ControlSpeed> ControlSpeedPtr;
+typedef std::vector<ControlSpeedPtr> ControlSpeedPtrVector;
 
-class SpeedDataVector : public noncopyable
+class SpeedData
 {
 public:
-	SpeedDataVector()
-		:SpeedDataPtrVect()
+	SpeedData()
+		:lastCounNum_(0)
+		,allCountNum_()
 	{
-		PDEBUG("SpeedDataVector init");
+		PDEBUG("SpeedData init");
 	}
 
-	~SpeedDataVector()
+	~SpeedData()
 	{
-		PERROR("~SpeedDataVector exit");
+		PERROR("~SpeedData init");
 	}
 
-	static SpeedDataVector& instance() { return Singleton<SpeedDataVector>::instance();}
-
-	int speedDataVectorAdd(uint32_t sunIndx)
+	void speedCount()
 	{
-		while(SpeedDataPtrVect.size() < sunIndx)
+		allCountNum_.increment();
+	}
+
+	//每秒钟获取总数和速度
+	int everySecondSpeed(uint64_t* allnum)
+	{
+		uint64_t all = allCountNum_.get();
+		if(allnum)
 		{
-			SpeedDataPtrVect.push_back(nullptr);
+			*allnum = all;
 		}
-
-		SpeedDataPtr speed(new SpeedData(sunIndx));
-		if(speed == nullptr)
-		{
-			return -1;
-		}
-		SpeedDataPtrVect.push_back(speed);
-		return 0;
+		int speed = static_cast<int>(all - lastCounNum_);
+		lastCounNum_ = all;
+		return speed;
 	}
-
-	int speedDataAdd(uint32_t sunIndx)
-	{
-		if(SpeedDataPtrVect.size() > sunIndx && SpeedDataPtrVect[sunIndx])
-		{
-			return SpeedDataPtrVect[sunIndx]->speedAdd();
-		}
-		return -2;
-	}
-
+	
 private:
-	std::vector<SpeedDataPtr> SpeedDataPtrVect;
+	uint64_t lastCounNum_;
+	AtomicUInt64 allCountNum_;
 };
 
-class ControlSpeedVector : public noncopyable
-{
-public:
-	ControlSpeedVector()
-		:ControlSpeedPtrVect()
-	{
-		PDEBUG("ControlSpeedVector init");
-	}
-
-	~ControlSpeedVector()
-	{
-		PERROR("~ControlSpeedVector exit");
-	}
-
-	static ControlSpeedVector& instance() { return Singleton<ControlSpeedVector>::instance();}
-
-	int controlSpeedVctAdd(uint32_t sunIndx, uint32_t maxSpeed)
-	{
-		while(ControlSpeedPtrVect.size() < sunIndx)
-		{
-			ControlSpeedPtrVect.push_back(nullptr);
-		}
-
-		ControlSpeedPtr cSpeed(new ControlSpeed(sunIndx, maxSpeed));
-		if(cSpeed == nullptr)
-		{
-			return -1;
-		}
-		ControlSpeedPtrVect.push_back(cSpeed);
-		return 0;
-	}
-
-	int controlSpeedAdd(uint32_t sunIndx)
-	{
-		if(ControlSpeedPtrVect.size() > sunIndx && ControlSpeedPtrVect[sunIndx])
-		{
-			return ControlSpeedPtrVect[sunIndx]->controlAdd();
-		}
-		return -2;
-	}
-private:
-	std::vector<ControlSpeedPtr> ControlSpeedPtrVect;
-};
+typedef std::shared_ptr<SpeedData> SpeedDataPtr;
+typedef std::vector<SpeedDataPtr> SpeedDataPtrVect;
 
 }
 #endif
