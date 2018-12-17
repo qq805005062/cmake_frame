@@ -81,6 +81,7 @@ public:
 		if(timev_)
 		{
 			evtimer_del(timev_);
+			event_free(timev_);
 			timev_ = nullptr;
 		}
 		

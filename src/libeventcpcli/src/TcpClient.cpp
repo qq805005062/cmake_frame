@@ -145,6 +145,7 @@ TcpClient::~TcpClient()
 	if(timev_)
 	{
 		evtimer_del(timev_);
+		event_free(timev_);
 		timev_ = nullptr;
 	}
 	if(bev_)
@@ -206,6 +207,7 @@ int TcpClient::connectServer(struct event_base* eBase)
 	{
 		ERROR("TcpClient bufferevent_socket_connect failed : %p  %d", base_, ret);
 		evtimer_del(timev_);
+		event_free(timev_);
 		timev_ = nullptr;
 		return ret;
 	}
@@ -226,6 +228,7 @@ void TcpClient::disConnect()
 	if(timev_)
 	{
 		evtimer_del(timev_);
+		event_free(timev_);
 		timev_ = nullptr;
 	}
 	if(bev_)
