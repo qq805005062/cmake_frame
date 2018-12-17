@@ -133,6 +133,7 @@ TcpClient::TcpClient(size_t ioIndex, uint64_t uniqueNum, const std::string& ipad
 	,ipaddr_(ipaddr)
 {
 	DEBUG("TcpClient init");
+	lastRecvSecond_ = secondSinceEpoch();
 }
 
 TcpClient::~TcpClient()
@@ -209,7 +210,13 @@ int TcpClient::connectServer(struct event_base* eBase)
 		return ret;
 	}
 	lastRecvSecond_ = secondSinceEpoch();
-	sockfd_ = bufferevent_getfd(bev_);
+	if(bev_)
+	{
+		sockfd_ = bufferevent_getfd(bev_);
+	}else{
+		ERROR("TcpClient bufferevent_socket_connect failed : %p  %d", base_, ret);
+		return -1;
+	}
 	DEBUG("connectServer ip port sockfd %s:%d %d  %lu", ipaddr_.c_str(), port_, sockfd_, uniqueNum_);
 	return sockfd_;
 }
@@ -238,16 +245,13 @@ void TcpClient::sendMsg(const void* msg, size_t len)
 	}
 }
 
-bool TcpClient::isKeepAlive()
+bool TcpClient::isKeepAlive(uint64_t second)
 {
 	bool result = true;
-	int ret = setRecvSecond();
-	if(ret < 0)
+	if(lastRecvSecond_  && ((second - lastRecvSecond_) > outSecond_))
 	{
-		result = false;
 		ERROR("tcp cli ip port sockfd %s %d %d %ld had been expire", ipaddr_.c_str(), port_, sockfd_, outbufLen_);
-	}else{
-		;
+		result = false;
 	}
 	return result;
 }
@@ -256,10 +260,11 @@ int TcpClient::setRecvSecond()
 {
 	uint64_t second = secondSinceEpoch();
 
-	if((second - lastRecvSecond_) > outSecond_)
+	if(lastRecvSecond_  && ((second - lastRecvSecond_) > outSecond_))
 	{
 		return -1;
 	}
+
 	lastRecvSecond_ = second;
 	return 0;
 }

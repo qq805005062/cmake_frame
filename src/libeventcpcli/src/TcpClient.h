@@ -36,7 +36,7 @@ public:
 		priv_ = p;
 	}
 
-	bool isKeepAlive();
+	bool isKeepAlive(uint64_t second);
 
 	uint64_t tcpCliUniqueNum()
 	{
@@ -48,6 +48,7 @@ public:
 		return ioIndex_;
 	}
 
+	//小于0失败，超时，==0正常
 	int setRecvSecond();
 
 	const char* tcpServerIp() const

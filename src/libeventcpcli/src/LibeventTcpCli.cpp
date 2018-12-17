@@ -197,7 +197,7 @@ int LibeventTcpCli::libeventTcpCliSendMsg(uint64_t unid, const char* msg, size_t
 		client = iter->second;
 	}
 
-	if(client->isKeepAlive())
+	if(client->setRecvSecond() == 0)
 	{
 		OrderNodePtr node(new OrderNode(client, msg, msglen));
 		if(node)
@@ -209,20 +209,15 @@ int LibeventTcpCli::libeventTcpCliSendMsg(uint64_t unid, const char* msg, size_t
 				return 0;
 			}else{
 				WARN("libeventTcpCliSendMsg libeventIoOrder error index %ld", client->inIoThreadIndex());
-				return -1;
 			}
 		}else{
 			WARN("libeventTcpCliSendMsg new order node nullptr ");
-			return -1;
 		}
-	}else{
-		WARN("libeventTcpCliSendMsg conn had been exprie and will be disconnect %lu", unid);
-		client->disConnect();
-		LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(client->tcpCliUniqueNum(), client->tcpClientPrivate(), DIS_CONNECT, client->tcpServerIp(), client->tcpServerPort());
-		return -3;
 	}
 	
-	return 0;
+	WARN("libeventTcpCliSendMsg conn had been exprie and will be disconnect %lu", unid);
+	libeventTcpCliDisconnect(unid);
+	return -3;
 }
 
 int LibeventTcpCli::libeventTcpCliResetPrivate(uint64_t unid, void* priv)
@@ -283,14 +278,11 @@ int LibeventTcpCli::libeventTcpCliDisconnect(uint64_t unid)
 		if(libeventIoPtrVect[client->inIoThreadIndex()])
 		{
 			libeventIoPtrVect[client->inIoThreadIndex()]->libeventIoOrder(node);
-			return 0;
 		}else{
 			WARN("libeventTcpCliDisconnect libeventIoOrder error index %ld", client->inIoThreadIndex());
-			return -1;
 		}
 	}else{
 		WARN("libeventTcpCliDisconnect new order node nullptr ");
-		return -1;
 	}
 
 	if(client->tcpCliState() == CONN_FAILED)
@@ -316,28 +308,23 @@ void LibeventTcpCli::libeventIoExpireThread()
 		{
 			break;
 		}
-		
-		TcpClientPtrVector vector;
+		uint64_t second = secondSinceEpoch();
+		std::vector<uint64_t> uidVect;
 		{
 			std::lock_guard<std::mutex> lock(mutex_);
-			for(TcpClientConnMapIter iter = tcpClientConnMap.begin(); iter != tcpClientConnMap.end(); )
+			for(TcpClientConnMapIter iter = tcpClientConnMap.begin(); iter != tcpClientConnMap.end(); iter++)
 			{
-				if(iter->second->isKeepAlive())
+				if(!iter->second->isKeepAlive(second))
 				{
-					iter++;
-				}else{
 					WARN("libeventTcpCliSendMsg conn had been exprie and will be disconnect %lu", iter->first);
-					TcpClientPtr client = iter->second;
-					vector.push_back(client);
-					tcpClientConnMap.erase(iter);
+					uidVect.push_back(iter->second->tcpCliUniqueNum());
 				}
 			}
 		}
 		
-		for(size_t i = 0; i < vector.size(); i++)
+		for(size_t i = 0; i < uidVect.size(); i++)
 		{
-			vector[i]->disConnect();
-			LIBEVENT_TCP_CLI::LibeventTcpCli::instance().tcpServerConnect(vector[i]->tcpCliUniqueNum(), vector[i]->tcpClientPrivate(), DIS_CONNECT, vector[i]->tcpServerIp(), vector[i]->tcpServerPort());
+			libeventTcpCliDisconnect(uidVect[i]);
 		}
 		
 		if(isExit)
