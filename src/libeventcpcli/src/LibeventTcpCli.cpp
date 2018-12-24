@@ -98,7 +98,7 @@ int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int thread
 	{
 		WARN("libeventTcpCliInit thread pool new error");
 		return -1;
-	}
+	}
 
 	expirThread.reset(new Thread(std::bind(&LIBEVENT_TCP_CLI::LibeventTcpCli::libeventIoExpireThread, this), "ioexprie"));
 	if(expirThread == nullptr)

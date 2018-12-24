@@ -84,8 +84,7 @@ public:
 			event_free(timev_);
 			timev_ = nullptr;
 		}
-		
-state_ = CONN_SUCCESS;
+		state_ = CONN_SUCCESS;
 	}
 	
 private:
