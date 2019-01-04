@@ -46,7 +46,7 @@ void LibeventTcpCli::libeventTcpCliExit()
 
 	while(ioThreadNum == 0)
 	{
-		usleep(1000);
+		return;
 	}
 
 	for(size_t i = 0; i < ioThreadNum; i++)
@@ -62,14 +62,6 @@ void LibeventTcpCli::libeventTcpCliExit()
 		usleep(1000);
 	}
 
-	for(size_t i = 0; i < ioThreadNum; i++)
-	{
-		if(libeventIoPtrVect[i])
-		{
-			libeventIoPtrVect[i].reset();
-		}
-	}
-
 	if(eventIoPoolPtr)
 	{
 		eventIoPoolPtr->stop();
@@ -80,6 +72,14 @@ void LibeventTcpCli::libeventTcpCliExit()
 	{
 		expirThread->join();
 		expirThread.reset();
+	}
+
+	for(size_t i = 0; i < ioThreadNum; i++)
+	{
+		if(libeventIoPtrVect[i])
+		{
+			libeventIoPtrVect[i].reset();
+		}
 	}
 }
 
