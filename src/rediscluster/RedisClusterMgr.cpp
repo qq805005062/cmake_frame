@@ -366,6 +366,7 @@ bool RedisClusterMgr::connectClusterNode(const NodeInfo& node)
 		}
 	}
 
+	//INFO("new redis connect nodeid=%s host=%s port=%d", node.id.c_str(), node.ipStr.c_str(), node.port);
 	RedisClusterNodePtr clusterNode(new RedisClusterNode());
 	if (!clusterNode)
 	{
@@ -383,10 +384,13 @@ bool RedisClusterMgr::connectClusterNode(const NodeInfo& node)
 	{
 		for (uint16_t pos = slotsVec[i].slotStart; pos <= slotsVec[i].slotEnd; pos++)
 		{
-			slotMap_.insert(std::make_pair(pos, clusterNode));
+			//fix bug map insert and [] diff
+			//slotMap_.insert(std::make_pair(pos, clusterNode));
+			slotMap_[pos] = clusterNode;
 		}
 	}
 
+	//INFO("success connect redis nodeid=%s", node.id.c_str());
 	nodesStatus_.insert(std::make_pair(node.id, true));
 	return true;
 }
@@ -396,7 +400,9 @@ RedisClient* RedisClusterMgr::findNodeConnection(const std::string& key)
 	// 检测状态是否可用，如果不可用则不能取到Redis连接
 	if (!bStatus_)
 	{
-		return NULL;
+		//WARN("redis cluster status fail will reconnect");
+		//去掉这里的返回 当整个集群都down了 再次重启也可以恢复正常 否则必须重启服务
+		//return NULL;
 	}
 
 	uint16_t slotIndex = getKeySlotIndex(key.c_str());

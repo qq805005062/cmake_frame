@@ -122,6 +122,7 @@ void RedisClient::recycle()
 		}
 		else
 		{
+			//ERROR("connect host=%s port=%d find error=%s will remove client", ipStr_.c_str(), port_, lastError_.c_str());
 			// 发生了错误后,需要清除这个连接
 			manager_->removeRedisClient(this);
 		}
@@ -131,16 +132,19 @@ void RedisClient::recycle()
 
 bool RedisClient::ping()
 {
+	if (context_ == NULL) return false;
 	redisReply* reply = static_cast<redisReply* >(redisCommand(context_, "PING"));
 	connStatus_ = ((NULL != reply) && (reply->str) && (strcasecmp(reply->str, "PONG") == 0));
 	
-	if ((reply->type == REDIS_REPLY_ERROR) && (reply->str))
-	{
-		setLastError(reply->str, reply->len);
-	}
+	if(NULL == reply) return false;
 	
 	if (reply)
 	{
+		if ((reply->type == REDIS_REPLY_ERROR) && (reply->str))
+		{
+			setLastError(reply->str, reply->len);
+		}
+
 		freeReplyObject(reply);
 	}
 	return connStatus_;
@@ -725,6 +729,15 @@ bool RedisClient::hincrby(const std::string& key, const std::string& field, cons
 
 	return commandInteger(retval, "HINCRBY %s %s %s", key.c_str(), field.c_str(),value.c_str());
 }
+bool RedisClient::incrby(const std::string& key, const int value, int64_t& retval)
+{
+    if (key.empty() || key == "")
+    {
+        return false;
+    }
+
+    return commandInteger(retval, "INCRBY %s %d", key.c_str(), value);
+}
 
 
 bool RedisClient::hmget(const std::string& key, const ArrayList& fieldList, HashMapDataItem& dataItemMap)
@@ -1001,4 +1014,73 @@ bool RedisClient::zrangebyscore_(const std::string& key,
 	}
 }
 
+bool RedisClient::lpush(const std::string& key, const std::string& value,int64_t& retval)
+{
+    if (key.empty() || key == "" || value.empty() || value == "")
+    {
+        return false;
+    }
 
+    std::vector<std::string> vCmdData;
+    vCmdData.push_back("LPUSH");
+    vCmdData.push_back(key);
+    vCmdData.push_back(value);
+
+    return commandArgvInteger(vCmdData, retval);
+}
+
+bool RedisClient::rpush(const std::string& key, const std::string& value,int64_t& retval)
+{
+    if (key.empty() || key == "" || value.empty() || value == "")
+    {
+        return false;
+    }
+
+    std::vector<std::string> vCmdData;
+    vCmdData.push_back("RPUSH");
+    vCmdData.push_back(key);
+    vCmdData.push_back(value);
+
+    return commandArgvInteger(vCmdData, retval);
+}
+
+bool RedisClient::lpop(const std::string& key, std::string& value)
+{
+    if (key.empty() || key == "")
+    {
+        return false;
+    }
+    std::string cmd = "LPOP " + key;
+    return commandString(value, cmd.c_str());
+}
+
+bool RedisClient::rpop(const std::string& key, std::string& value)
+{
+    if (key.empty() || key == "")
+    {
+        return false;
+    }
+    std::string cmd = "RPOP " + key;
+    return commandString(value, cmd.c_str());
+}
+
+bool RedisClient::blpop(const std::string& key, std::vector<std::string>& vValue, int64_t timeout)
+{
+    if (key.empty() || key == "")
+    {
+        return false;
+    }
+    std::string cmd = "BLPOP " + key + " " + std::to_string(timeout);
+    return commandList(vValue, cmd.c_str());
+    
+}
+
+bool RedisClient::brpop(const std::string& key, std::vector<std::string>& vValue, int64_t timeout)
+{
+    if (key.empty() || key == "")
+    {
+        return false;
+    }
+    std::string cmd = "BRPOP " + key + " " + std::to_string(timeout);
+    return commandList(vValue, cmd.c_str());
+}

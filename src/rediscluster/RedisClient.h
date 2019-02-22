@@ -47,6 +47,7 @@ typedef struct _DATA_ITEM_
 		value = data.value;
 		return *this;
 	}
+    int intValue(){ return atoi(value.c_str()); }
 } DataItem;
 
 typedef std::map<std::string, DataItem> HashMapDataItem;
@@ -97,6 +98,11 @@ public:
 	
 	//
 	bool hincrby(const std::string& key, const std::string& field, const std::string& value,int64_t& retval);
+    bool incrby(const std::string& key, const int value, int64_t& retval);
+    inline bool incr(const std::string& key, int64_t& retval)
+    {
+        return incrby(key, 1, retval);
+    }
 
 	// 无序set操作
 	bool sadd(const std::string& key, const std::vector<std::string>& vValue, int64_t& retval);
@@ -104,6 +110,14 @@ public:
 	bool smembers(const std::string& key, std::vector<std::string>& vValue);
 	bool srem(const std::string& key, const std::vector<std::string>& members, int64_t& count);
 	bool sismember(const std::string& key, const std::string& member);
+
+    //队列
+    bool lpush(const std::string& key, const std::string& value,int64_t& retval);
+    bool rpush(const std::string& key, const std::string& value,int64_t& retval);
+    bool lpop(const std::string& key, std::string& value);
+    bool rpop(const std::string& key, std::string& value);
+    bool blpop(const std::string& key, std::vector<std::string>& vValue, int64_t timeout=0);
+    bool brpop(const std::string& key, std::vector<std::string>& vValue, int64_t timeout=0);
 
 	// 有序set操作
 	/**

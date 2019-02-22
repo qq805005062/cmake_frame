@@ -20,6 +20,7 @@ RedisClusterNode::RedisClusterNode()
 
 RedisClusterNode::~RedisClusterNode()
 {
+	//WARN("host=%s port=%d will disconnect", info_.ipStr.c_str(), info_.port);
 	stop();
 }
 
@@ -91,8 +92,7 @@ bool RedisClusterNode::applayNewRedisClient(RedisClient*& client)
 			bool bRet = client->connect();
 			if (!bRet && client)
 			{
-				printf("conn redis failed! reason: (%s:%d) %s\n",
-				      info_.ipStr.c_str(), info_.port, client->getLastError().c_str());
+				//ERROR("conn redis failed! reason: (%s:%d) %s", info_.ipStr.c_str(), info_.port, client->getLastError().c_str());
 				delete client;
 				client = NULL;
 			}
