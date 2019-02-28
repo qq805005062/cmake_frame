@@ -425,7 +425,13 @@ RedisClient* RedisClusterMgr::getConnection(uint16_t slotIndex)
 		int ret = init2(brokers_, minSize_, maxSize_, timeout_, password_);
 		if (ret == 0)
 		{
+			//重连恢复之后 再次获取本次请求的连接
 			bStatus_ = true;
+			auto itnew = slotMap_.find(slotIndex);
+			if (itnew != slotMap_.end() && (itnew->second))
+			{
+				return itnew->second->getRedisClient();
+			}
 		}
 		return NULL;
 	}

@@ -275,6 +275,8 @@ public:
 						const std::string& start = "",
 						const std::string& end = "",
 						int offset = 0,int cout = 0);
+
+	bool getStatus(){ return connStatus_; }
 private:
 	redisContext* connectWithTimeout();
 
