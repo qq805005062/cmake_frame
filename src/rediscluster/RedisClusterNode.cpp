@@ -39,22 +39,6 @@ bool RedisClusterNode::init(const NodeInfo& info,
 		return false;
 	}
 
-	//异常重连的时候 需要清空回收所有上次建立的连接 仅处理空闲的连接 
-	//已经被取走的连接会由removeRedisClient处理释放
-	//此过程加锁 为了不让继续获取连接
-	std::lock_guard<std::mutex> lock(mutex_);
-	for ( auto it=idleList_.begin(); it != idleList_.end(); ++it)
-	{
-		if (*it)
-		{
-			(*it)->release();
-			delete (*it);
-			*it = NULL;
-		}
-	}
-	idleList_.clear();
-
-
 	for (int i = 0; i < minSize_; ++i)
 	{
 		RedisClient* client = NULL;
@@ -135,9 +119,9 @@ RedisClient* RedisClusterNode::getRedisClient()
 			{
 				useMap_.insert(std::make_pair(client, 0));
 			}
-			else
+			else if(useMap_.empty())
 			{
-				// 如果申请新的连接不成功则置节点状态为false
+				// 如果申请新的连接不成功+无再用连接,则置节点状态为false
 				bStatus_ = false;
 			}
 		}
@@ -173,9 +157,13 @@ void RedisClusterNode::removeRedisClient(RedisClient* client)
 			useMap_.erase(client);
 			client->release();
 			client = NULL;
-		}
-	}
 
-	//遇到异常[视为整个节点异常]移除连接
-	bStatus_ = false;
+			//如果空闲 + 在用 size = 0
+			if (useMap_.empty() && idleList_.empty())
+			{
+				bStatus_ = false;
+			}
+		}
+		
+	}
 }

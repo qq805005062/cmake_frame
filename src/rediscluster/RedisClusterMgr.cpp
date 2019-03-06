@@ -65,7 +65,7 @@ uint16_t RedisClusterMgr::crc16(const char *buf, size_t len)
 
 int RedisClusterMgr::init(const std::string& ipStr,
                           int port, int minSize, int maxSize, int timeout,
-                          const std::string& password)
+                          const std::string& password, int fullCoverage)
 {
 	ipStr_ = ipStr;
 	port_ = port;
@@ -73,6 +73,7 @@ int RedisClusterMgr::init(const std::string& ipStr,
 	maxSize_ = maxSize;
 	timeout_ = timeout;
 	password_ = password;
+	fullCoverage_ = fullCoverage;
 
 	RedisClient client(NULL);
 	client.init(ipStr_, port_, timeout_, password_);
@@ -123,13 +124,14 @@ int RedisClusterMgr::init(const std::string& ipStr,
 
 int RedisClusterMgr::init2(const std::string& brokers,
                            int minSize, int maxSize, int timeout,
-                           const std::string& password)
+                           const std::string& password, int fullCoverage)
 {
 	brokers_ = brokers;
 	minSize_ = minSize;
 	maxSize_ = maxSize;
 	timeout_ = timeout;
 	password_ = password;
+	fullCoverage_ = fullCoverage;
 
 	std::vector<std::string> result;
 	split(brokers_, ",", &result);
@@ -398,11 +400,11 @@ bool RedisClusterMgr::connectClusterNode(const NodeInfo& node)
 RedisClient* RedisClusterMgr::findNodeConnection(const std::string& key)
 {
 	// 检测状态是否可用，如果不可用则不能取到Redis连接
-	if (!bStatus_)
+	if (!bStatus_ && fullCoverage_)
 	{
 		//WARN("redis cluster status fail will reconnect");
-		//去掉这里的返回 当整个集群都down了 再次重启也可以恢复正常 否则必须重启服务
-		//return NULL;
+		//明确配置必须全覆盖 才可用(可能导致异常无法恢复)
+		return NULL;
 	}
 
 	uint16_t slotIndex = getKeySlotIndex(key.c_str());
@@ -419,21 +421,31 @@ RedisClient* RedisClusterMgr::getConnection(uint16_t slotIndex)
 
 	if (it->second->getStatus() == false)
 	{
-		nodesStatus_.erase(it->second->getNodeId());
-		// FIXME: 原子操作，置为false,暂停取连接
 		bStatus_ = false;
-		int ret = init2(brokers_, minSize_, maxSize_, timeout_, password_);
-		if (ret == 0)
+
 		{
-			//重连恢复之后 再次获取本次请求的连接
-			bStatus_ = true;
-			auto itnew = slotMap_.find(slotIndex);
-			if (itnew != slotMap_.end() && (itnew->second))
+			// 初始化互斥
+			std::lock_guard<std::mutex> lock(initMtx_);
+			if (bStatus_ == false)
 			{
-				return itnew->second->getRedisClient();
+				nodesStatus_.erase(it->second->getNodeId());
+				int ret = init2(brokers_, minSize_, maxSize_, timeout_, password_);
+				if (ret != CONNECT_SUCCESS)
+				{
+					return NULL;
+				}
+
+				//重连恢复之后 再次获取本次请求的连接
+				bStatus_ = true;
 			}
 		}
-		return NULL;
+
+		
+		auto itnew = slotMap_.find(slotIndex);
+		if (itnew != slotMap_.end() && (itnew->second))
+		{
+			return itnew->second->getRedisClient();
+		}
 	}
 
 	return it->second->getRedisClient();

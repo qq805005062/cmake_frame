@@ -5,10 +5,13 @@
 #include <hiredis/hiredis.h>
 
 #include <common/Singleton.h>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <map>
 #include <memory>
+
+#define CONNECT_SUCCESS 0 
 
 namespace rediscluster
 {
@@ -36,12 +39,14 @@ public:
 	          int minSize,
 	          int maxSize,
 	          int timeout = 0,
-	          const std::string& passwd = "");
+	          const std::string& passwd = "",
+	          int fullCoverage = 0/*是否要求slot全覆盖*/);
 	int  init2(const std::string& brokers,
 	           int minSize,
 	           int maxSize,
 	           int timeout = 0,
-	           const std::string& passwd = "");
+	           const std::string& passwd = "",
+	           int fullCoverage = 0/*是否要求slot全覆盖*/);
 	int  start();
 	void stop();
 
@@ -78,6 +83,7 @@ private:
 
 private:
 	bool bStatus_;
+	int fullCoverage_;
 	std::string brokers_;
 	std::string ipStr_;
 	int port_;
@@ -88,6 +94,8 @@ private:
 	std::vector<NodeInfo> nodes_;
 	std::map<std::string, bool> nodesStatus_;
 	std::map<uint16_t, RedisClusterNodePtr> slotMap_;
+	
+	std::mutex initMtx_;
 };
 
 } // end namespace rediscluster
