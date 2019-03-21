@@ -56,7 +56,7 @@ public:
 	//服务端端口，回调函数会带回来那个端口回来的数据
 	//每个连接上携带的私有数据，内部不维护内存结构，外部要自己析构、new
 	//连接超时时间，如果连接在大于这个时间无数据来往的话，及认为不可用，单位秒钟
-	int libeventAddConnect(const std::string& ipaddr, int port, void* priv = NULL, int outSecond = 30);
+	int libeventAddConnect(const std::string& ipaddr, int port, void* priv = NULL, int dataOutSecond = 30, int connOutSecond = 3);
 
 	//发送消息，异步发送，返回值仅仅表示这个连接是否可以发送，并不是真正的发送成功
 	//第一个参数是每一个连接唯一的标识数子

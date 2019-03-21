@@ -16,7 +16,7 @@ class TcpClient
 {
 public:
 	//io线程下标，唯一数字标识，ip地址，端口，私有信息，超时时间，
-	TcpClient(size_t ioIndex, uint64_t uniqueNum, const std::string& ipaddr, int port, void* priv, int outSecond = 30);
+	TcpClient(size_t ioIndex, uint64_t uniqueNum, const std::string& ipaddr, int port, void* priv, int dataOutSecond = 30, int connOutSecond = 3);
 
 	~TcpClient();
 
@@ -80,7 +80,6 @@ public:
 	{
 		if(timev_)
 		{
-			evtimer_del(timev_);
 			event_free(timev_);
 			timev_ = nullptr;
 		}
@@ -90,7 +89,8 @@ public:
 private:
 	int port_;
 	int sockfd_;
-	int outSecond_;
+	int connOutSecond_;
+    int dataOutSecond_;
 	int state_;// 0是初始状态，未连接成功， 1 是连接成功， 2是连接成功之后断开
 	
 	size_t ioIndex_;

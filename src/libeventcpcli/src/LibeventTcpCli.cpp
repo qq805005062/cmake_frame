@@ -123,7 +123,7 @@ int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int thread
 	return 0;
 }
 
-int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void* priv, int outSecond)
+int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void* priv, int dataOutSecond, int connOutSecond)
 {
 	if(isExit)
 	{
@@ -146,7 +146,7 @@ int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void
 		
 		uint64_t uuid = uniqueNumId(uniquId_);
 		DEBUG("uniqueNumId %lu", uuid);
-		TcpClientPtr client(new TcpClient(index, uuid, ipaddr, port, priv, outSecond));
+		TcpClientPtr client(new TcpClient(index, uuid, ipaddr, port, priv, dataOutSecond, connOutSecond));
 		if(client)
 		{
 			if(libeventIoPtrVect[index])

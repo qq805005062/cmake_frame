@@ -183,14 +183,19 @@ void sig_catch(int sig)
 	return;
 }
 
-static void tcpConnectCallback(uint64_t uniqueid, void* priv, bool isConn, const std::string& ipaddr, int port)
+static void tcpConnectCallback(uint64_t uniqueid, void* priv, int state, const std::string& ipaddr, int port)
 {
-	if(isConn)
-	{
-		PDEBUG("server %s:%d  %lu had been connect", ipaddr.c_str(), port, uniqueid);
-		lastConnuid = uniqueid;
-	}else{
-		PDEBUG("server %s:%d  %lu had been disconnect", ipaddr.c_str(), port, uniqueid);
+    if(state == 0)
+    {
+        PDEBUG("server %s:%d  %lu connect false", ipaddr.c_str(), port, uniqueid);
+    }else if(state == 1)
+    {
+        PDEBUG("server %s:%d  %lu had been connect", ipaddr.c_str(), port, uniqueid);
+        lastConnuid = uniqueid;
+    }else if(state == 2){
+        PDEBUG("server %s:%d  %lu had been disconnect", ipaddr.c_str(), port, uniqueid);
+    }else{
+		PDEBUG("server %s:%d  %lu connect state %d", ipaddr.c_str(), port, uniqueid, state);
 	}
 }
 
