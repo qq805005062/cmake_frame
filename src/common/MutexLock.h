@@ -18,6 +18,7 @@ class MutexLock : noncopyable
 public:
     MutexLock()
         : holder_(0)
+        , isLock(0)
     {
         MCHECK(pthread_mutex_init(&mutex_, NULL));
     }
@@ -48,6 +49,27 @@ public:
     {
         unassignHolder();
         MCHECK(pthread_mutex_unlock(&mutex_));
+    }
+
+    int trylock()
+    {
+        int ret = pthread_mutex_trylock(&mutex_);
+        if(ret == 0)
+        {
+            isLock = 1;
+            assignHolder();
+        }
+        return ret;
+    }
+
+    void tryUnlock()
+    {
+        unassignHolder();
+        if(isLock)
+        {
+            isLock = 0;
+            pthread_mutex_unlock(&mutex_);
+        }
     }
 
     pthread_mutex_t* getPthreadMutex()
@@ -86,8 +108,10 @@ private:
     }
     
 private:
+
     pthread_mutex_t mutex_;
     pid_t holder_;
+    int isLock;
 };
 
 class MutexLockGuard : noncopyable
@@ -107,6 +131,34 @@ private:
     MutexLock& mutex_;
 };
 
+class TryMutexLock : noncopyable
+{
+public:
+    explicit TryMutexLock(MutexLock& mutex) : mutex_(mutex), isLock(0)
+    {
+        isLock = mutex_.trylock();
+    }
+
+    ~TryMutexLock()
+    {
+        mutex_.tryUnlock();
+    }
+
+    bool isLockMutex()
+    {
+        if(isLock)
+        {
+            return false;
+        
+}else{
+            return true;
+        }
+    }
+
+private:
+    MutexLock& mutex_;
+    volatile int isLock;
+};
 } // namespace common
 
 // Prevent misuse like:

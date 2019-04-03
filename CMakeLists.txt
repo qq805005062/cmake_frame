@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.6)
 
-project(M-RCS C CXX)
+project(CMAKE C CXX)
 
 enable_testing()
 
