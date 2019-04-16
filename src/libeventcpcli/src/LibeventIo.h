@@ -6,7 +6,6 @@
 #include <event2/event_struct.h>
 
 #include "OrderInfo.h"
-#include "TcpClient.h"
 
 namespace LIBEVENT_TCP_CLI
 {
