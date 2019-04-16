@@ -71,6 +71,7 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 #include_directories(${PROJECT_SOURCE_DIR}/src/proto)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/include/libevent)
+include_directories(${PROJECT_SOURCE_DIR}/include/sasl_2_1_27)
 
 link_directories(${PROJECT_SOURCE_DIR}/lib)
 
@@ -85,6 +86,7 @@ add_subdirectory(src/redisSync)
 add_subdirectory(src/zookconfig)
 add_subdirectory(src/curlHttpCli)
 add_subdirectory(src/libeventcpcli)
+add_subdirectory(src/redisClusterAsyn)
 
 if(NOT CMAKE_BUILD_NO_EXAMPLES)
   add_subdirectory(examples)
