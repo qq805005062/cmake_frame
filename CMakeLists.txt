@@ -71,7 +71,9 @@ include_directories(${PROJECT_SOURCE_DIR}/src)
 #include_directories(${PROJECT_SOURCE_DIR}/src/proto)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/include/libevent)
+include_directories(${PROJECT_SOURCE_DIR}/include/hiredis)
 include_directories(${PROJECT_SOURCE_DIR}/include/sasl_2_1_27)
+include_directories(${PROJECT_SOURCE_DIR}/include/mwnet_mt)
 
 link_directories(${PROJECT_SOURCE_DIR}/lib)
 
