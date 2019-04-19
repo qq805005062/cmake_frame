@@ -20,7 +20,9 @@ static std::vector<common::LibeventIoPtr> libeventIoPtrVect;
 ClusterRedisAsync::ClusterRedisAsync()
     :connNum_(0)
     ,ioThreadNum_(0)
+    ,state_(REDIS_ASYNC_INIT_STATE)
     ,initCb_(nullptr)
+    ,exceCb_(nullptr)
 {
     PDEBUG("ClusterRedisAsync init");
 }
@@ -199,10 +201,16 @@ int ClusterRedisAsync::set(const std::string& key, const std::string& value, int
     return 0;
 }
 
-int ClusterRedisAsync::redisAsyncCommand(const CmdResultCallback& cb, int outSecond, void *priv, const char *format, ...)
+int ClusterRedisAsync::redisAsyncCommand(const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const char *format, ...)
 {
     return 0;
 }
+
+int ClusterRedisAsync::redisAsyncCommand(const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const std::string& cmdStr)
+{
+    return 0;
+}
+
 
 }
 
