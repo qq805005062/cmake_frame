@@ -7,6 +7,12 @@
 static LIBEVENT_TCP_CLI::AtomicUInt32 UniqueTail;
 
 //0 ~ 8191
+/*
+ *此接口单秒最大调用262143
+ *超过这个数字，出来的数字就会重复
+ *
+ *
+ */
 inline uint64_t uniqueNumId(uint32_t uniquId = 60)
 {
 	unsigned int nYear = 0;

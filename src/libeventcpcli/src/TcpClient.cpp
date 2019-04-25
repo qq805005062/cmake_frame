@@ -16,7 +16,7 @@ namespace LIBEVENT_TCP_CLI
 {
 
 static void connectTimeout(evutil_socket_t fd, short event, void *arg)
-{
+{
     TcpClient *pClient = static_cast<TcpClient*>(arg);
     if(pClient->tcpCliState() == CONN_FAILED)
     {

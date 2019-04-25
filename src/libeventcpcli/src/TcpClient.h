@@ -15,7 +15,7 @@ namespace LIBEVENT_TCP_CLI
 class TcpClient
 {
 public:
-	//io线程下标，唯一数字标识，ip地址，端口，私有信息，超时时间，
+	//io绾跨▼涓嬫爣锛屽敮涓�鏁板瓧鏍囪瘑锛宨p鍦板潃锛岀鍙ｏ紝绉佹湁淇℃伅锛岃秴鏃舵椂闂达紝
 	TcpClient(size_t ioIndex, uint64_t uniqueNum, const std::string& ipaddr, int port, void* priv, int dataOutSecond = 30, int connOutSecond = 3);
 
 	~TcpClient();
@@ -48,7 +48,7 @@ public:
 		return ioIndex_;
 	}
 
-	//小于0失败，超时，==0正常
+	//灏忎簬0澶辫触锛岃秴鏃讹紝==0姝ｅ父
 	int setRecvSecond();
 
 	const char* tcpServerIp() const
@@ -91,7 +91,7 @@ private:
 	int sockfd_;
 	int connOutSecond_;
     int dataOutSecond_;
-	int state_;// 0是初始状态，未连接成功， 1 是连接成功， 2是连接成功之后断开
+	int state_;// 0鏄垵濮嬬姸鎬侊紝鏈繛鎺ユ垚鍔燂紝 1 鏄繛鎺ユ垚鍔燂紝 2鏄繛鎺ユ垚鍔熶箣鍚庢柇寮�
 	
 	size_t ioIndex_;
 	size_t outbufLen_;

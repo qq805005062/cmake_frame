@@ -1,6 +1,6 @@
 /*
- *Ä£¿é²âÊÔ´úÂë£¬²âÊÔTCP cli¶ËÄ£¿é´úÂë¡¢ĞÔÄÜ¡¢¹¦ÄÜ
- *Ê¾Àı´úÂë£¬ÈçºÎÕıÈ·µÄ½«Ä£¿é´úÂë¼¯³Éµ½ÏîÄ¿ÖĞ
+ *æ¨¡å—æµ‹è¯•ä»£ç ï¼Œæµ‹è¯•TCP cliç«¯æ¨¡å—ä»£ç ã€æ€§èƒ½ã€åŠŸèƒ½
+ *ç¤ºä¾‹ä»£ç ï¼Œå¦‚ä½•æ­£ç¡®çš„å°†æ¨¡å—ä»£ç é›†æˆåˆ°é¡¹ç›®ä¸­
  *
  *zhaoxiaoxiao
  */
@@ -24,8 +24,8 @@
 #define PDEBUG(fmt, args...)		fprintf(stderr, "%s :: %s() %d: DEBUG " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define PERROR(fmt, args...)		fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 
-static int isExit = 0,isStopTest = 0, serverport = 6000;
-static std::string serverip = "192.169.1.212";
+static int isExit = 0,isStopTest = 0, serverport = 8990;
+static std::string serverip = "192.169.6.211";
 static uint64_t lastConnuid = 0;
 //SIGINT,SIGKILL,SIGTERM,SIGSTOP,SIGUSR1,SIGUSR2
 static int sigArray[] = {
@@ -111,7 +111,7 @@ inline int IgnoreSig()
 	return ret;
 }
 
-////³ÌĞòÔËĞĞÖĞ£¬ÄÚ²¿µ÷ÓÃÖÕÖ¹³ÌĞòÔËĞĞµÄ£¬É÷ÓÃ
+////ç¨‹åºè¿è¡Œä¸­ï¼Œå†…éƒ¨è°ƒç”¨ç»ˆæ­¢ç¨‹åºè¿è¡Œçš„ï¼Œæ…ç”¨
 void sigMyself()
 {
 	pid_t self =  getpid();
@@ -125,7 +125,7 @@ void processExit()
 	LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliExit();
 }
 
-//²¶»ñĞÅºÅ
+//æ•è·ä¿¡å·
 void sig_catch(int sig)
 {
 	PERROR("!!!!!!!!well, we catch signal in this process :::%d will be exit",sig);
@@ -208,7 +208,7 @@ static size_t tcpOnMessage(uint64_t uniqueid, void* priv, const char* msg, size_
 }
 
 
-void* tcpSendMsgTest(void* arg)///HTTPÇëÇó
+void* tcpSendMsgTest(void* arg)///HTTPè¯·æ±‚
 {
 	int ret = 0;
 	while(1)
@@ -285,7 +285,7 @@ int main(int argc, char* argv[])
 	(void)signal(SIGUSR1, sig_catch);
 	(void)signal(SIGUSR2, sig_catch);
 
-	ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliInit(20, 4, std::bind(&tcpConnectCallback, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5), std::bind(&tcpOnMessage, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));//Ä£¿é³õÊ¼»¯
+	ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliInit(20, 4, std::bind(&tcpConnectCallback, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5), std::bind(&tcpOnMessage, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));//æ¨¡å—åˆå§‹åŒ–
 	if(ret < 0)
 	{
 		PERROR("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliInit %d", ret);

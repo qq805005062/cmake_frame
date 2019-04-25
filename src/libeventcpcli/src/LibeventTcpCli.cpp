@@ -379,7 +379,8 @@ void LibeventTcpCli::tcpServerConnect(uint64_t unid, void* priv, int state, cons
 		{
 			tcpClientConnMap.erase(iter);
 		}
-	}	if(connCb)
+	}
+	if(connCb)
 	{
 		connCb(unid, priv, state, ipaddr, port);
 	}

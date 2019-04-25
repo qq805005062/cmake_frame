@@ -115,7 +115,7 @@ void LibeventIo::handleRead()
 	while(1)
 	{
 		OrderNodePtr node = orderDeque_.dealOrderNode();
-		if(node)
+		if(node && node->orderNodeTcpcli())
 		{
 			if(node->orderNodeTcpcli()->tcpCliSockFd() == 0)
 			{
