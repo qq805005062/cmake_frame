@@ -30,9 +30,11 @@ static void wakeUpFdcb(int sockFd, short eventType, void *arg)
 
 LibeventIo::LibeventIo()
     :wakeupFd(createEventfd())
-    ,orderDeque_()
     ,evbase(nullptr)
+    ,lastSecond_(0)
     ,wake_event()
+    ,orderDeque_()
+    ,ioRedisClients_()
 {
     PDEBUG("LibeventIo init");
 }
@@ -71,7 +73,7 @@ int LibeventIo::libeventIoReady()
     return 0;
 }
 
-int LibeventIo::libeventIoOrder(const OrderNodePtr& node)
+int LibeventIo::libeventIoOrder(const RedisCliOrderNodePtr& node)
 {
     orderDeque_.orderNodeInsert(node);
     libeventIoWakeup();
@@ -102,6 +104,38 @@ int LibeventIo::libeventIoExit()
     return 0;
 }
 
+void LibeventIo::ioDisRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli)
+{
+    for(size_t i = 0; i < ioRedisClients_.size(); i++)
+    {
+        if(ioRedisClients_[i].get() == cli.get())
+        {
+            ioRedisClients_[i].reset();
+        }
+    }
+}
+
+void LibeventIo::ioAddRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli)
+{
+    for(size_t i = 0; i < ioRedisClients_.size(); i++)
+    {
+        if(ioRedisClients_[i].get() == cli.get())
+        {
+            return;
+        }
+    }
+
+    for(size_t i = 0; i < ioRedisClients_.size(); i++)
+    {
+        if(ioRedisClients_[i] == nullptr)
+        {
+            ioRedisClients_[i] = cli;
+        }
+    }
+
+    ioRedisClients_.push_back(cli);
+}
+
 void LibeventIo::handleRead()
 {
     uint64_t one = 1;
@@ -115,10 +149,31 @@ void LibeventIo::handleRead()
 
     while(1)
     {
-        OrderNodePtr node = orderDeque_.dealOrderNode();
+        RedisCliOrderNodePtr node = orderDeque_.dealOrderNode();
         if(node)
         {
-            ;//TODO
+            if(node->cli_)
+            {
+                if(node->cmdOrd_ == nullptr)
+                {
+                    if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
+                    {
+                        node->cli_->connectServer(evbase);
+                        ioAddRedisClient(node->cli_);
+                    }else{
+                        node->cli_->disConnect();
+                    }
+                }else{
+                    if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
+                    {
+                        PERROR("TODO");
+                    }else{
+                        node->cli_->requestCmd(node->cmdOrd_);
+                    }
+                }
+            }else{
+                PERROR("TODO");
+            }
         }else{
             break;
         }
@@ -127,6 +182,25 @@ void LibeventIo::handleRead()
     if(num)
     {
         event_base_loopbreak(evbase);
+        return;
+    }
+
+    if(lastSecond_ == 0)
+    {
+        lastSecond_ = secondSinceEpoch();
+    }else{
+        uint64_t nowSecond = secondSinceEpoch();
+        if(nowSecond != lastSecond_)
+        {
+            for(size_t i = 0; i < ioRedisClients_.size(); i++)
+            {
+                if(ioRedisClients_[i])
+                {
+                    ioRedisClients_[i]->checkOutSecondCmd(nowSecond);
+                }
+            }
+            lastSecond_ = nowSecond;
+        }
     }
 }
 

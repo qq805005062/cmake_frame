@@ -10,11 +10,11 @@ namespace common
 template<typename T>
 class AtomicIntegerT : public noncopyable
 {
- public:
-  AtomicIntegerT()
-	: value_(0)
-  {
-  }
+public:
+AtomicIntegerT()
+    : value_(0)
+{
+}
 
   // uncomment if you need copying and assignment
   //
@@ -28,56 +28,61 @@ class AtomicIntegerT : public noncopyable
   //   return *this;
   // }
 
-  T get()
-  {
-	// in gcc >= 4.7: __atomic_load_n(&value_, __ATOMIC_SEQ_CST)
-	return __sync_val_compare_and_swap(&value_, 0, 0);
-  }
+T get()
+{
+    // in gcc >= 4.7: __atomic_load_n(&value_, __ATOMIC_SEQ_CST)
+    return __sync_val_compare_and_swap(&value_, 0, 0);
+}
 
-  T getAndAdd(T x)
-  {
-	// in gcc >= 4.7: __atomic_fetch_add(&value_, x, __ATOMIC_SEQ_CST)
-	return __sync_fetch_and_add(&value_, x);
-  }
+T getAndAdd(T x)
+{
+    // in gcc >= 4.7: __atomic_fetch_add(&value_, x, __ATOMIC_SEQ_CST)
+    return __sync_fetch_and_add(&value_, x);
+}
 
-  T addAndGet(T x)
-  {
-	return getAndAdd(x) + x;
-  }
+T addAndGet(T x)
+{
+    return getAndAdd(x) + x;
+}
 
-  T incrementAndGet()
-  {
-	return addAndGet(1);
-  }
+T getAndIncrement()
+{
+    return getAndAdd(1);
+}
 
-  T decrementAndGet()
-  {
-	return addAndGet(-1);
-  }
+T incrementAndGet()
+{
+    return addAndGet(1);
+}
 
-  void add(T x)
-  {
-	getAndAdd(x);
-  }
+T decrementAndGet()
+{
+    return addAndGet(-1);
+}
 
-  void increment()
-  {
-	incrementAndGet();
-  }
+void add(T x)
+{
+    getAndAdd(x);
+}
 
-  void decrement()
-  {
-	decrementAndGet();
-  }
+void increment()
+{
+    incrementAndGet();
+}
 
-  T getAndSet(T newValue)
-  {
-	// in gcc >= 4.7: __atomic_exchange_n(&value, newValue, __ATOMIC_SEQ_CST)
-	return __sync_lock_test_and_set(&value_, newValue);
-  }
+void decrement()
+{
+    decrementAndGet();
+}
 
- private:
-  volatile T value_;
+T getAndSet(T newValue)
+  {
+    // in gcc >= 4.7: __atomic_exchange_n(&value, newValue, __ATOMIC_SEQ_CST)
+    return __sync_lock_test_and_set(&value_, newValue);
+}
+
+private:
+    volatile T value_;
 };
 
 typedef AtomicIntegerT<int32_t> AtomicInt32;

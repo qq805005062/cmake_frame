@@ -9,14 +9,15 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //exception code define
+//异常状态编码宏定义
 #define EXCE_INIT_CONN_FAILED                   (-1)
 #define EXCE_RUNING_CONN_FAILED                 (-2)
 #define EXCE_RUNING_DISCONN                     (-3)
-#define EXCE_RUNING_SYSTEM_ERROR                (-4)
+#define EXCE_SYSTEM_ERROR                       (-4)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //init code define
-
+//初始化状态编号宏定义
 #define INIT_SUCCESS_CODE                       (0)
 #define INIT_PARAMETER_ERROR                    (-1)
 #define INIT_SYSTEM_ERROR                       (-2)
@@ -25,23 +26,39 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //cmd code define
+//执行命令状态编号宏定义
+#define CMD_SUCCESS_CODE                        (0)
 #define CMD_OUTTIME_CODE                        (-1)
+#define CMD_NOREDIS_SVR_NODE_CODE               (-2)
+#define CMD_REDIS_NODE_DISCONNECT               (-3)
+#define CMD_REPLY_EMPTY_CODE                    (-4)
+#define CMD_MALLOC_NULL_CODE                    (-5)
+#define CMD_EMPTY_RESULT_CODE                   (-6)
+#define CMD_REDIS_ERROR_CODE                    (-7)
+#define CMD_REDIS_UNKNOWN_CODE                  (-8)
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //inside define 
+//连接redis服务端状态标志
+#define CONNECT_REDISVR_SUCCESS                 (0)
+#define CONNECT_REDISVR_RESET                   (1)
+#define REDISVR_CONNECT_DISCONN                 (2)
 
+//内部redis各个状态标志位宏定义
 #define REDIS_ASYNC_INIT_STATE                  (0)
-#define REDIS_ASYNC_RUNING_STATE                (1)
+#define REDIS_ASYNC_SINGLE_RUNING_STATE         (1)
+#define REDIS_ASYNC_MASTER_SLAVE_STATE          (2)
+#define REDIS_ASYNC_CLUSTER_RUNING_STATE        (3)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace CLUSTER_REDIS_ASYNC
 {
-
-typedef std::vector<std::string> StdVectorString;
-typedef StdVectorString::iterator StdVectorStringIter;
-
+typedef std::shared_ptr<std::string> StdStringSharedPtr;
+typedef std::vector<StdStringSharedPtr> StdVectorStringPtr;
+typedef StdVectorStringPtr::iterator StdVectorStringPtrIter;
 
 /*
  * [InitCallback] 初始化回调函数，异步初始化，当异步初始化完成之后，回调会被调用
@@ -82,7 +99,7 @@ typedef std::function<void(int exceCode, const std::string& exceMsg)> ExceptionC
  *
  * @return 无
  */
-typedef std::function<void(int64_t ret, void* priv, StdVectorString& resultMsg)> CmdResultCallback;
+typedef std::function<void(int64_t ret, void* priv, const StdVectorStringPtr& resultMsg)> CmdResultCallback;
 
 /*
  * [ClusterRedisAsync]异步redis集群或者单点管理类
@@ -103,16 +120,29 @@ public:
     static ClusterRedisAsync& instance() { return common::Singleton<ClusterRedisAsync>::instance(); }
 
     /*
+     * [redisAsyncSetCallback] 设置回调函数，主要设置初始化回调函数，设置异常回调函数
+     * @author xiaoxiao 2019-04-15
+     * @param initcb 初始化完成回调函数，无论成功与失败，都会回调，初始化回调只会回调一次，回调则说明初始化完成
+     * @param excecb 异常回调函数，可能会回调多次，包括在初始化过程中有异常会回调。或者运行中有异常也会回调
+     *
+     * @return 无
+     */
+    void redisAsyncSetCallback(const InitCallback& initcb, const ExceptionCallBack& excecb);
+    /*
      * [redisAsyncInit] 初始化方法,单线程初始化，只需要初始化一次
      * @author xiaoxiao 2019-04-15
      * @param threadNum 内部线程数，内部会开多少个线程来处理与redis的io。建议参考集群数量，但是也不是要特别多，最少也要是一个
+     * @param callbackNum 回调线程池数。内部会开启多少个线程回调回调函数，因为不能用IO线程处理回调。不能拥堵IO
      * @param ipPortInfo redis集群信息，可以配置单点，也可以配置多个点。初始化如果连不上会失败，内部支持主从切换、支持自动重连
-     * @param initcb 初始化完成回调函数，无论成功与失败，都会回调
+     * @param connOutSecond 连接超时时间，一般3秒
+     * @param keepSecond 内部redis保持激活的间隔秒钟，保证这段时间，与redis至少心跳一次。以保持连接活跃
      * @param connNum 连接数量，因为是异步，所以基本上1个也就够用了，当然也可以初始化多个
      *
      * @return 大于等于0是成功，其他是错误，内部异步初始化
      */
-    int redisAsyncInit(int threadNum, const std::string& ipPortInfo, InitCallback& initcb, int connNum = 1);
+    int redisAsyncInit(int threadNum, int callbackNum, const std::string& ipPortInfo, int connOutSecond, int keepSecond, int connNum = 1);
+
+    void redisAsyncExit();
 
     int set(const std::string& key, const std::string& value, int outSecond, const CmdResultCallback& cb, void *priv);
 
@@ -145,13 +175,25 @@ public:
     void redisAsyncConnect();
 
     void libeventIoThread(int index);
+
+    //void initConnectException(int exceCode, std::string& exceMsg);
+
+    void redisSvrOnConnect(int state, const std::string& ipaddr, int port);
+
+    void cmdReplyCallPool();
 private:
 
-    void asyncInitCallBack(int ret);
+    void asyncInitCallBack(int initCode, const std::string& initMsg);
+
+    void asyncExceCallBack(int exceCode, const std::string& exceMsg);
 
     int connNum_;
+    int callBackNum_;
     int ioThreadNum_;
-    int state_;
+    int state_;//内部模块状态及运行状态的标志位
+    int keepSecond_;
+    int connOutSecond_;
+    int isExit_;
     
     InitCallback initCb_;
     ExceptionCallBack exceCb_;

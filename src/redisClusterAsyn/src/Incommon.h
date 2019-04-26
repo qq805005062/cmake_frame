@@ -5,9 +5,15 @@
 #include <stdint.h>
 #include <endian.h>
 #include <stdlib.h>
+#include <unistd.h>
+
 #include <string>
 #include <memory>
 #include <vector>
+
+#include <time.h>
+#include <sys/time.h>
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 #define MAX_IP_ADDR_LEN                         15
@@ -17,92 +23,7 @@
 #define PERROR(fmt, args...)                    fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-class RedisSvrInfo
-{
-public:
 
-    RedisSvrInfo()
-        :port_(0)
-        ,ipAddr_()
-    {
-    }
-
-    RedisSvrInfo(int p, const std::string& ip)
-        :port_(p)
-        ,ipAddr_(ip)
-    {
-    }
-
-    RedisSvrInfo(const std::string& ip, int p)
-        :port_(p)
-        ,ipAddr_(ip)
-    {
-    }
-
-    RedisSvrInfo(const RedisSvrInfo& that)
-        :port_(0)
-        ,ipAddr_()
-    {
-        *this = that;
-    }
-
-    RedisSvrInfo& operator=(const RedisSvrInfo& that)
-    {
-        if(this == &that) return *this;
-
-        port_ = that.port_;
-        ipAddr_ = that.ipAddr_;
-        
-        return *this;
-    }
-
-    int port_;
-    std::string ipAddr_;
-};
-
-typedef std::shared_ptr<RedisSvrInfo> RedisSvrInfoPtr;
-typedef std::vector<RedisSvrInfoPtr> RedisSvrInfoPtrVect;
-
-class RedisClusterNode
-{
-public:
-    RedisClusterNode()
-        :slotStart(0)
-        ,slotEnd(0)
-        ,master_(nullptr)
-        ,slave_()
-    {
-    }
-
-    RedisClusterNode(const RedisClusterNode& that)
-        :slotStart(0)
-        ,slotEnd(0)
-        ,master_(nullptr)
-        ,slave_()
-    {
-        *this = that;
-    }
-
-    RedisClusterNode& operator=(const RedisClusterNode& that)
-    {
-        if(this == &that) return *this;
-
-        slotStart = that.slotStart;
-        slotEnd = that.slotEnd;
-        master_ = that.master_;
-        slave_ = that.slave_;
-
-        return *this;
-    }
-
-    uint16_t slotStart;
-    uint16_t slotEnd;
-    RedisSvrInfoPtr master_;
-    RedisSvrInfoPtrVect slave_;
-};
-
-typedef std::shared_ptr<RedisClusterNode> RedisClusterNodePtr;
-typedef std::vector<RedisClusterNodePtr> RedisClusterNodePtrVect;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -164,6 +85,26 @@ inline const char* utilFristConstchar(const char *str,const char c)
     return NULL;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+inline int64_t microSecondSinceEpoch(int64_t* second = NULL)
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    if(second)
+    {
+        *second = tv.tv_sec;
+    }
+    int64_t microSeconds = tv.tv_sec * 1000000 + tv.tv_usec;
+    return microSeconds;
+}
+
+inline int64_t secondSinceEpoch()
+{
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    int64_t seconds = tv.tv_sec;
+    return seconds;
+}
 
 
 #endif

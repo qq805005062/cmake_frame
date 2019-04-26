@@ -2,50 +2,62 @@
 #define __COMMON_ORDERINFO_H__
 
 //#include "OrderInfo.h"
-
+#include <map>
 #include <deque>
 
+#include "Singleton.h"
+#include "noncopyable.h"
+
 #include "MutexLock.h"
-#include "RedisClient.h"
+#include "Condition.h"
+
+#include "../ClusterRedisAsync.h"
 
 namespace common
 {
 
+/*
+ * [function]
+ * @author
+ * @param
+ * @param
+ * @param
+ *
+ * @return
+ */
 class OrderNode
 {
 public:
-    OrderNode()
-        :cmdPri(nullptr)
-        ,cmdMsg()
-        ,cli(nullptr)
+    OrderNode(const std::string& msg, int outSecond = 3)
+        :cmdRet_(0)
+        ,cmdOutSecond_(outSecond)
+        ,cmdQuerySecond_(0)
+        ,cmdPri_(nullptr)
+        ,cmdMsg_(msg)
+        ,resultCb_(nullptr)
+        ,cmdResult_()
     {
     }
 
-    OrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cl)
-        :cmdPri(nullptr)
-        ,cmdMsg()
-        ,cli(cl)
-    {
-    }
-
-    OrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cl, const std::string& msg, void* pri = NULL)
-        :cmdPri(pri)
-        ,cmdMsg(msg)
-        ,cli(cl)
-    {
-    }
-
-    OrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cl, const char* msg, size_t msgLen, void* pri = NULL)
-        :cmdPri(pri)
-        ,cmdMsg(msg, msgLen)
-        ,cli(cl)
+    OrderNode(const std::string& msg, int outSecond = 3, const CLUSTER_REDIS_ASYNC::CmdResultCallback& cb = NULL, void* pri = NULL)
+        :cmdRet_(0)
+        ,cmdOutSecond_(outSecond)
+        ,cmdQuerySecond_(0)
+        ,cmdPri_(pri)
+        ,cmdMsg_(msg)
+        ,resultCb_(cb)
+        ,cmdResult_()
     {
     }
 
     OrderNode(const OrderNode& that)
-        :cmdPri(nullptr)
-        ,cmdMsg()
-        ,cli(nullptr)
+        :cmdRet_(0)
+        ,cmdOutSecond_(0)
+        ,cmdQuerySecond_(0)
+        ,cmdPri_(nullptr)
+        ,cmdMsg_()
+        ,resultCb_(nullptr)
+        ,cmdResult_()
     {
         *this = that;
     }
@@ -54,95 +66,99 @@ public:
     {
         if(this == &that) return *this;
 
-        cmdPri = that.cmdPri;
-        cmdMsg = that.cmdMsg;
-        cli = that.cli;
+        cmdRet_ = that.cmdRet_;
+        cmdOutSecond_ = that.cmdOutSecond_;
+        cmdQuerySecond_ = that.cmdQuerySecond_;
+        cmdPri_ = that.cmdPri_;
+        cmdMsg_ = that.cmdMsg_;
+        resultCb_ = that.resultCb_;
+        cmdResult_ = that.cmdResult_;
+
+        return *this;
     }
 
     ~OrderNode()
     {
     }
 
-    void setOrderNodeCmdmsg(const std::string& msg)
-    {
-        cmdMsg.assign(msg);
-    }
+    
+    int cmdRet_;
+    int cmdOutSecond_;
+    uint64_t cmdQuerySecond_;
 
-    void setOrderNodeCmdmsg(const char* msg, size_t msglen)
-    {
-        cmdMsg.assign(msg, msglen);
-    }
+    void* cmdPri_;
+    std::string cmdMsg_;
 
-    void setOrderNodeRediscli(const REDIS_ASYNC_CLIENT::RedisClientPtr& cl)
-    {
-        cli = cl;
-    }
-
-    void setOrderNodeCmdPri(void* pri)
-    {
-        cmdPri = pri;
-    }
-
-    std::string orderNodeCmdmsg()
-    {
-        return cmdMsg;
-    }
-
-    REDIS_ASYNC_CLIENT::RedisClientPtr orderNodeRediscli()
-    {
-        return cli;
-    }
-
-    void* orderNodePri()
-    {
-        return cmdPri;
-    }
-
-private:
-    void* cmdPri;
-    std::string cmdMsg;
-    REDIS_ASYNC_CLIENT::RedisClientPtr cli;//如果cmdMsg 是空，则表示要建立连接或者关闭连接，根据内部标志位判断
+    CLUSTER_REDIS_ASYNC::CmdResultCallback resultCb_;
+    CLUSTER_REDIS_ASYNC::StdVectorStringPtr cmdResult_;
 };
 
 typedef std::shared_ptr<OrderNode> OrderNodePtr;
 typedef std::deque<OrderNodePtr> OrderNodePtrDeque;
+typedef std::map<uint32_t, OrderNodePtr> SeqOrderNodeMap;
 
-class OrderNodeDeque
+/*
+ * [function]
+ * @author
+ * @param
+ * @param
+ * @param
+ *
+ * @return
+ */
+class CmdResultQueue : public common::noncopyable
 {
 public:
-    OrderNodeDeque()
-        :mutex_()
+    CmdResultQueue()
+        :isExit_(0)
+        ,mutex_()
+        ,notEmpty_(mutex_)
         ,queue_()
     {
     }
 
-    ~OrderNodeDeque()
+    ~CmdResultQueue()
     {
     }
+    
+    static CmdResultQueue& instance() { return common::Singleton<CmdResultQueue>::instance(); }
 
-    void orderNodeInsert(const OrderNodePtr& node)
+    void cmdResuleExit()
+    {
+        isExit_ = 1;
+        notEmpty_.notifyAll();
+    }
+
+    void insertCmdResult(const OrderNodePtr& node)
     {
         SafeMutexLock lock(mutex_);
         queue_.push_back(node);
+        notEmpty_.notify();
     }
 
-    OrderNodePtr dealOrderNode()
+    OrderNodePtr takeCmdResult()
     {
         SafeMutexLock lock(mutex_);
-        OrderNodePtr node(nullptr);
-        if(!queue_.empty())
+        while(queue_.empty())
         {
-            node = queue_.front();
-            queue_.pop_front();
+            if(isExit_)
+            {
+                return OrderNodePtr();
+            }
+            notEmpty_.wait();
         }
+
+        OrderNodePtr node = queue_.front();
+        queue_.pop_front();
         return node;
     }
 
 private:
+    int isExit_;
     MutexLock mutex_;
+    Condition notEmpty_;
     OrderNodePtrDeque queue_;
 };
-
 }//end namespace common
 
 #endif//end __COMMON_ORDERINFO_H__
