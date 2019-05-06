@@ -23,15 +23,21 @@ namespace common
 class RedisCliOrderNode
 {
 public:
-    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli, const common::OrderNodePtr& cmd = nullptr)
-        :cmdOrd_(cmd)
-        ,cli_(cli)
+    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli)
+        :cli_(cli)
+        ,cmdOrd_(nullptr)
+    {
+    }
+
+    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli, const common::OrderNodePtr& cmd)
+        :cli_(cli)
+        ,cmdOrd_(cmd)
     {
     }
 
     RedisCliOrderNode(const RedisCliOrderNode& that)
-        :cmdOrd_(nullptr)
-        ,cli_(nullptr)
+        :cli_(nullptr)
+        ,cmdOrd_(nullptr)
     {
         *this = that;
     }
@@ -40,18 +46,27 @@ public:
     {
         if(this == &that) return *this;
 
-        cmdOrd_ = that.cmdOrd_;
         cli_ = that.cli_;
-
+        cmdOrd_ = that.cmdOrd_;
+        
         return *this;
     }
     
     ~RedisCliOrderNode()
     {
+        if(cli_)
+        {
+            cli_.reset();
+        
+}
+        if(cmdOrd_)
+        {
+            cmdOrd_.reset();
+        }
     }
 
-    OrderNodePtr cmdOrd_;//如果 cmdOrd_ 是空指针，则表示要建立连接或者关闭连接，根据内部标志位判断
     REDIS_ASYNC_CLIENT::RedisClientPtr cli_;
+    OrderNodePtr cmdOrd_;//如果 cmdOrd_ 是空指针，则表示要建立连接或者关闭连接，根据内部标志位判断
 };
 
 typedef std::shared_ptr<RedisCliOrderNode> RedisCliOrderNodePtr;

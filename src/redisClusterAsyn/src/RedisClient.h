@@ -13,6 +13,7 @@
 
 #include "Atomic.h"
 #include "OrderInfo.h"
+#include "../ClusterRedisAsync.h"
 
 #define REDIS_CLIENT_STATE_INIT         0
 #define REDIS_CLIENT_STATE_CONN         1
@@ -60,12 +61,12 @@ public:
     std::string ipAddr_;
 };
 typedef std::shared_ptr<RedisSvrInfo> RedisSvrInfoPtr;
-typedef std::vector<RedisSvrInfoPtr> RedisSvrInfoPtrVect;
+typedef std::vector<RedisSvrInfoPtr> VectRedisSvrInfoPtr;
 
 class RedisClient
 {
 public:
-    RedisClient(size_t ioIndex, const RedisSvrInfoPtr& svrInfo, int keepAliveSecond = 10, int connOutSecond = 3);
+    RedisClient(size_t ioIndex, size_t fd, const RedisSvrInfoPtr& svrInfo, int keepAliveSecond = 10, int connOutSecond = 3);
 
     ~RedisClient();
 
@@ -118,8 +119,9 @@ private:
     int state_;//0是初始化状态，1是已经连接，2是连接失败
     int connOutSecond_;
     int keepAliveSecond_;
+    
     size_t ioIndex_;
-
+    size_t mgrFd_;
     uint64_t lastSecond_;//最后一次与redis活跃时间
 
     struct event *timev_;
@@ -134,138 +136,5 @@ private:
 typedef std::shared_ptr<RedisClient> RedisClientPtr;
 typedef std::vector<RedisClientPtr> VectRedisClientPtr;
 
-class RedisSvrCli
-{
-public:
-    RedisSvrCli()
-        :svrInfo_(nullptr)
-        ,redisClient_(nullptr)
-    {
-    }
-
-    RedisSvrCli(const RedisSvrInfoPtr& infoPtr)
-        :svrInfo_(infoPtr)
-        ,redisClient_(nullptr)
-    {
-    }
-
-    RedisSvrCli(const RedisSvrInfoPtr& infoPtr, const RedisClientPtr& client)
-        :svrInfo_(infoPtr)
-        ,redisClient_(client)
-    {
-    }
-
-    ~RedisSvrCli()
-    {
-        if(svrInfo_)
-        {
-            svrInfo_.reset();
-        }
-        if(redisClient_)
-        {
-            redisClient_.reset();
-        }
-    }
-
-    RedisSvrCli(const RedisSvrInfo& that)
-        :svrInfo_(nullptr)
-        ,redisClient_(nullptr)
-    {
-        *this = that;
-    }
-
-    RedisSvrCli& operator=(const RedisSvrCli& that)
-    {
-        if(this == &that) return *this;
-
-        svrInfo_ = that.svrInfo_;
-        redisClient_ = that.redisClient_;
-        
-        return *this;
-    }
-
-    RedisSvrInfoPtr svrInfo_;
-    RedisClientPtr redisClient_;
-};
-typedef std::shared_ptr<RedisSvrCli> RedisSvrCliPtr;
-typedef std::vector<RedisSvrCliPtr> RedisSvrCliPtrVect;
-
-class RedisMasterSlaveNode
-{
-public:
-    RedisMasterSlaveNode()
-        :master_(nullptr)
-        ,slave_()
-    {
-    }
-
-    ~RedisMasterSlaveNode()
-    {
-        if(master_)
-        {
-            master_.reset();
-        }
-
-        RedisSvrCliPtrVect ().swap(slave_);
-    }
-
-    RedisMasterSlaveNode(const RedisMasterSlaveNode& that)
-        :master_(nullptr)
-        ,slave_()
-    {
-       *this = that;
-    }
-
-    RedisMasterSlaveNode& operator=(const RedisMasterSlaveNode& that)
-    {
-        if(this == &that) return *this;
-
-        master_ = that.master_;
-        slave_ = that.slave_;
-
-        return *this;
-    }
-    RedisSvrCliPtr master_;
-    RedisSvrCliPtrVect slave_;
-};
-
-typedef std::shared_ptr<RedisMasterSlaveNode> RedisMasterSlaveNodePtr;
-
-class RedisClusterNode
-{
-public:
-    RedisClusterNode()
-        :slotStart(0)
-        ,slotEnd(0)
-        ,clusterNode_(nullptr)
-    {
-    }
-
-    RedisClusterNode(const RedisClusterNode& that)
-        :slotStart(0)
-        ,slotEnd(0)
-        ,clusterNode_(nullptr)
-    {
-        *this = that;
-    }
-
-    RedisClusterNode& operator=(const RedisClusterNode& that)
-    {
-        if(this == &that) return *this;
-
-        slotStart = that.slotStart;
-        slotEnd = that.slotEnd;
-        clusterNode_ = that.clusterNode_;
-
-        return *this;
-    }
-
-    uint16_t slotStart;
-    uint16_t slotEnd;
-    RedisMasterSlaveNodePtr clusterNode_;
-};
-
-typedef std::shared_ptr<RedisClusterNode> RedisClusterNodePtr;
-typedef std::vector<RedisClusterNodePtr> RedisClusterNodePtrVect;
 }
 #endif // end __REDIS_CLIENT_ASYNC_H__

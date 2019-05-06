@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <functional>
+#include <mutex>
 
 #include "src/Singleton.h"
 #include "src/noncopyable.h"
@@ -23,6 +24,7 @@
 #define INIT_SYSTEM_ERROR                       (-2)
 #define INIT_CONNECT_FAILED                     (-3)
 #define INIT_SVRINFO_ERROR                      (-4)
+#define INIT_NO_INIT_ERROR                      (-5)
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //cmd code define
@@ -51,7 +53,20 @@
 #define REDIS_ASYNC_MASTER_SLAVE_STATE          (2)
 #define REDIS_ASYNC_CLUSTER_RUNING_STATE        (3)
 
+#define REDIS_SVR_INIT_STATE                    (0)
+#define REDIS_SVR_RUNING_STATE                  (1)
+#define REDIS_SVR_ERROR_STATE                   (2)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+/*
+ * [function]
+ * @author
+ * @param
+ * @param
+ * @param
+ *
+ * @return
+ */
 
 
 namespace CLUSTER_REDIS_ASYNC
@@ -68,13 +83,14 @@ typedef StdVectorStringPtr::iterator StdVectorStringPtrIter;
                     反正有一个点连接成功，但是未获得集群信息，则认为初始化失败
                     初始化失败内部会释放所有资源
  * @author xiaoxiao 2019-04-14
+ * @param asyFd 句柄，因为内部支持多个redis服务。每个服务唯一的句柄
  * @param ret 初始化返回值，等于0是成功，其他是错误
  * @param errMsg 当初始化失败的时候，错误信息,可能是redis集群返回的，也可能是内部自己定义
  * @param
  *
  * @return 无
  */
-typedef std::function<void(int ret, const std::string& errMsg)> InitCallback;
+typedef std::function<void(int asyFd, int ret, const std::string& errMsg)> InitCallback;
 
 /*
  * [ExceptionCallBack] 模块运行中异常回调，当初始化完成之后;初始化完成也分初始化失败和初始化成功，
@@ -82,13 +98,14 @@ typedef std::function<void(int ret, const std::string& errMsg)> InitCallback;
                         内部有任何异常，比如断线会调用这个回调
                         初始化成功之后，所有异常，内部会主动尝试恢复，但是会回调上层，让上层感知
  * @author xiaoxiao 2019-04-18
+ * @param asyFd 句柄，因为内部支持多个redis服务。每个服务唯一的句柄
  * @param exceCode 异常编号
  * @param exceMsg 异常信息
  * @param
  *
  * @return 无
  */
-typedef std::function<void(int exceCode, const std::string& exceMsg)> ExceptionCallBack;
+typedef std::function<void(int asyFd, int exceCode, const std::string& exceMsg)> ExceptionCallBack;
 
 /*
  * [function] 执行命令结果回调函数。
@@ -96,6 +113,9 @@ typedef std::function<void(int exceCode, const std::string& exceMsg)> ExceptionC
  * @param ret 命令执行结果,等于0是成功，其他是错误
  * @param priv 执行命令携带的私有指针
  * @param resultMsg 查询结果，结果可能是成对出现的
+                    这个参数很重要，是表示结果集，正常情况下单一结果，比较清晰
+                    但是hgetall zset是都是成对出现的。
+                    hget指定域的话，就一定要注意了，一定是按域的顺序出现结果集的。但是结果集中不带域名称
  *
  * @return 无
  */
@@ -104,9 +124,13 @@ typedef std::function<void(int64_t ret, void* priv, const StdVectorStringPtr& re
 /*
  * [ClusterRedisAsync]异步redis集群或者单点管理类
  * @author xiaoxiao 2019-04-15
+ * @param 这个类正常情况下是单例。但是特殊情况下也要支持多实例。所以内部还是要把指针传递下去使用。内部不要用单实例。保证外部可以选择单实例或者多实例模式
  * @param
  * @param
- * @param
+ *
+ * 模块中有部分撰写代码的方式有些奇怪。主要是为了尽可能少的暴露模块内部定义及头文件出去。
+ * 这样外面使用者不用关心内部的定义，只用关心此头文件里面的一些基础定义就可以完成使用
+ * 
  *
  * @return
  */
@@ -120,30 +144,75 @@ public:
     static ClusterRedisAsync& instance() { return common::Singleton<ClusterRedisAsync>::instance(); }
 
     /*
-     * [redisAsyncSetCallback] 设置回调函数，主要设置初始化回调函数，设置异常回调函数
-     * @author xiaoxiao 2019-04-15
-     * @param initcb 初始化完成回调函数，无论成功与失败，都会回调，初始化回调只会回调一次，回调则说明初始化完成
-     * @param excecb 异常回调函数，可能会回调多次，包括在初始化过程中有异常会回调。或者运行中有异常也会回调
-     *
-     * @return 无
-     */
-    void redisAsyncSetCallback(const InitCallback& initcb, const ExceptionCallBack& excecb);
-    /*
-     * [redisAsyncInit] 初始化方法,单线程初始化，只需要初始化一次
+     * [redisAsyncInit] 初始化方法,单线程初始化，只需要初始化一次, 设置内部线程数及回调线程数。设置回调函数，主要设置初始化回调函数，设置异常回调函数
      * @author xiaoxiao 2019-04-15
      * @param threadNum 内部线程数，内部会开多少个线程来处理与redis的io。建议参考集群数量，但是也不是要特别多，最少也要是一个
      * @param callbackNum 回调线程池数。内部会开启多少个线程回调回调函数，因为不能用IO线程处理回调。不能拥堵IO
-     * @param ipPortInfo redis集群信息，可以配置单点，也可以配置多个点。初始化如果连不上会失败，内部支持主从切换、支持自动重连
      * @param connOutSecond 连接超时时间，一般3秒
      * @param keepSecond 内部redis保持激活的间隔秒钟，保证这段时间，与redis至少心跳一次。以保持连接活跃
-     * @param connNum 连接数量，因为是异步，所以基本上1个也就够用了，当然也可以初始化多个
+     * @param initcb 初始化完成回调函数，无论成功与失败，都会回调，初始化回调只会回调一次，回调则说明初始化完成
+     * @param excecb 异常回调函数，可能会回调多次，包括在初始化过程中有异常会回调。或者运行中有异常也会回调
      *
-     * @return 大于等于0是成功，其他是错误，内部异步初始化
+     * @return 大于等于0是成功，其他是错误
      */
-    int redisAsyncInit(int threadNum, int callbackNum, const std::string& ipPortInfo, int connOutSecond, int keepSecond, int connNum = 1);
+    int redisAsyncInit(int threadNum, int callbackNum, int connOutSecond, int keepSecond, const InitCallback& initcb, const ExceptionCallBack& excecb);
 
+    /*
+     * [addSigleRedisInfo] 初始化单节点redis服务
+     * @author xiaoxiao 2019-05-06
+     * @param ipPortInfo 单节点服务的服务信息，ip:port
+     * @param
+     * @param
+     *
+     * @return 大于等于0都是成功，其他是错误。返回值为此redis服务的句柄。后续在此服务操作命令使用。内部此redis服务的唯一标识
+     */
+    int addSigleRedisInfo(const std::string& ipPortInfo);
+
+    
+    /*
+     * [addMasterSlaveInfo] 初始化redis主从服务信息
+     * @author xiaoxiao 2019-05-06
+     * @param ipPortInfo 主从服务地址信息信息，ip:port，多个以逗号分隔
+     * @param
+     * @param
+     *
+     * @return 大于等于0都是成功，其他是错误。返回值为此redis服务的句柄。后续在此服务操作命令使用。内部此redis服务的唯一标识
+     */
+    int addMasterSlaveInfo(const std::string& ipPortInfo);
+
+    
+    /*
+     * [addClusterInfo] 初始化redis集群服务信息
+     * @author xiaoxiao 2019-05-06
+     * @param ipPortInfo 集群服务地址信息信息，ip:port，多个以逗号分隔
+     * @param
+     * @param
+     *
+     * @return 大于等于0都是成功，其他是错误。返回值为此redis服务的句柄。后续在此服务操作命令使用。内部此redis服务的唯一标识
+     */
+    int addClusterInfo(const std::string& ipPortInfo);
+    
+    /*
+     * [function]
+     * @author
+     * @param
+     * @param
+     * @param
+     *
+     * @return
+     */
     void redisAsyncExit();
 
+    
+    /*
+     * [function]
+     * @author
+     * @param
+     * @param
+     * @param
+     *
+     * @return
+     */
     int set(const std::string& key, const std::string& value, int outSecond, const CmdResultCallback& cb, void *priv);
 
     /*
@@ -172,29 +241,29 @@ public:
      */
     int redisAsyncCommand(const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const std::string& cmdStr);
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    void redisAsyncConnect();
-
+///下面这个虽然是public，但是外面使用者千万不要调用，都是内部调用接口
     void libeventIoThread(int index);
+
+    void cmdReplyCallPool();
 
     //void initConnectException(int exceCode, std::string& exceMsg);
 
     void redisSvrOnConnect(int state, const std::string& ipaddr, int port);
 
-    void cmdReplyCallPool();
 private:
+    int redisInitConnect();
 
-    void asyncInitCallBack(int initCode, const std::string& initMsg);
+    void asyncInitCallBack(int asyFd, int initCode, const std::string& initMsg);
 
-    void asyncExceCallBack(int exceCode, const std::string& exceMsg);
-
-    int connNum_;
+    void asyncExceCallBack(int asyFd, int exceCode, const std::string& exceMsg);
+    
     int callBackNum_;
     int ioThreadNum_;
-    int state_;//内部模块状态及运行状态的标志位
     int keepSecond_;
     int connOutSecond_;
     int isExit_;
-    
+
+    std::mutex initMutex_;
     InitCallback initCb_;
     ExceptionCallBack exceCb_;
 };

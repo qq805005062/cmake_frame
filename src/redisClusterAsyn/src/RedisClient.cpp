@@ -10,7 +10,6 @@
 
 #include "Incommon.h"
 #include "RedisClient.h"
-#include "../ClusterRedisAsync.h"
 
 namespace REDIS_ASYNC_CLIENT
 {
@@ -85,11 +84,12 @@ static void cmdCallback(redisAsyncContext *c, void *r, void *privdata)
     return;
 }
 
-RedisClient::RedisClient(size_t ioIndex, const RedisSvrInfoPtr& svrInfo, int keepAliveSecond, int connOutSecond)
+RedisClient::RedisClient(size_t ioIndex, size_t fd, const RedisSvrInfoPtr& svrInfo, int keepAliveSecond, int connOutSecond)
     :state_(REDIS_CLIENT_STATE_INIT)
     ,connOutSecond_(connOutSecond)
     ,keepAliveSecond_(keepAliveSecond)
     ,ioIndex_(ioIndex)
+    ,mgrFd_(fd)
     ,lastSecond_(0)
     ,timev_(nullptr)
     ,base_(nullptr)
