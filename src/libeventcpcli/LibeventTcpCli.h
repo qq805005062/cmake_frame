@@ -56,12 +56,14 @@ public:
 	//服务端端口，回调函数会带回来那个端口回来的数据
 	//每个连接上携带的私有数据，内部不维护内存结构，外部要自己析构、new
 	//连接超时时间，如果连接在大于这个时间无数据来往的话，及认为不可用，单位秒钟
+	//返回值，返回0就是错误。正常返回这个连接的唯一标识。上层可以保存使用。回调也会回调这个标识
+	//除非外面调用了退出接口，否则不会返回0.但是如果内存不足，内部会不停的尝试new。直到new成功。接口好像阻塞了一样，很耗CPU
 	/*
 	 *性能问题，关于性能来说的话，
 	 *机器的端口最多只有6万多，所以并发测试要控制在6万以下
 	 *内部唯一标志的接口并发最大262143，因为每一个连接都有一个唯一标识。超过这个数字就会重复
 	 */
-	int libeventAddConnect(const std::string& ipaddr, int port, void* priv = NULL, int dataOutSecond = 30, int connOutSecond = 3);
+	uint64_t libeventAddConnect(const std::string& ipaddr, int port, void* priv = NULL, int dataOutSecond = 30, int connOutSecond = 3);
 
 	//发送消息，异步发送，返回值仅仅表示这个连接是否可以发送，并不是真正的发送成功
 	//第一个参数是每一个连接唯一的标识数子

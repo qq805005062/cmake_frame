@@ -210,7 +210,7 @@ static size_t tcpOnMessage(uint64_t uniqueid, void* priv, const char* msg, size_
 
 void* tcpSendMsgTest(void* arg)///HTTP请求
 {
-	int ret = 0;
+	uint64_t ret = 0;
 	while(1)
 	{
 		std::cout << ">>";
@@ -220,18 +220,18 @@ void* tcpSendMsgTest(void* arg)///HTTP请求
 			{
 				if(line.compare("1") == 0)
 				{
-					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventAddConnect %d", ret);
+					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventAddConnect %lu", ret);
 					ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventAddConnect(serverip, serverport);
-					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventAddConnect %d", ret);
+					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventAddConnect %lu", ret);
 				}else if(line.compare("2") == 0)
 				{
-					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliDisconnect %d", ret);
+					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliDisconnect %lu", ret);
 					ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliDisconnect(lastConnuid);
-					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliDisconnect %d", ret);
+					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliDisconnect %lu", ret);
 				}else{
-					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliSendMsg %d", ret);
+					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliSendMsg %lu", ret);
 					ret = LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliSendMsg(lastConnuid, line.c_str(), line.length());
-					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliSendMsg %d", ret);
+					PDEBUG("LIBEVENT_TCP_CLI::LibeventTcpCli::instance().libeventTcpCliSendMsg %lu", ret);
 				}
 			}
 			if(isExit || isStopTest)

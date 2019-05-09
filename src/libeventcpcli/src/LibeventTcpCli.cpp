@@ -123,12 +123,13 @@ int LibeventTcpCli::libeventTcpCliInit(unsigned int uniquId, unsigned int thread
 	return 0;
 }
 
-int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void* priv, int dataOutSecond, int connOutSecond)
+uint64_t LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void* priv, int dataOutSecond, int connOutSecond)
 {
+    uint64_t uuid = 0;
 	if(isExit)
 	{
 		WARN("LibeventTcpCli had been exit");
-		return -2;
+		return uuid;
 	}
 	
 	while(ioThreadNum == 0 || readyIothread != ioThreadNum)
@@ -144,7 +145,7 @@ int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void
 		}
 		index = static_cast<int>(index % ioThreadNum);
 		
-		uint64_t uuid = uniqueNumId(uniquId_);
+		uuid = uniqueNumId(uniquId_);
 		DEBUG("uniqueNumId %lu", uuid);
 		TcpClientPtr client(new TcpClient(index, uuid, ipaddr, port, priv, dataOutSecond, connOutSecond));
 		if(client)
@@ -170,7 +171,7 @@ int LibeventTcpCli::libeventAddConnect(const std::string& ipaddr, int port, void
 			WARN("libeventAddConnect new client node nullptr");
 		}
 	}while(1);
-	return 0;
+	return uuid;
 }
 
 int LibeventTcpCli::libeventTcpCliSendMsg(uint64_t unid, const char* msg, size_t msglen)

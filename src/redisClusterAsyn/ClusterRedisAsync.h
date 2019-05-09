@@ -4,6 +4,7 @@
 #include <vector>
 #include <functional>
 #include <mutex>
+#include <memory>
 
 #include "src/Singleton.h"
 #include "src/noncopyable.h"
