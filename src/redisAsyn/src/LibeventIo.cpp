@@ -65,6 +65,7 @@ int LibeventIo::libeventIoReady()
 
     event_base_dispatch(evbase);
     PERROR("event_base_dispatch return %p", evbase);
+    //正常情况下这句话根本就不会返回。如果返回了，其实我也不知道为什么
 
     event_del(&wake_event);
     close(wakeupFd);
@@ -84,7 +85,7 @@ int LibeventIo::libeventIoWakeup()
 {
     uint64_t one = 2;
     ssize_t n = write(wakeupFd, &one, sizeof one);
-    //INFO("wakeup n one %ld %ld %p", n, one, evbase);
+    PDEBUG("wakeup n one %ld %ld %p", n, one, evbase);
     if (n != sizeof one)
     {
         PERROR("EventLoop::wakeup() writes %ld bytes instead of 8", n);

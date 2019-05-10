@@ -13,7 +13,7 @@
 
 #include "Atomic.h"
 #include "OrderInfo.h"
-#include "../ClusterRedisAsync.h"
+#include "../RedisAsync.h"
 
 #define REDIS_CLIENT_STATE_INIT         0
 #define REDIS_CLIENT_STATE_CONN         1
@@ -114,6 +114,11 @@ public:
     size_t redisCliIoIndex()
     {
         return ioIndex_;
+    }
+
+    size_t redisMgrfd()
+    {
+        return mgrFd_;
     }
 private:
     int state_;//0是初始化状态，1是已经连接，2是连接失败

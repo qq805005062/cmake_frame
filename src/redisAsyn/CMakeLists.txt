@@ -7,7 +7,7 @@ set(LIBEVENT_REDIS_FILE
   src/RedisTools.cpp
   src/RedisClient.cpp
   src/LibeventIo.cpp
-  src/ClusterRedisAsync.cpp
+  src/RedisAsync.cpp
 )
 
 set(LIBEVENT_REDIS_TEST_FILE
@@ -18,7 +18,7 @@ set(LIBEVENT_REDIS_TEST_FILE
   src/RedisTools.cpp
   src/RedisClient.cpp
   src/LibeventIo.cpp
-  src/ClusterRedisAsync.cpp
+  src/RedisAsync.cpp
   TestMain.cpp
 )
 

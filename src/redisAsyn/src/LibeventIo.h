@@ -57,8 +57,7 @@ public:
         if(cli_)
         {
             cli_.reset();
-        
-}
+        }
         if(cmdOrd_)
         {
             cmdOrd_.reset();
@@ -66,7 +65,7 @@ public:
     }
 
     REDIS_ASYNC_CLIENT::RedisClientPtr cli_;
-    OrderNodePtr cmdOrd_;//Èç¹û cmdOrd_ ÊÇ¿ÕÖ¸Õë£¬Ôò±íÊ¾Òª½¨Á¢Á¬½Ó»òÕß¹Ø±ÕÁ¬½Ó£¬¸ù¾İÄÚ²¿±êÖ¾Î»ÅĞ¶Ï
+    OrderNodePtr cmdOrd_;//å¦‚æœ cmdOrd_ æ˜¯ç©ºæŒ‡é’ˆï¼Œåˆ™è¡¨ç¤ºè¦å»ºç«‹è¿æ¥æˆ–è€…å…³é—­è¿æ¥ï¼Œæ ¹æ®å†…éƒ¨æ ‡å¿—ä½åˆ¤æ–­
 };
 
 typedef std::shared_ptr<RedisCliOrderNode> RedisCliOrderNodePtr;

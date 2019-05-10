@@ -22,7 +22,7 @@ static void connectTimeout(evutil_socket_t fd, short event, void *arg)
         pClient->disConnect();
         std::string ipaddr = pClient->redisSvrIpaddr();
         int port = pClient->redisSvrPort();
-        CLUSTER_REDIS_ASYNC::ClusterRedisAsync::instance().redisSvrOnConnect(CONNECT_REDISVR_RESET, ipaddr, port);
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port);
     }
     return;
 }
@@ -38,15 +38,15 @@ static void connectCallback(const redisAsyncContext *c, int status)
         if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
         {
             pClient->disConnect();
-            CLUSTER_REDIS_ASYNC::ClusterRedisAsync::instance().redisSvrOnConnect(CONNECT_REDISVR_RESET, ipaddr, port);
+            CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port);
         }else{
             pClient->disConnect();
-            CLUSTER_REDIS_ASYNC::ClusterRedisAsync::instance().redisSvrOnConnect(REDISVR_CONNECT_DISCONN, ipaddr, port);
+            CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port);
         }
         return;
     }
     pClient->setStateConnected();
-    CLUSTER_REDIS_ASYNC::ClusterRedisAsync::instance().redisSvrOnConnect(CONNECT_REDISVR_SUCCESS, ipaddr, port);
+    CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_SUCCESS, ipaddr, port);
     PDEBUG("Connected....");
     return;
 }
@@ -64,9 +64,9 @@ static void disconnectCallback(const redisAsyncContext *c, int status)
     int port = pClient->redisSvrPort();
     if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
     {
-        CLUSTER_REDIS_ASYNC::ClusterRedisAsync::instance().redisSvrOnConnect(CONNECT_REDISVR_RESET, ipaddr, port);
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port);
     }else{
-        CLUSTER_REDIS_ASYNC::ClusterRedisAsync::instance().redisSvrOnConnect(REDISVR_CONNECT_DISCONN, ipaddr, port);
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port);
     }
     PDEBUG("Disconnected....");
     return;

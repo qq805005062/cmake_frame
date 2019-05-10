@@ -11,7 +11,7 @@
 #include "MutexLock.h"
 #include "Condition.h"
 
-#include "../ClusterRedisAsync.h"
+#include "../RedisAsync.h"
 
 namespace common
 {
@@ -106,6 +106,50 @@ typedef std::map<uint32_t, OrderNodePtr> SeqOrderNodeMap;
  *
  * @return
  */
+#if 1
+class CmdResultQueue : public common::noncopyable
+{
+public:
+    CmdResultQueue()
+        :mutex_()
+        ,queue_()
+    {
+    }
+
+    ~CmdResultQueue()
+    {
+    }
+    
+    static CmdResultQueue& instance() { return common::Singleton<CmdResultQueue>::instance(); }
+
+    void insertCmdResult(const OrderNodePtr& node)
+    {
+        {
+            SafeMutexLock lock(mutex_);
+            queue_.push_back(node);
+        }
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().asyncCmdResultCallBack();
+    }
+
+    OrderNodePtr takeCmdResult()
+    {
+        SafeMutexLock lock(mutex_);
+        if(queue_.empty())
+        {
+            return OrderNodePtr();
+        }
+
+        OrderNodePtr node = queue_.front();
+        queue_.pop_front();
+        return node;
+    }
+
+private:
+
+    MutexLock mutex_;
+    OrderNodePtrDeque queue_;
+};
+#else
 class CmdResultQueue : public common::noncopyable
 {
 public:
@@ -134,6 +178,7 @@ public:
         SafeMutexLock lock(mutex_);
         queue_.push_back(node);
         notEmpty_.notify();
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().asyncCmdResultCallBack();
     }
 
     OrderNodePtr takeCmdResult()
@@ -159,6 +204,7 @@ private:
     Condition notEmpty_;
     OrderNodePtrDeque queue_;
 };
+#endif
 }//end namespace common
 
 #endif//end __COMMON_ORDERINFO_H__

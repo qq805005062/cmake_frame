@@ -203,7 +203,7 @@ class RedisClientMgr
 {
 public:
     RedisClientMgr()
-        :cliState_(0)
+        :svrType_(0)
         ,initState_(0)
         ,initSvrIndex_(0)
         ,mgrFd_(0)
@@ -236,7 +236,7 @@ public:
     }
 
     RedisClientMgr(const RedisClientMgr& that)
-        :cliState_(0)
+        :svrType_(0)
         ,initState_(0)
         ,initSvrIndex_(0)
         ,mgrFd_(0)
@@ -253,7 +253,7 @@ public:
     {
         if(this == &that) return *this;
 
-        cliState_ = that.cliState_;
+        svrType_ = that.svrType_;
         initState_ = that.initState_;
         initSvrIndex_ = that.initSvrIndex_;
         mgrFd_ = that.mgrFd_;
@@ -266,7 +266,7 @@ public:
         return *this;
     }
 
-    int cliState_;//0 1 2 3
+    int svrType_;//0 1 2 3
     int initState_;//0 1 2
     size_t initSvrIndex_;
     size_t mgrFd_;
