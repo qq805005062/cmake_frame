@@ -13,6 +13,8 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //exception code define
 //异常回调函数中状态编码宏定义
+#define EXCE_RECONNECT_NEWORDER_NULL            (-1)
+
 #define EXCE_INIT_CONN_FAILED                   (-1)
 #define EXCE_RUNING_CONN_FAILED                 (-2)
 #define EXCE_RUNING_DISCONN                     (-3)
