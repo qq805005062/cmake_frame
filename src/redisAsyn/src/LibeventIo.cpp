@@ -31,6 +31,7 @@ static void wakeUpFdcb(int sockFd, short eventType, void *arg)
 LibeventIo::LibeventIo()
     :wakeupFd(createEventfd())
     ,evbase(nullptr)
+    ,nowSecond_(0)
     ,lastSecond_(0)
     ,wake_event()
     ,orderDeque_()
@@ -74,18 +75,20 @@ int LibeventIo::libeventIoReady()
     return 0;
 }
 
-int LibeventIo::libeventIoOrder(const RedisCliOrderNodePtr& node)
+int LibeventIo::libeventIoOrder(const RedisCliOrderNodePtr& node, uint64_t nowsecond)
 {
+    PDEBUG("nowsecond %ld", nowsecond);
     orderDeque_.orderNodeInsert(node);
-    libeventIoWakeup();
+    libeventIoWakeup(nowsecond);
     return 0;
 }
 
-int LibeventIo::libeventIoWakeup()
+int LibeventIo::libeventIoWakeup(uint64_t nowsecond)
 {
     uint64_t one = 2;
+    nowSecond_ = nowsecond;
     ssize_t n = write(wakeupFd, &one, sizeof one);
-    PDEBUG("wakeup n one %ld %ld %p", n, one, evbase);
+    //PDEBUG("wakeup n one %ld %ld %p", n, one, evbase);
     if (n != sizeof one)
     {
         PERROR("EventLoop::wakeup() writes %ld bytes instead of 8", n);
@@ -146,34 +149,40 @@ void LibeventIo::handleRead()
         PERROR("LibeventIo::handleRead() reads %ld bytes instead of 8", n);
         return;
     }
-    PDEBUG("handleRead n one %ld %ld :: %p", n, one, evbase);
+    //PDEBUG("handleRead n one %ld %ld :: %p", n, one, evbase);
 
     while(1)
     {
         RedisCliOrderNodePtr node = orderDeque_.dealOrderNode();
         if(node)
         {
-            if(node->cli_)
+            if((node->outSecond_) && (nowSecond_ > node->outSecond_))
             {
-                if(node->cmdOrd_ == nullptr)
+                PDEBUG("node->outSecond_ %ld nowSecond_ %ld", node->outSecond_, nowSecond_);
+            }else
+            {
+                if(node->cli_)
                 {
-                    if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
+                    if(node->cmdOrd_ == nullptr)
                     {
-                        node->cli_->connectServer(evbase);
-                        ioAddRedisClient(node->cli_);
+                        if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
+                        {
+                            node->cli_->connectServer(evbase);
+                            ioAddRedisClient(node->cli_);
+                        }else{
+                            node->cli_->disConnect();
+                        }
                     }else{
-                        node->cli_->disConnect();
+                        if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
+                        {
+                            PERROR("TODO");
+                        }else{
+                            node->cli_->requestCmd(node->cmdOrd_);
+                        }
                     }
                 }else{
-                    if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
-                    {
-                        PERROR("TODO");
-                    }else{
-                        node->cli_->requestCmd(node->cmdOrd_);
-                    }
+                    PERROR("TODO");
                 }
-            }else{
-                PERROR("TODO");
             }
         }else{
             break;
@@ -188,19 +197,18 @@ void LibeventIo::handleRead()
 
     if(lastSecond_ == 0)
     {
-        lastSecond_ = secondSinceEpoch();
+        lastSecond_ = nowSecond_;
     }else{
-        uint64_t nowSecond = secondSinceEpoch();
-        if(nowSecond != lastSecond_)
+        if(nowSecond_ != lastSecond_)
         {
             for(size_t i = 0; i < ioRedisClients_.size(); i++)
             {
                 if(ioRedisClients_[i])
                 {
-                    ioRedisClients_[i]->checkOutSecondCmd(nowSecond);
+                    ioRedisClients_[i]->checkOutSecondCmd(nowSecond_);
                 }
             }
-            lastSecond_ = nowSecond;
+            lastSecond_ = nowSecond_;
         }
     }
 }

@@ -23,20 +23,23 @@ namespace common
 class RedisCliOrderNode
 {
 public:
-    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli)
-        :cli_(cli)
+    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli, uint64_t outsecond = 0)
+        :outSecond_(outsecond)
+        ,cli_(cli)
         ,cmdOrd_(nullptr)
     {
     }
 
-    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli, const common::OrderNodePtr& cmd)
-        :cli_(cli)
+    RedisCliOrderNode(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli, const common::OrderNodePtr& cmd, uint64_t outsecond = 0)
+        :outSecond_(outsecond)
+        ,cli_(cli)
         ,cmdOrd_(cmd)
     {
     }
 
     RedisCliOrderNode(const RedisCliOrderNode& that)
-        :cli_(nullptr)
+        :outSecond_(0)
+        ,cli_(nullptr)
         ,cmdOrd_(nullptr)
     {
         *this = that;
@@ -46,6 +49,7 @@ public:
     {
         if(this == &that) return *this;
 
+        outSecond_ = that.outSecond_;
         cli_ = that.cli_;
         cmdOrd_ = that.cmdOrd_;
         
@@ -64,6 +68,7 @@ public:
         }
     }
 
+    uint64_t outSecond_;// 超时时间，精确到秒钟
     REDIS_ASYNC_CLIENT::RedisClientPtr cli_;
     OrderNodePtr cmdOrd_;//如果 cmdOrd_ 是空指针，则表示要建立连接或者关闭连接，根据内部标志位判断
 };
@@ -137,7 +142,9 @@ public:
 
     int libeventIoExit();
 
-    int libeventIoOrder(const RedisCliOrderNodePtr& node);
+    int libeventIoOrder(const RedisCliOrderNodePtr& node, uint64_t nowsecond);
+
+    int libeventIoWakeup(uint64_t nowsecond);
 
     void ioDisRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli);
 
@@ -147,13 +154,12 @@ public:
     void handleRead();
 private:
 
-    int libeventIoWakeup();
-
     int wakeupFd;
 
     struct event_base *evbase;
-    
-    uint64_t lastSecond_;
+
+    volatile uint64_t nowSecond_;
+    volatile uint64_t lastSecond_;
     
     struct event wake_event;
     OrderNodeDeque orderDeque_;

@@ -47,7 +47,7 @@ static void connectCallback(const redisAsyncContext *c, int status)
     }
     pClient->setStateConnected();
     CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_SUCCESS, ipaddr, port);
-    PDEBUG("Connected....");
+    PDEBUG("%s::%d Connected....", pClient->redisSvrIpaddr().c_str(), pClient->redisSvrPort());
     return;
 }
 

@@ -28,7 +28,7 @@ namespace common
 class OrderNode
 {
 public:
-    OrderNode(const std::string& msg, int outSecond = 3)
+    OrderNode(const std::string& msg, int outSecond = 0)
         :cmdRet_(0)
         ,cmdOutSecond_(outSecond)
         ,cmdQuerySecond_(0)
@@ -82,15 +82,15 @@ public:
     }
 
     
-    int cmdRet_;
-    int cmdOutSecond_;
-    uint64_t cmdQuerySecond_;
+    int cmdRet_;//查询命令执行结果
+    int cmdOutSecond_;//超时时间，单位秒钟
+    uint64_t cmdQuerySecond_;//命令执行秒钟
 
-    void* cmdPri_;
-    std::string cmdMsg_;
+    void* cmdPri_;//私有指针
+    std::string cmdMsg_;//命令的字符串
 
-    CLUSTER_REDIS_ASYNC::CmdResultCallback resultCb_;
-    CLUSTER_REDIS_ASYNC::StdVectorStringPtr cmdResult_;
+    CLUSTER_REDIS_ASYNC::CmdResultCallback resultCb_;//命令直接结果的回调
+    CLUSTER_REDIS_ASYNC::StdVectorStringPtr cmdResult_;//执行结果的string vect
 };
 
 typedef std::shared_ptr<OrderNode> OrderNodePtr;

@@ -130,7 +130,7 @@ typedef std::function<void(int asyFd, int exceCode, const std::string& exceMsg)>
  *
  * @return 无
  */
-typedef std::function<void(int64_t ret, void* priv, const StdVectorStringPtr& resultMsg)> CmdResultCallback;
+typedef std::function<void(int ret, void* priv, const StdVectorStringPtr& resultMsg)> CmdResultCallback;
 
 /*
  * [RedisAsync]异步redis集群或者单点管理类
@@ -261,8 +261,12 @@ public:
 public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///下面这些接口虽然是public，但是外面使用者千万不要调用，都是内部调用接口
+
+    void timerThreadRun();
+
     void libeventIoThread(int index);
 
+    //异步结果回调
     void cmdReplyCallPool();
 
     //void initConnectException(int exceCode, std::string& exceMsg);
@@ -273,7 +277,12 @@ public:
 
     void asyncExceCallBack(int asyFd, int exceCode, const std::string& exceMsg);
 
+    //异步结果回调
     void asyncCmdResultCallBack();
+
+    void clusterInitCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
+
+    void masterSalveInitCb(int ret, void* priv, const StdVectorStringPtr& resultMsg);
 
 private:
     int redisInitConnect();
@@ -284,6 +293,7 @@ private:
     int connOutSecond_;
     int isExit_;
 
+    volatile uint64_t nowSecond_;
     std::mutex initMutex_;
     StateChangeCb stateCb_;
     ExceptionCallBack exceCb_;
