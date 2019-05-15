@@ -82,15 +82,15 @@ public:
     }
 
     
-    int cmdRet_;//²éÑ¯ÃüÁîÖ´ĞĞ½á¹û
-    int cmdOutSecond_;//³¬Ê±Ê±¼ä£¬µ¥Î»ÃëÖÓ
-    uint64_t cmdQuerySecond_;//ÃüÁîÖ´ĞĞÃëÖÓ
+    int cmdRet_;//æŸ¥è¯¢å‘½ä»¤æ‰§è¡Œç»“æœ
+    int cmdOutSecond_;//è¶…æ—¶æ—¶é—´ï¼Œå•ä½ç§’é’Ÿ
+    uint64_t cmdQuerySecond_;//å‘½ä»¤æ‰§è¡Œç§’é’Ÿ
 
-    void* cmdPri_;//Ë½ÓĞÖ¸Õë
-    std::string cmdMsg_;//ÃüÁîµÄ×Ö·û´®
+    void* cmdPri_;//ç§æœ‰æŒ‡é’ˆ
+    std::string cmdMsg_;//å‘½ä»¤çš„å­—ç¬¦ä¸²
 
-    CLUSTER_REDIS_ASYNC::CmdResultCallback resultCb_;//ÃüÁîÖ±½Ó½á¹ûµÄ»Øµ÷
-    CLUSTER_REDIS_ASYNC::StdVectorStringPtr cmdResult_;//Ö´ĞĞ½á¹ûµÄstring vect
+    CLUSTER_REDIS_ASYNC::CmdResultCallback resultCb_;//å‘½ä»¤ç›´æ¥ç»“æœçš„å›è°ƒ
+    CLUSTER_REDIS_ASYNC::StdVectorStringPtr cmdResult_;//æ‰§è¡Œç»“æœçš„string vect
 };
 
 typedef std::shared_ptr<OrderNode> OrderNodePtr;
