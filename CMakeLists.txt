@@ -74,6 +74,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include/libevent)
 include_directories(${PROJECT_SOURCE_DIR}/include/hiredis)
 include_directories(${PROJECT_SOURCE_DIR}/include/sasl_2_1_27)
 include_directories(${PROJECT_SOURCE_DIR}/include/mwnet_mt)
+include_directories(${PROJECT_SOURCE_DIR}/include/c_ares)
 
 link_directories(${PROJECT_SOURCE_DIR}/lib)
 
