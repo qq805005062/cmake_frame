@@ -37,3 +37,6 @@ add_executable(curlHttpCliTest ${CURLHTTPCLI_TEST_FILE})
 target_link_libraries(curlHttpCliTest ${CURLHTTPCLI_TEST_LIB})
 install(TARGETS curlHttpCliTest DESTINATION bin)
 
+add_executable(curlSyncTest CurlSyncTesr.cpp)
+target_link_libraries(curlSyncTest ${CURLHTTPCLI_TEST_LIB})
+install(TARGETS curlSyncTest DESTINATION bin)
