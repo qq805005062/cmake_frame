@@ -28,9 +28,10 @@ namespace common
 class OrderNode
 {
 public:
-    OrderNode(const std::string& msg, int outSecond = 0)
+    OrderNode(const std::string& msg)
         :cmdRet_(0)
-        ,cmdOutSecond_(outSecond)
+        ,outSecond_(0)
+        ,cmdOutSecond_(0)
         ,cmdQuerySecond_(0)
         ,cmdPri_(nullptr)
         ,cmdMsg_(msg)
@@ -39,9 +40,10 @@ public:
     {
     }
 
-    OrderNode(const std::string& msg, int outSecond = 3, const CLUSTER_REDIS_ASYNC::CmdResultCallback& cb = NULL, void* pri = NULL)
+    OrderNode(const std::string& msg, const CLUSTER_REDIS_ASYNC::CmdResultCallback& cb = NULL, void* pri = NULL)
         :cmdRet_(0)
-        ,cmdOutSecond_(outSecond)
+        ,outSecond_(0)
+        ,cmdOutSecond_(0)
         ,cmdQuerySecond_(0)
         ,cmdPri_(pri)
         ,cmdMsg_(msg)
@@ -52,6 +54,7 @@ public:
 
     OrderNode(const OrderNode& that)
         :cmdRet_(0)
+        ,outSecond_(0)
         ,cmdOutSecond_(0)
         ,cmdQuerySecond_(0)
         ,cmdPri_(nullptr)
@@ -67,6 +70,7 @@ public:
         if(this == &that) return *this;
 
         cmdRet_ = that.cmdRet_;
+        outSecond_ = that.outSecond_;
         cmdOutSecond_ = that.cmdOutSecond_;
         cmdQuerySecond_ = that.cmdQuerySecond_;
         cmdPri_ = that.cmdPri_;
@@ -83,8 +87,9 @@ public:
 
     
     int cmdRet_;//查询命令执行结果
-    int cmdOutSecond_;//超时时间，单位秒钟
-    uint64_t cmdQuerySecond_;//命令执行秒钟
+    int outSecond_;//超时时间，相对时间，单位秒钟
+    uint64_t cmdOutSecond_;//超时时间，单位秒钟，绝对时间
+    uint64_t cmdQuerySecond_;//命令执行秒钟，绝对时间
 
     void* cmdPri_;//私有指针
     std::string cmdMsg_;//命令的字符串

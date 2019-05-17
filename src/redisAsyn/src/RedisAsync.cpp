@@ -1,4 +1,5 @@
 
+#include <stdarg.h>
 #include <string.h>
 
 #include "Atomic.h"
@@ -328,6 +329,14 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                     }
                 }
                 pClient->cluterCli_->clusterVectInfo_.push_back(tmpClusNode);
+
+                for(size_t j = 0; j < tmpClusNode->vectSlotInfo_.size(); ++j)
+                {
+                    for(uint16_t jj = tmpClusNode->vectSlotInfo_[j]->slotStart_; jj <= tmpClusNode->vectSlotInfo_[j]->slotEnd_; jj++)
+                    {
+                        pClient->cluterCli_->clusterSlotMap_.insert(REDIS_ASYNC_CLIENT::SlotCliInfoMap::value_type(jj, tmpCli));
+                    }
+                }
 
                 //从节点
                 for (size_t j = 0; j < vLines.size(); ++j)
@@ -763,13 +772,15 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                     {
                                         PDEBUG("INFO replication");
                                         std::string clusterCmd = "INFO replication";
-                                        common::OrderNodePtr cmdnode(new common::OrderNode(clusterCmd, DEFAULT_CMD_OUTSECOND, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::masterSalveInitCb, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3)));
+                                        common::OrderNodePtr cmdnode(new common::OrderNode(clusterCmd, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::masterSalveInitCb, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3)));
                                         if(cmdnode == nullptr)
                                         {
                                             //TODO
                                             return;
                                         }
-                                        common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_, cmdnode, (nowSecond_ + DEFAULT_CMD_OUTSECOND)));
+                                        cmdnode->outSecond_ = DEFAULT_CMD_OUTSECOND;
+                                        cmdnode->cmdOutSecond_ = nowSecond_ + DEFAULT_CMD_OUTSECOND;
+                                        common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_, cmdnode, cmdnode->cmdOutSecond_));
                                         if(node == nullptr)
                                         {
                                             //TODO
@@ -909,13 +920,15 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                         if((vectRedisCliMgr[asyFd]->cluterCli_ == nullptr) || (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size() == 0))
                                         {
                                             std::string clusterCmd = "CLUSTER NODES";
-                                            common::OrderNodePtr cmdnode(new common::OrderNode(clusterCmd, DEFAULT_CMD_OUTSECOND, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::clusterInitCallBack, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3), vectRedisCliMgr[asyFd].get()));
+                                            common::OrderNodePtr cmdnode(new common::OrderNode(clusterCmd, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::clusterInitCallBack, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3), vectRedisCliMgr[asyFd].get()));
                                             if(cmdnode == nullptr)
                                             {
                                                 //TODO
                                                 return;
                                             }
-                                            common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_, cmdnode, (nowSecond_ + DEFAULT_CMD_OUTSECOND)));
+                                            cmdnode->outSecond_ = DEFAULT_CMD_OUTSECOND;
+                                            cmdnode->cmdOutSecond_ = nowSecond_ + DEFAULT_CMD_OUTSECOND;
+                                            common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_, cmdnode, cmdnode->cmdOutSecond_));
                                             if(node == nullptr)
                                             {
                                                 //TODO
@@ -1206,16 +1219,77 @@ void RedisAsync::asyncExceCallBack(int asyFd, int exceCode, const std::string& e
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 int RedisAsync::set(int asyFd, const std::string& key, const std::string& value, int outSecond, const CmdResultCallback& cb, void *priv)
 {
-    return 0;
+    char cmdBuf[1024] = {0};
+
+    sprintf(cmdBuf, "set %s %s", key.c_str(), value.c_str());
+    return redisAsyncCommand(asyFd, cb, outSecond, priv, key, cmdBuf);
 }
 
 int RedisAsync::redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const char *format, ...)
 {
-    return 0;
+    char *cmd = NULL;
+    va_list ap;
+    va_start(ap,format);
+
+    int len = redisvFormatCommand(&cmd,format,ap);
+    if (len == -1)
+    {
+        return CMD_PARAMETER_ERROR_CODE;
+    }
+    std::string cmdStr(cmd);
+    if(cmd)
+    {
+        free(cmd);
+    }
+    return redisAsyncCommand(asyFd, cb, outSecond, priv, key, cmdStr);;
 }
 
 int RedisAsync::redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const std::string& cmdStr)
 {
+    
+    REDIS_ASYNC_CLIENT::RedisClientPtr redisClient(nullptr);
+    if(asyFd < 0 || key.empty())
+    {
+        return CMD_PARAMETER_ERROR_CODE;
+    }
+
+    size_t mgrFd_ = static_cast<size_t>(asyFd);
+    if(mgrFd_ >= vectRedisCliMgr.size())
+    {
+        return CMD_PARAMETER_ERROR_CODE;
+    }
+
+    if((vectRedisCliMgr[mgrFd_]->initState_ == REDIS_SVR_INIT_STATE) || (vectRedisCliMgr[mgrFd_]->initState_ == REDIS_SVR_ERROR_STATE))
+    {
+        return CMD_SVR_NO_INIT_CODE;
+    }
+
+    if(vectRedisCliMgr[mgrFd_]->svrType_ == REDIS_ASYNC_CLUSTER_RUNING_STATE)
+    {
+        uint16_t slot = getKeySlotIndex(key);
+        REDIS_ASYNC_CLIENT::SlotCliInfoMap::iterator iter = vectRedisCliMgr[mgrFd_]->cluterCli_->clusterSlotMap_.find(slot);
+        if(iter == vectRedisCliMgr[mgrFd_]->cluterCli_->clusterSlotMap_.end())
+        {
+            return CMD_SVR_NO_INIT_CODE;
+        }
+        redisClient = iter->second;
+    }else{
+        redisClient = vectRedisCliMgr[mgrFd_]->nodeCli_->redisClient_;
+    }
+
+    common::OrderNodePtr cmdOrder(new common::OrderNode(cmdStr, cb, priv));
+    if(cmdOrder == nullptr)
+    {
+        return CMD_SYSTEM_MALLOC_CODE;
+    }
+    cmdOrder->outSecond_ = outSecond;
+    cmdOrder->cmdOutSecond_ = nowSecond_ + outSecond;
+    common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(redisClient, cmdOrder, cmdOrder->cmdOutSecond_));
+    if(node == nullptr)
+    {
+        return CMD_SYSTEM_MALLOC_CODE;
+    }
+    libeventIoPtrVect[redisClient->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
     return 0;
 }
 

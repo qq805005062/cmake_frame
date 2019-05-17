@@ -34,15 +34,17 @@
 //cmd code define
 //执行命令回调状态编号宏定义
 #define CMD_SUCCESS_CODE                        (0)
-#define CMD_OUTTIME_CODE                        (-1)
-#define CMD_NOREDIS_SVR_NODE_CODE               (-2)
-#define CMD_REDIS_NODE_DISCONNECT               (-3)
-#define CMD_REPLY_EMPTY_CODE                    (-4)
-#define CMD_MALLOC_NULL_CODE                    (-5)
+#define CMD_PARAMETER_ERROR_CODE                (-1)
+#define CMD_SVR_NO_INIT_CODE                    (-2)
+#define CMD_SYSTEM_MALLOC_CODE                  (-3)
+
+//callback
+
+#define CMD_OUTTIME_CODE                        (-4)
+#define CMD_REPLY_EMPTY_CODE                    (-5)
 #define CMD_EMPTY_RESULT_CODE                   (-6)
 #define CMD_REDIS_ERROR_CODE                    (-7)
 #define CMD_REDIS_UNKNOWN_CODE                  (-8)
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //inside connect define 

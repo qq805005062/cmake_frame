@@ -195,8 +195,7 @@ void RedisClient::checkOutSecondCmd(uint64_t nowSecond)
 
     for(common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.begin(); iter != cmdSeqOrderMap_.end(); iter++)
     {
-        int diff = static_cast<int>(nowSecond - iter->second->cmdQuerySecond_);
-        if(diff > iter->second->cmdOutSecond_)
+        if(iter->second->outSecond_ && (nowSecond > iter->second->cmdOutSecond_))
         {
             if(iter->second->resultCb_)
             {
@@ -246,7 +245,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                     iter->second->cmdResult_.push_back(elementStr);
                                     iter->second->cmdRet_ = CMD_SUCCESS_CODE;
                                 }else{
-                                    iter->second->cmdRet_ = CMD_MALLOC_NULL_CODE;
+                                    iter->second->cmdRet_ = CMD_SYSTEM_MALLOC_CODE;
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
@@ -264,7 +263,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                     CLUSTER_REDIS_ASYNC::StdStringSharedPtr elementStr(new std::string(reply->element[j]->str, reply->element[j]->len));
                                     if(elementStr == nullptr)
                                     {
-                                        iter->second->cmdRet_ = CMD_MALLOC_NULL_CODE;
+                                        iter->second->cmdRet_ = CMD_SYSTEM_MALLOC_CODE;
                                         iter->second->cmdResult_.push_back(CLUSTER_REDIS_ASYNC::StdStringSharedPtr());
                                     }else{
                                         iter->second->cmdResult_.push_back(elementStr);
@@ -287,7 +286,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 {
                                     iter->second->cmdResult_.push_back(elementStr);
                                 }else{
-                                    iter->second->cmdRet_ = CMD_MALLOC_NULL_CODE;
+                                    iter->second->cmdRet_ = CMD_SYSTEM_MALLOC_CODE;
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
@@ -317,7 +316,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 {
                                     iter->second->cmdResult_.push_back(elementStr);
                                 }else{
-                                    iter->second->cmdRet_ = CMD_MALLOC_NULL_CODE;
+                                    iter->second->cmdRet_ = CMD_SYSTEM_MALLOC_CODE;
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
@@ -335,7 +334,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 {
                                     iter->second->cmdResult_.push_back(elementStr);
                                 }else{
-                                    iter->second->cmdRet_ = CMD_MALLOC_NULL_CODE;
+                                    iter->second->cmdRet_ = CMD_SYSTEM_MALLOC_CODE;
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{

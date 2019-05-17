@@ -199,7 +199,7 @@ public:
 typedef std::shared_ptr<RedisClusterNode> RedisClusterNodePtr;
 typedef std::vector<RedisClusterNodePtr> VectRedisClusterNodePtr;
 
-typedef std::map<uint16_t, RedisClusterNodePtr>  SlotCliInfoMap;
+typedef std::map<uint16_t, RedisClientPtr>  SlotCliInfoMap;
 
 class RedisClusterInfo
 {
