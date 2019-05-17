@@ -78,7 +78,8 @@ static void cmdCallback(redisAsyncContext *c, void *r, void *privdata)
     redisReply* reply = static_cast<redisReply*>(r);
     if (reply == NULL)
     {
-        PERROR("TODO");
+        PERROR("cmdCallback reply nullptr");
+        return;
     }
     pClient->requestCallBack(privdata, reply);
     return;
@@ -119,19 +120,21 @@ int RedisClient::connectServer(struct event_base* eBase)
 {
     if((eBase == nullptr) || (svrInfo_ == nullptr) || (svrInfo_->ipAddr_.empty()) || (svrInfo_->port_ == 0))
     {
-        return -101;
+        PERROR("eBase nullptr or svrInfo_ nullptr or ipaddr port empty");
+         return -1;
     }
+    disConnect();
     base_ = eBase;
     client_ = redisAsyncConnect(svrInfo_->ipAddr_.c_str(), svrInfo_->port_);
     if(client_ == nullptr)
     {
-        PERROR("TODO");
-        return -102;
+        PERROR("redisAsyncConnect nullptr");
+        return -1;
     }
     if (client_->err)
     {
-        PERROR("TODO");
-        return -103;
+         PERROR("redisAsyncConnect client_->err %d", client_->err);
+         return -1;
     }
     
     client_->data = static_cast<void*>(this);
@@ -142,8 +145,8 @@ int RedisClient::connectServer(struct event_base* eBase)
     timev_ = evtimer_new(base_, connectTimeout, static_cast<void*>(this));
     if(timev_ == nullptr)
     {
-        PERROR("evtimer_new malloc null");
-        return -104;
+         PERROR("evtimer_new malloc null");
+         return -1;
     }
 
     struct timeval connSecondOut = {connOutSecond_, 0};
@@ -170,15 +173,25 @@ void RedisClient::disConnect()
 void RedisClient::requestCmd(const common::OrderNodePtr& order)
 {
     uint32_t seq = cmdSeq_.getAndIncrement();
-    order->cmdQuerySecond_ = secondSinceEpoch();
-    cmdSeqOrderMap_.insert(common::SeqOrderNodeMap::value_type(seq, order));
     void *priv = (void *)(seq);
     PDEBUG("requestCmd %u::%p", seq, priv);
     int ret = redisAsyncCommand(client_, cmdCallback, priv, order->cmdMsg_.c_str());
     if(ret)
     {
-        PERROR("TODO");
+        char errorMsg[1024] = {0};
+        sprintf(errorMsg, "redisAsyncCommand ret %d", ret);
+        CLUSTER_REDIS_ASYNC::StdStringSharedPtr errorStr(new std::string(errorMsg));
+        if(errorStr)
+        {
+            order->cmdResult_.push_back(errorStr);
+        }
+        order->cmdRet_ = ret;
+        common::CmdResultQueue::instance().insertCmdResult(order);
+        return;
     }
+
+    order->cmdQuerySecond_ = secondSinceEpoch();
+    cmdSeqOrderMap_.insert(common::SeqOrderNodeMap::value_type(seq, order));
 }
 
 void RedisClient::checkOutSecondCmd(uint64_t nowSecond)
@@ -202,7 +215,7 @@ void RedisClient::checkOutSecondCmd(uint64_t nowSecond)
                 iter->second->cmdRet_ = CMD_OUTTIME_CODE;
                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
             }else{
-                PERROR("TODO");
+                PERROR("no callback %u", iter->first);
             }
             cmdSeqOrderMap_.erase(iter++);
         }else{
@@ -219,7 +232,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
     common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.find(seq);
     if(iter == cmdSeqOrderMap_.end())
     {
-        PERROR("TODO");
+        PERROR("callback been outtime or no callback %u", seq);
     }else{
         if(iter->second)
         {
@@ -230,7 +243,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                     iter->second->cmdRet_ = CMD_REPLY_EMPTY_CODE;
                     common::CmdResultQueue::instance().insertCmdResult(iter->second);
                 }else{
-                    PERROR("TODO");
+                    PERROR("no callback %u", seq);
                 }
             }else{
                 switch(reply->type)
@@ -249,7 +262,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
@@ -271,7 +284,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
@@ -290,7 +303,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
@@ -301,7 +314,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 iter->second->cmdRet_ = CMD_EMPTY_RESULT_CODE;
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
@@ -320,7 +333,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
@@ -338,7 +351,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
@@ -359,14 +372,14 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                                 }
                                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
                             }else{
-                                PERROR("TODO");
+                                PERROR("no callback %u", seq);
                             }
                             break;
                         }
                 }
             }
         }else{
-            PERROR("TODO");
+            PERROR("no callback %u", seq);
         }
         cmdSeqOrderMap_.erase(iter);
     }

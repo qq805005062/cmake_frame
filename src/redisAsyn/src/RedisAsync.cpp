@@ -234,6 +234,7 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                 return;
             }
 
+            bool addMasConnCmd = true, addSalConnCmd = true;
             if(strstr(nodeInfo[2].c_str(), "master"))
             {
                 if (nodeInfo.size() < 9)
@@ -254,6 +255,9 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                 std::string tmpIpStr = nodeInfo[1].substr(0, pos);
                 PDEBUG("master %s::%d", tmpIpStr.c_str(), tmpPort);
 
+                size_t tmpIoIndex = 0;
+                REDIS_ASYNC_CLIENT::RedisClientPtr tmpCli(nullptr);
+                REDIS_ASYNC_CLIENT::RedisSvrCliPtr tmpScrCli(nullptr);
                 REDIS_ASYNC_CLIENT::RedisSvrInfoPtr tmpsvr(new REDIS_ASYNC_CLIENT::RedisSvrInfo(tmpIpStr, tmpPort));
                 if(tmpsvr == nullptr)
                 {
@@ -261,23 +265,31 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                     return;
                 }
 
-                size_t tmpIoIndex = initIoIndex.incrementAndGet();
-                tmpIoIndex = tmpIoIndex % ioThreadNum_;
-                REDIS_ASYNC_CLIENT::RedisClientPtr tmpCli(new REDIS_ASYNC_CLIENT::RedisClient(tmpIoIndex, pClient->mgrFd_, tmpsvr, keepSecond_, connOutSecond_));
-                if(tmpCli == nullptr)
+                if((*pClient->nodeCli_->svrInfo_) == (*tmpsvr))
                 {
-                    pClient->cluterCli_.reset();//TODO
-                    return;
-                }
+                    addMasConnCmd = false;
+                    tmpCli = pClient->nodeCli_->redisClient_;
+                    tmpScrCli = pClient->nodeCli_;
+                }else
+                {
+                    tmpIoIndex = initIoIndex.incrementAndGet();
+                    tmpIoIndex = tmpIoIndex % ioThreadNum_;
+                    tmpCli.reset(new REDIS_ASYNC_CLIENT::RedisClient(tmpIoIndex, pClient->mgrFd_, tmpsvr, keepSecond_, connOutSecond_));
+                    if(tmpCli == nullptr)
+                    {
+                        pClient->cluterCli_.reset();//TODO
+                        return;
+                    }
 
-                REDIS_ASYNC_CLIENT::RedisSvrCliPtr tmpScrCli(new REDIS_ASYNC_CLIENT::RedisSvrCli());
-                if(tmpScrCli == nullptr)
-                {
-                    pClient->cluterCli_.reset();//TODO
-                    return;
+                    tmpScrCli.reset(new REDIS_ASYNC_CLIENT::RedisSvrCli());
+                    if(tmpScrCli == nullptr)
+                    {
+                        pClient->cluterCli_.reset();//TODO
+                        return;
+                    }
+                    tmpScrCli->svrInfo_ = tmpsvr;
+                    tmpScrCli->redisClient_ = tmpCli;
                 }
-                tmpScrCli->svrInfo_ = tmpsvr;
-                tmpScrCli->redisClient_ = tmpCli;
 
                 REDIS_ASYNC_CLIENT::RedisMasterSlavePtr tmpMS(new REDIS_ASYNC_CLIENT::RedisMasterSlave());
                 if(tmpMS == nullptr)
@@ -337,6 +349,18 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                         pClient->cluterCli_->clusterSlotMap_.insert(REDIS_ASYNC_CLIENT::SlotCliInfoMap::value_type(jj, tmpCli));
                     }
                 }
+                
+                if(addMasConnCmd)
+                {
+                    common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(tmpMS->master_->redisClient_));
+                    if(node == nullptr)
+                    {
+                        pClient->cluterCli_.reset();//TODO
+                        return;
+                    }
+                    
+                    libeventIoPtrVect[tmpMS->master_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
+                }
 
                 //从节点
                 for (size_t j = 0; j < vLines.size(); ++j)
@@ -370,43 +394,59 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                             return;
                         }
 
-                        tmpIoIndex = initIoIndex.incrementAndGet();
-                        tmpIoIndex = tmpIoIndex % ioThreadNum_;
-                        tmpCli.reset(new REDIS_ASYNC_CLIENT::RedisClient(tmpIoIndex, pClient->mgrFd_, tmpsvr, keepSecond_, connOutSecond_));
-                        if(tmpCli == nullptr)
+                        if((*pClient->nodeCli_->svrInfo_) == (*tmpsvr))
                         {
-                            pClient->cluterCli_.reset();//TODO
-                            return;
-                        }
+                            addSalConnCmd = false;
+                            tmpCli = pClient->nodeCli_->redisClient_;
+                            tmpScrCli = pClient->nodeCli_;
+                        }else{
+                            tmpIoIndex = initIoIndex.incrementAndGet();
+                            tmpIoIndex = tmpIoIndex % ioThreadNum_;
+                            tmpCli.reset(new REDIS_ASYNC_CLIENT::RedisClient(tmpIoIndex, pClient->mgrFd_, tmpsvr, keepSecond_, connOutSecond_));
+                            if(tmpCli == nullptr)
+                            {
+                                pClient->cluterCli_.reset();//TODO
+                                return;
+                            }
 
-                        tmpScrCli.reset(new REDIS_ASYNC_CLIENT::RedisSvrCli());
-                        if(tmpScrCli == nullptr)
-                        {
-                            pClient->cluterCli_.reset();//TODO
-                            return;
+                            tmpScrCli.reset(new REDIS_ASYNC_CLIENT::RedisSvrCli());
+                            if(tmpScrCli == nullptr)
+                            {
+                                pClient->cluterCli_.reset();//TODO
+                                return;
+                            }
+                            tmpScrCli->svrInfo_ = tmpsvr;
+                            tmpScrCli->redisClient_ = tmpCli;
                         }
-                        tmpScrCli->svrInfo_ = tmpsvr;
-                        tmpScrCli->redisClient_ = tmpCli;
 
                         tmpMS->slave_.push_back(tmpScrCli);
+
+                        if(addSalConnCmd)
+                        {
+                            common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(tmpCli));
+                            if(node == nullptr)
+                            {
+                                pClient->cluterCli_.reset();//TODO
+                                return;
+                            }
+                            
+                            libeventIoPtrVect[tmpMS->master_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
+                        }
                     }
                }
-
-                common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(tmpMS->master_->redisClient_));
-                if(node == nullptr)
-                {
-                    pClient->cluterCli_.reset();//TODO
-                    return;
-                }
                 
-                libeventIoPtrVect[tmpMS->master_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
             }else{
                 continue;
             }
         }
         
     }else{
-        //TODO
+        PERROR("ret %d priv %p", ret , priv);
+
+        for(StdVectorStringPtr::const_iterator iter = resultMsg.begin(); iter != resultMsg.end(); iter++)
+        {
+            PERROR("\n%s", (*iter)->c_str());
+        }
     }
 
     return;
@@ -1229,9 +1269,9 @@ int RedisAsync::redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int ou
 {
     char *cmd = NULL;
     va_list ap;
-    va_start(ap,format);
+    va_start(ap, format);
 
-    int len = redisvFormatCommand(&cmd,format,ap);
+    int len = redisvFormatCommand(&cmd, format, ap);
     if (len == -1)
     {
         return CMD_PARAMETER_ERROR_CODE;
@@ -1241,6 +1281,7 @@ int RedisAsync::redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int ou
     {
         free(cmd);
     }
+    va_end(ap);
     return redisAsyncCommand(asyFd, cb, outSecond, priv, key, cmdStr);;
 }
 

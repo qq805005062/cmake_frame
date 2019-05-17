@@ -108,6 +108,7 @@ int LibeventIo::libeventIoExit()
     return 0;
 }
 
+//不需要删除，因为一个redis客户端绑定的io之后的重连无论任何操作绑定的io线程不应该改变
 void LibeventIo::ioDisRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli)
 {
     for(size_t i = 0; i < ioRedisClients_.size(); i++)
@@ -159,6 +160,9 @@ void LibeventIo::handleRead()
             if((node->outSecond_) && (nowSecond_ > node->outSecond_))
             {
                 PDEBUG("node->outSecond_ %ld nowSecond_ %ld", node->outSecond_, nowSecond_);
+                OrderNodePtr cmdNode = node->cmdOrd_;
+                cmdNode->cmdRet_ = CMD_OUTTIME_CODE;
+                common::CmdResultQueue::instance().insertCmdResult(cmdNode);
             }else
             {
                 if(node->cli_)
@@ -167,15 +171,21 @@ void LibeventIo::handleRead()
                     {
                         if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
                         {
-                            node->cli_->connectServer(evbase);
                             ioAddRedisClient(node->cli_);
+                            int ret = node->cli_->connectServer(evbase);
+                            if(ret)
+                            {
+                                CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(node->cli_->redisMgrfd(), CONNECT_REDISVR_RESET, node->cli_->redisSvrIpaddr(), node->cli_->redisSvrPort());
+                            }
                         }else{
                             node->cli_->disConnect();
                         }
                     }else{
                         if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
                         {
-                            PERROR("TODO");
+                            OrderNodePtr cmdNode = node->cmdOrd_;
+                            cmdNode->cmdRet_ = CMD_SVR_DISCONNECT_CODE;
+                            common::CmdResultQueue::instance().insertCmdResult(cmdNode);
                         }else{
                             node->cli_->requestCmd(node->cmdOrd_);
                         }

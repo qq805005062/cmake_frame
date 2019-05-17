@@ -46,6 +46,7 @@
 #define CMD_REDIS_ERROR_CODE                    (-7)
 #define CMD_REDIS_UNKNOWN_CODE                  (-8)
 
+#define CMD_SVR_DISCONNECT_CODE                 (-9)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //inside connect define 
 //客户端连接服务端状态标志

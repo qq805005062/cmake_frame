@@ -57,6 +57,22 @@ public:
         return *this;
     }
 
+    bool operator ==(const RedisSvrInfo& that)
+    {
+        if(this == &that)
+        {
+            return true;
+        }
+        
+        if((port_ == that.port_) && (ipAddr_.compare(that.ipAddr_) == 0))
+        {
+            return true;
+        }
+
+        return false;
+    
+}
+
     int port_;
     std::string ipAddr_;
 };
@@ -78,7 +94,7 @@ public:
 
     void requestCallBack(void* priv, redisReply* reply);
 
-    void checkOutSecondCmd(uint64_t nowSecond = 0);
+    void checkOutSecondCmd(uint64_t nowSecond);
 
     void setStateConnected()
     {
