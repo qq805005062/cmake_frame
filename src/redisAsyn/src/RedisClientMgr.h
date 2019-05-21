@@ -76,12 +76,14 @@ public:
 
     ~RedisSvrCli()
     {
+        PTRACE("~RedisSvrCli exit");
         if(svrInfo_)
         {
             svrInfo_.reset();
         }
         if(redisClient_)
         {
+            PTRACE("redisClient_.reset();");
             redisClient_.reset();
         }
     }
@@ -183,6 +185,7 @@ public:
 
     ~RedisClusterNode()
     {
+        PTRACE("~RedisClusterNode exit");
         if(clusterNode_)
         {
             clusterNode_.reset();
@@ -229,6 +232,7 @@ public:
 
     ~RedisClusterInfo()
     {
+        PTRACE("~RedisClusterInfo exit");
         SlotCliInfoMap ().swap(clusterSlotMap_);
         VectRedisClusterNodePtr ().swap(clusterVectInfo_);
     }
@@ -254,12 +258,15 @@ public:
         ,mSlaveCli_(nullptr)
         ,cluterCli_(nullptr)
     {
+        PTRACE("RedisClientMgr init");
     }
 
     ~RedisClientMgr()
     {
+        PTRACE("~RedisClientMgr exit");
         if(nodeCli_)
         {
+            PTRACE("nodeCli_.reset();");
             nodeCli_.reset();
         }
         

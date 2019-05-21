@@ -15,8 +15,11 @@
 #include "OrderInfo.h"
 #include "../RedisAsync.h"
 
-#define REDIS_CLIENT_STATE_INIT         0
-#define REDIS_CLIENT_STATE_CONN         1
+#define REDIS_CLIENT_STATE_INIT         (0)
+#define REDIS_CLIENT_STATE_CONN         (1)
+
+#define RESOURCES_FREE_ALREADY          (0)
+#define RESOURCES_NEED_FREE             (1)
 
 namespace REDIS_ASYNC_CLIENT
 {
@@ -38,6 +41,7 @@ public:
 
     ~RedisSvrInfo()
     {
+        PTRACE("%s::%d ~RedisSvrInfo exit", ipAddr_.c_str(), port_);
     }
 
     RedisSvrInfo(const RedisSvrInfo& that)
@@ -98,6 +102,7 @@ public:
 
     void setStateConnected()
     {
+        PTRACE("%s::%d connect success", svrInfo_->ipAddr_.c_str(), svrInfo_->port_);
         if(timev_)
         {
             event_free(timev_);
@@ -137,9 +142,10 @@ public:
         return mgrFd_;
     }
 private:
-    int state_;//0是初始化状态，1是已经连接，2是连接失败
+    int state_;//0是未连接，1是已经连接
     int connOutSecond_;
     int keepAliveSecond_;
+    volatile int freeState_;//内部资源释放标志位。因为断开连接会触发回调函数，disconnect不可以重入，0 是已经释放了，1是需要释放
     
     size_t ioIndex_;
     size_t mgrFd_;

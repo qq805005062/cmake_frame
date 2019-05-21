@@ -23,6 +23,7 @@ static std::vector<common::LibeventIoPtr> libeventIoPtrVect;
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //init paramter
 static common::AtomicUInt32 initIoIndex;
+static common::AtomicInt32 asyncCmdNum;
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 static REDIS_ASYNC_CLIENT::VectRedisClientMgrPtr vectRedisCliMgr;
@@ -34,6 +35,7 @@ RedisAsync::RedisAsync()
     ,keepSecond_(0)
     ,connOutSecond_(0)
     ,isExit_(0)
+    ,timerExit_(0)
     ,nowSecond_(0)
     ,initMutex_()
     ,stateCb_(nullptr)
@@ -51,15 +53,33 @@ void RedisAsync::redisAsyncExit()
 {
     isExit_ = 1;
     
-    //TODO
+    do{
+        if(asyncCmdNum.get() == 0)
+        {
+            break;
+        }
+        PERROR("This still async cmd num %d", asyncCmdNum.get());
+        usleep(1000);
+    }while(1);
+    
     if(callBackPoolPtr)
     {
         callBackPoolPtr->stop();
     }
 
+    timerExit_ = 1;
     if(timerThreadPtr)
     {
         timerThreadPtr->join();
+    }
+
+    for(int i = 0; i < ioThreadNum_; i++)
+    {
+        size_t index = static_cast<size_t>(i);
+        if(libeventIoPtrVect[index])
+        {
+            libeventIoPtrVect[index]->libeventIoExit();
+        }
     }
 
     if(eventIoPoolPtr)
@@ -137,17 +157,15 @@ void RedisAsync::timerThreadRun()
 {
     while(1)
     {
-        if(isExit_)
+        if(timerExit_)
         {
             break;
-        
-}
+        }
         sleep(1);
-        if(isExit_)
+        if(timerExit_)
         {
             break;
-        
-}
+        }
 
         nowSecond_ = secondSinceEpoch();
         size_t subIndex = 0;
@@ -159,6 +177,18 @@ void RedisAsync::timerThreadRun()
             }
             subIndex++;
         }
+
+        do{
+            common::RedisCliOrderNodePtr node = common::TimerOrderDeque::instance().dealTimerOrder(nowSecond_);
+            if(node)
+            {
+                node->outSecond_ = 0;
+                libeventIoPtrVect[node->cli_->redisMgrfd()]->libeventIoOrder(node, nowSecond_);
+            
+}else{
+                break;
+            }
+        }while(true);
     }
 }
 
@@ -166,18 +196,24 @@ void RedisAsync::libeventIoThread(int index)
 {
     int ret = 0;
     size_t subIndex = static_cast<size_t>(index);
+    PDEBUG("io thread index %d entry", index);
     while(1)
     {
         if(libeventIoPtrVect[subIndex])
         {
             ret = libeventIoPtrVect[subIndex]->libeventIoReady();
-            PERROR("LibeventIoPtrVect[index]->asyncCurlReady ret %d", ret);
+            PERROR("LibeventIoPtrVect[%d]->asyncCurlReady ret %d", index, ret);
         }else{
-            PERROR("LibeventTcpCli new io Thread object error");
+            PERROR("LibeventTcpCli %d new io Thread object error", index);
+        }
+        if(isExit_)
+        {
+            break;
         }
 
         libeventIoPtrVect[subIndex].reset(new common::LibeventIo());
     }
+    PDEBUG("io thread index %d out", index);
 
     return;
 }
@@ -193,8 +229,16 @@ void RedisAsync::cmdReplyCallPool()
     }
     if(node && node->resultCb_)
     {
+        asyncCmdNum.decrement();
+        PTRACE("asyncCmdNum %d", asyncCmdNum.get());
         node->resultCb_(node->cmdRet_, node->cmdPri_, node->cmdResult_);
     }
+}
+
+void RedisAsync::asyncRequestCmdAdd()
+{
+    asyncCmdNum.increment();
+    PTRACE("asyncCmdNum %d", asyncCmdNum.get());
 }
 
 void RedisAsync::asyncCmdResultCallBack()
@@ -202,6 +246,52 @@ void RedisAsync::asyncCmdResultCallBack()
     PDEBUG("IO Asynchronous ready cb");
     callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::cmdReplyCallPool, this));
 }
+
+void RedisAsync::redisSvrMgrInvalid(size_t asyFd)
+{
+    if(vectRedisCliMgr[asyFd]->nodeCli_ && vectRedisCliMgr[asyFd]->nodeCli_->redisClient_)
+    {
+        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_);
+    }
+    
+    if(vectRedisCliMgr[asyFd]->mSlaveCli_)
+    {
+        if(vectRedisCliMgr[asyFd]->mSlaveCli_->master_ && vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_)
+        {
+            libeventIoPtrVect[vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_);
+        }
+
+        for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator iter = vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.begin(); iter != vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.end(); iter++)
+        {
+            libeventIoPtrVect[(*iter)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->redisClient_);
+        }
+    }
+    
+    if(vectRedisCliMgr[asyFd]->cluterCli_)
+    {
+        for(REDIS_ASYNC_CLIENT::VectRedisClusterNodePtr::iterator iter = vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.begin(); iter != vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.end(); iter++)
+        {
+            if((*iter)->clusterNode_)
+            {
+                if((*iter)->clusterNode_->master_ && (*iter)->clusterNode_->master_->redisClient_)
+                {
+                    libeventIoPtrVect[(*iter)->clusterNode_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->clusterNode_->master_->redisClient_);
+                }
+
+                for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator it = (*iter)->clusterNode_->slave_.begin(); it != (*iter)->clusterNode_->slave_.end(); it++)
+                {
+                    libeventIoPtrVect[(*it)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*it)->redisClient_);
+                }
+            }
+        }
+    }
+    
+    callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_SVR_UNVALID_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
+    PTRACE("vectRedisCliMgr[asyFd].reset() %ld begin", vectRedisCliMgr[asyFd]->nodeCli_->redisClient_.use_count());
+    vectRedisCliMgr[asyFd].reset();
+    PTRACE("vectRedisCliMgr[asyFd].reset() end");
+}
+
 
 /*
 9be7650002bdbfd6b099c07969c6969d120b2b6c 192.169.6.211:6790@16790 master - 0 1557940444069 5 connected 10923-16383
@@ -358,7 +448,6 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                         pClient->cluterCli_.reset();//TODO
                         return;
                     }
-                    
                     libeventIoPtrVect[tmpMS->master_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
                 }
 
@@ -429,7 +518,6 @@ void RedisAsync::clusterInitCallBack(int ret, void* priv, const StdVectorStringP
                                 pClient->cluterCli_.reset();//TODO
                                 return;
                             }
-                            
                             libeventIoPtrVect[tmpMS->master_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
                         }
                     }
@@ -619,7 +707,6 @@ int RedisAsync::redisInitConnect()
     {
         return INIT_SYSTEM_ERROR;
     }
-    
     libeventIoPtrVect[tmpIoIndex]->libeventIoOrder(node, nowSecond_);
     return INIT_SUCCESS_CODE;
 }
@@ -635,7 +722,7 @@ int RedisAsync::redisInitConnect()
  */
 void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port)
 {
-    if(vectRedisCliMgr.size() <= asyFd)
+    if((vectRedisCliMgr.size() <= asyFd) || (vectRedisCliMgr[asyFd] == nullptr))
     {
         PERROR("vectRedisCliMgr.size() %ld asyFd %ld", vectRedisCliMgr.size(), asyFd);
         return;
@@ -963,7 +1050,7 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                             common::OrderNodePtr cmdnode(new common::OrderNode(clusterCmd, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::clusterInitCallBack, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3), vectRedisCliMgr[asyFd].get()));
                                             if(cmdnode == nullptr)
                                             {
-                                                //TODO
+                                                callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::redisSvrMgrInvalid, this, asyFd));
                                                 return;
                                             }
                                             cmdnode->outSecond_ = DEFAULT_CMD_OUTSECOND;
@@ -971,7 +1058,7 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                             common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_, cmdnode, cmdnode->cmdOutSecond_));
                                             if(node == nullptr)
                                             {
-                                                //TODO
+                                                callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::redisSvrMgrInvalid, this, asyFd));
                                                 return;
                                             }
                                             libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
@@ -1222,6 +1309,13 @@ void RedisAsync::asyncStateCallBack(int asyFd, int stateCode, const std::string&
                     stateCb_(asyFd, stateCode, stateMsgBuf);
                     break;
                 }
+            case REDIS_SVR_UNVALID_STATE:
+                {
+                    char stateMsgBuf[1024] = {0};
+                    sprintf(stateMsgBuf, "redis svr invalid state %s", stateMsg.c_str());
+                    stateCb_(asyFd, stateCode, stateMsgBuf);
+                    break;
+                }
             default:
                 {
                     char stateMsgBuf[1024] = {0};
@@ -1295,7 +1389,7 @@ int RedisAsync::redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int ou
     }
 
     size_t mgrFd_ = static_cast<size_t>(asyFd);
-    if(mgrFd_ >= vectRedisCliMgr.size())
+    if((mgrFd_ >= vectRedisCliMgr.size()) || (vectRedisCliMgr[mgrFd_] == nullptr))
     {
         return CMD_PARAMETER_ERROR_CODE;
     }

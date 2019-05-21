@@ -78,6 +78,14 @@ int LibeventIo::libeventIoReady()
 int LibeventIo::libeventIoOrder(const RedisCliOrderNodePtr& node, uint64_t nowsecond)
 {
     PDEBUG("nowsecond %ld", nowsecond);
+    if(node == nullptr)
+    {
+        return 0;
+    }
+    if(node->cmdOrd_ && node->cmdOrd_->resultCb_)
+    {
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().asyncRequestCmdAdd();
+    }
     orderDeque_.orderNodeInsert(node);
     libeventIoWakeup(nowsecond);
     return 0;
@@ -109,6 +117,7 @@ int LibeventIo::libeventIoExit()
 }
 
 //不需要删除，因为一个redis客户端绑定的io之后的重连无论任何操作绑定的io线程不应该改变
+//当redis管理出现不可修复错误时，需要整个析构的时候，需要掉用这个，析构内部所有的redis client对象
 void LibeventIo::ioDisRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli)
 {
     for(size_t i = 0; i < ioRedisClients_.size(); i++)

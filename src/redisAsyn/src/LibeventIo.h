@@ -2,9 +2,13 @@
 #define __COMMON_LIBEVENT_IO_H__
 
 #include <vector>
+#include <list>
 
 #include <event2/event.h>
 #include <event2/event_struct.h>
+
+#include "Singleton.h"
+#include "noncopyable.h"
 
 #include "OrderInfo.h"
 #include "RedisClient.h"
@@ -75,6 +79,76 @@ public:
 
 typedef std::shared_ptr<RedisCliOrderNode> RedisCliOrderNodePtr;
 typedef std::deque<RedisCliOrderNodePtr> DequeRedisCliOrderNodePtr;
+typedef std::list<RedisCliOrderNodePtr> ListRedisCliOrderNodePtr;
+/*
+ * [TimerOrderDeque] 定时命令队列，此队列是存放需要延迟定时执行的命令。所以内部的超时时间为定时执行的时间。并且实际的命令不可以有超时时间
+ * @author xiaoxiao 2019-05-17
+ * @param
+ * @param
+ * @param
+ *
+ * @return
+ */
+class TimerOrderDeque : public common::noncopyable
+{
+public:
+    TimerOrderDeque()
+        :mutex_()
+        ,list_()
+    {
+    }
+
+    ~TimerOrderDeque()
+    {
+        ListRedisCliOrderNodePtr ().swap(list_);
+    }
+
+    static TimerOrderDeque& instance() { return common::Singleton<TimerOrderDeque>::instance(); }
+
+    void insertTimerOrder(const RedisCliOrderNodePtr& node)
+    {
+        SafeMutexLock lock(mutex_);
+        if(list_.empty())
+        {
+            list_.push_back(node);
+            return;
+        }
+        for(ListRedisCliOrderNodePtr::iterator iter = list_.begin(); iter != list_.end(); iter++)
+        {
+            if(node->outSecond_ <= (*iter)->outSecond_ )
+            {
+                list_.insert(iter, node);
+                return;
+            }
+        }
+        list_.push_back(node);
+        return;
+    }
+
+    RedisCliOrderNodePtr dealTimerOrder(uint64_t nowSecond)
+    {
+        SafeMutexLock lock(mutex_);
+
+        for(ListRedisCliOrderNodePtr::iterator iter = list_.begin(); iter != list_.end(); iter++)
+        {
+            if(nowSecond >= (*iter)->outSecond_)
+            {
+                RedisCliOrderNodePtr node = (*iter);
+                list_.pop_front();
+                return node;
+            }else{
+                return RedisCliOrderNodePtr();
+            }
+        }
+
+        return RedisCliOrderNodePtr();
+    }
+    
+private:
+    MutexLock mutex_;
+    ListRedisCliOrderNodePtr list_;
+
+};
 
 /*
  * [function]

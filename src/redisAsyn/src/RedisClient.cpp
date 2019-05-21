@@ -16,6 +16,7 @@ namespace REDIS_ASYNC_CLIENT
 
 static void connectTimeout(evutil_socket_t fd, short event, void *arg)
 {
+    PTRACE("arg %p", arg);
     RedisClient* pClient = static_cast<RedisClient*>(arg);
     if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
     {
@@ -29,6 +30,7 @@ static void connectTimeout(evutil_socket_t fd, short event, void *arg)
 
 static void connectCallback(const redisAsyncContext *c, int status)
 {
+    PTRACE("redisAsyncContext %p status %d", c, status);
     RedisClient* pClient = static_cast<RedisClient*>(c->data);
     std::string ipaddr = pClient->redisSvrIpaddr();
     int port = pClient->redisSvrPort();
@@ -53,6 +55,7 @@ static void connectCallback(const redisAsyncContext *c, int status)
 
 static void disconnectCallback(const redisAsyncContext *c, int status)
 {
+    PTRACE("redisAsyncContext %p status %d", c, status);
     if (status != REDIS_OK)
     {
         PERROR("Error %s", c->errstr);
@@ -68,7 +71,7 @@ static void disconnectCallback(const redisAsyncContext *c, int status)
     }else{
         CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port);
     }
-    PDEBUG("Disconnected....");
+    PDEBUG("%s::%d Disconnected....", ipaddr.c_str(), port);
     return;
 }
 
@@ -89,6 +92,7 @@ RedisClient::RedisClient(size_t ioIndex, size_t fd, const RedisSvrInfoPtr& svrIn
     :state_(REDIS_CLIENT_STATE_INIT)
     ,connOutSecond_(connOutSecond)
     ,keepAliveSecond_(keepAliveSecond)
+    ,freeState_(RESOURCES_FREE_ALREADY)
     ,ioIndex_(ioIndex)
     ,mgrFd_(fd)
     ,lastSecond_(0)
@@ -99,10 +103,13 @@ RedisClient::RedisClient(size_t ioIndex, size_t fd, const RedisSvrInfoPtr& svrIn
     ,cmdSeq_()
     ,cmdSeqOrderMap_()
 {
+    PDEBUG("RedisClient init");
 }
 
 RedisClient::~RedisClient()
 {
+    PERROR("~RedisClient exit");
+    freeState_ = RESOURCES_FREE_ALREADY;
     if(timev_)
     {
         event_free(timev_);
@@ -110,10 +117,17 @@ RedisClient::~RedisClient()
     }
     if(client_)
     {
-        redisAsyncDisconnect(client_);
+        redisAsyncDisconnect(client_);//这里会触发断连回调
         client_ = NULL;
     }
+    if(svrInfo_)
+    {
+        svrInfo_.reset();
+    }
+
+    common::SeqOrderNodeMap ().swap(cmdSeqOrderMap_);
     base_ = NULL;
+    state_ = REDIS_CLIENT_STATE_INIT;
 }
 
 int RedisClient::connectServer(struct event_base* eBase)
@@ -148,7 +162,7 @@ int RedisClient::connectServer(struct event_base* eBase)
          PERROR("evtimer_new malloc null");
          return -1;
     }
-
+    freeState_ = RESOURCES_NEED_FREE;
     struct timeval connSecondOut = {connOutSecond_, 0};
     evtimer_add(timev_, &connSecondOut);// call back outtime check
     return 0;
@@ -156,6 +170,13 @@ int RedisClient::connectServer(struct event_base* eBase)
 
 void RedisClient::disConnect()
 {
+    PTRACE("disConnect entry");
+    if(freeState_ == RESOURCES_FREE_ALREADY)
+    {
+        return;
+    }
+    freeState_ = RESOURCES_FREE_ALREADY;
+    PTRACE("disConnect free");
     if(timev_)
     {
         event_free(timev_);
@@ -163,7 +184,7 @@ void RedisClient::disConnect()
     }
     if(client_)
     {
-        redisAsyncDisconnect(client_);
+        redisAsyncDisconnect(client_);//这里会触发断连回调
         client_ = NULL;
     }
 

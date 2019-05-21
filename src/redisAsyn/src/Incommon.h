@@ -19,6 +19,7 @@
 #define MAX_IP_ADDR_LEN                         15
 #define MAX_PORT_NUM_LEN                        5
 
+#define PTRACE(fmt, args...)                    fprintf(stderr, "%s :: %s() %d: TRACE " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define PDEBUG(fmt, args...)                    fprintf(stderr, "%s :: %s() %d: DEBUG " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define PERROR(fmt, args...)                    fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

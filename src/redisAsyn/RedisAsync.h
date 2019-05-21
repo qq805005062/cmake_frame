@@ -67,6 +67,8 @@
 #define REDIS_SVR_RUNING_STATE                  (1)//正常运行状态
 #define REDIS_EXCEPTION_STATE                   (2)//部分异常状态
 #define REDIS_SVR_ERROR_STATE                   (3)//错误异常，此状态下彻底无法执行命令
+#define REDIS_SVR_UNVALID_STATE                 (4)//redis服务彻底失效状态，一般在重连、恢复时内部内存不足。无法自我修复时才会传回这个值，此状态非常危险
+                                                   //此状态值下会释放对应句柄所有一切内存资源。但是占用的句柄不会重复使用。
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 /*
@@ -78,7 +80,6 @@
  *
  * @return
  */
-
 namespace CLUSTER_REDIS_ASYNC
 {
 
@@ -130,6 +131,8 @@ typedef std::function<void(int asyFd, int exceCode, const std::string& exceMsg)>
                     这个参数很重要，是表示结果集，正常情况下单一结果，比较清晰
                     但是hgetall zset是都是成对出现的。
                     hget指定域的话，就一定要注意了，一定是按域的顺序出现结果集的。但是结果集中不带域名称
+
+                    注意如果没有设置回调的方法，内部是不关心是否已经执行的。如果正处理退出临界区。可能会丢失
  *
  * @return 无
  */
@@ -265,36 +268,52 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///下面这些接口虽然是public，但是外面使用者千万不要调用，都是内部调用接口
 
-    void timerThreadRun();
-
-    void libeventIoThread(int index);
-
-    //异步结果回调
-    void cmdReplyCallPool();
+    //内部会统计异步请求数字。在退出的时候。必须所有的异步回调都回调结束之后才能退出。当有回调方法的时候，才会计数。
+    //所以通常没有回调的时候我们并不关心有没有执行完
+    void asyncRequestCmdAdd();
 
     //void initConnectException(int exceCode, std::string& exceMsg);
 
     void redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port);
 
-    void asyncStateCallBack(int asyFd, int stateCode, const std::string& stateMsg);
-
-    void asyncExceCallBack(int asyFd, int exceCode, const std::string& exceMsg);
-
     //异步结果回调
     void asyncCmdResultCallBack();
 
+private:
+
+    //定时器线程运行
+    void timerThreadRun();
+
+    //每一个io线程运行
+    void libeventIoThread(int index);
+
+    //初始化redis初始化参数连接
+    int redisInitConnect();
+
+    //当redis服务失效时异步回调这个方法，不可以同步调用，会core，慎用
+    void redisSvrMgrInvalid(size_t asyFd);
+
+    //异步结果回调
+    void cmdReplyCallPool();
+
+    //集群初始化命令回调函数
     void clusterInitCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
 
+    //主从redis服务命令回调函数
     void masterSalveInitCb(int ret, void* priv, const StdVectorStringPtr& resultMsg);
 
-private:
-    int redisInitConnect();
+    //redis服务状态变化回调函数
+    void asyncStateCallBack(int asyFd, int stateCode, const std::string& stateMsg);
+
+    //redis服务异常状态回调函数
+    void asyncExceCallBack(int asyFd, int exceCode, const std::string& exceMsg);
     
     int callBackNum_;
     int ioThreadNum_;
     int keepSecond_;
     int connOutSecond_;
     int isExit_;
+    int timerExit_;
 
     volatile uint64_t nowSecond_;
     std::mutex initMutex_;
