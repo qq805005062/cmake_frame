@@ -91,7 +91,7 @@ public:
 
     int connectServer(struct event_base* eBase);
 
-    void disConnect();
+    void disConnect(bool isFree = false);
 
     void requestCmd(const common::OrderNodePtr& order);
 
@@ -102,11 +102,7 @@ public:
     void setStateConnected()
     {
         PTRACE("%s::%d connect success", svrInfo_->ipAddr_.c_str(), svrInfo_->port_);
-        if(timev_)
-        {
-            event_free(timev_);
-            timev_ = nullptr;
-        }
+        freeTimeEvent();
         state_ = REDIS_CLIENT_STATE_CONN;
         lastSecond_ = secondSinceEpoch();
     }
@@ -136,11 +132,25 @@ public:
         return ioIndex_;
     }
 
+    RedisSvrInfoPtr redisCliSvrInfo()
+    {
+        return svrInfo_;
+    }
+    
     size_t redisMgrfd()
     {
         return mgrFd_;
     }
 private:
+    void freeTimeEvent()
+    {
+        if(timev_)
+        {
+            event_free(timev_);
+            timev_ = nullptr;
+        }
+    }
+    
     int state_;//0是未连接，1是已经连接
     int connOutSecond_;
     int keepAliveSecond_;

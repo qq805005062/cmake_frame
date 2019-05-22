@@ -6,6 +6,8 @@
 #pragma GCC diagnostic ignored "-Wconversion"
 #include <async.h>
 
+#include "MutexLock.h"
+
 #include "Atomic.h"
 #include "Incommon.h"
 #include "Thread.h"
@@ -186,8 +188,13 @@ void RedisAsync::timerThreadRun()
             common::RedisCliOrderNodePtr node = common::TimerOrderDeque::instance().dealTimerOrder(nowSecond_);
             if(node)
             {
-                node->outSecond_ = 0;
-                libeventIoPtrVect[node->cli_->redisMgrfd()]->libeventIoOrder(node, nowSecond_);
+                if(node->cmdOrd_)
+                {
+                    ;//TODO
+                }else{
+                    node->outSecond_ = 0;
+                    libeventIoPtrVect[node->cli_->redisMgrfd()]->libeventIoOrder(node, nowSecond_);
+                }
             
 }else{
                 break;
@@ -251,51 +258,30 @@ void RedisAsync::asyncCmdResultCallBack()
     callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::cmdReplyCallPool, this));
 }
 
-void RedisAsync::redisSvrMgrInvalid(size_t asyFd)
+/*
+cluster_state:ok
+cluster_slots_assigned:16384
+cluster_slots_ok:16384
+cluster_slots_pfail:0
+cluster_slots_fail:0
+cluster_known_nodes:6
+cluster_size:3
+cluster_current_epoch:7
+cluster_my_epoch:7
+cluster_stats_messages_ping_sent:1266118
+cluster_stats_messages_pong_sent:862541
+cluster_stats_messages_sent:2128659
+cluster_stats_messages_ping_received:862541
+cluster_stats_messages_pong_received:1266035
+cluster_stats_messages_received:2128576
+*/
+void RedisAsync::clusterInfoCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg)
 {
-    if(vectRedisCliMgr[asyFd]->nodeCli_ && vectRedisCliMgr[asyFd]->nodeCli_->redisClient_)
-    {
-        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_);
-    }
-    
-    if(vectRedisCliMgr[asyFd]->mSlaveCli_)
-    {
-        if(vectRedisCliMgr[asyFd]->mSlaveCli_->master_ && vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_)
-        {
-            libeventIoPtrVect[vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_);
-        }
-
-        for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator iter = vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.begin(); iter != vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.end(); iter++)
-        {
-            libeventIoPtrVect[(*iter)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->redisClient_);
-        }
-    }
-    
-    if(vectRedisCliMgr[asyFd]->cluterCli_)
-    {
-        for(REDIS_ASYNC_CLIENT::VectRedisClusterNodePtr::iterator iter = vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.begin(); iter != vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.end(); iter++)
-        {
-            if((*iter)->clusterNode_)
-            {
-                if((*iter)->clusterNode_->master_ && (*iter)->clusterNode_->master_->redisClient_)
-                {
-                    libeventIoPtrVect[(*iter)->clusterNode_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->clusterNode_->master_->redisClient_);
-                }
-
-                for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator it = (*iter)->clusterNode_->slave_.begin(); it != (*iter)->clusterNode_->slave_.end(); it++)
-                {
-                    libeventIoPtrVect[(*it)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*it)->redisClient_);
-                }
-            }
-        }
-    }
-    
-    callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_SVR_INVALID_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
-    PTRACE("vectRedisCliMgr[asyFd].reset() %ld begin", vectRedisCliMgr[asyFd]->nodeCli_->redisClient_.use_count());
-    vectRedisCliMgr[asyFd].reset();
-    PTRACE("vectRedisCliMgr[asyFd].reset() end");
 }
 
+void RedisAsync::clusterNodesCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg)
+{
+}
 
 /*
 9be7650002bdbfd6b099c07969c6969d120b2b6c 192.169.6.211:6790@16790 master - 0 1557940444069 5 connected 10923-16383
@@ -724,7 +710,7 @@ int RedisAsync::redisInitConnect()
  *
  * @return
  */
-void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port)
+void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port, const std::string errMsg)
 {
     if((vectRedisCliMgr.size() <= asyFd) || (vectRedisCliMgr[asyFd] == nullptr))
     {
@@ -761,16 +747,11 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 //function state 连接状态
                                 case CONNECT_REDISVR_RESET:
                                     {
-                                        common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_));
-                                        if(node == nullptr)
-                                        {
-                                            char exceMsgBuf[1024] = {0};
-                                            sprintf(exceMsgBuf, "%s::%d", ipaddr.c_str(), port);
-                                            callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, exceMsgBuf));
-                                            //TODO
-                                            return;
-                                        }
-                                        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONNECT_RESET, exceMsgBuf));
+                                        
+                                        delayReconnect(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -809,17 +790,12 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 case REDISVR_CONNECT_DISCONN:
                                     {
                                         vectRedisCliMgr[asyFd]->initState_ = REDIS_SVR_ERROR_STATE;
+
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONECT_DISCONNECT, exceMsgBuf));
                                         callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_SVR_ERROR_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
-                                        common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_));
-                                        if(node == nullptr)
-                                        {
-                                            char exceMsgBuf[1024] = {0};
-                                            sprintf(exceMsgBuf, "%s::%d", ipaddr.c_str(), port);
-                                            callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, exceMsgBuf));
-                                            //TODO
-                                            return;
-                                        }
-                                        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
+                                        reconnectAtOnece(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -851,17 +827,11 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 //function state 连接状态
                                 case CONNECT_REDISVR_RESET:
                                     {
-                                        //TODO 重连时间要拉长
-                                        common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_));
-                                        if(node == nullptr)
-                                        {
-                                            char exceMsgBuf[1024] = {0};
-                                            sprintf(exceMsgBuf, "%s::%d", ipaddr.c_str(), port);
-                                            callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, exceMsgBuf));
-                                            //TODO
-                                            return;
-                                        }
-                                        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONNECT_RESET, exceMsgBuf));
+                                        
+                                        delayReconnect(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -1038,6 +1008,7 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
         //vectRedisCliMgr[asyFd]->svrType_ 服务类型
         case REDIS_CLUSTER_SERVER:
             {
+                common::SafeMutexLock clusterLock(vectRedisCliMgr[asyFd]->mutex_);
                 switch(vectRedisCliMgr[asyFd]->initState_)
                 {
                     //vectRedisCliMgr[asyFd]->initState_ 服务端状态
@@ -1050,8 +1021,8 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                     {
                                         if((vectRedisCliMgr[asyFd]->cluterCli_ == nullptr) || (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size() == 0))
                                         {
-                                            std::string clusterCmd = "CLUSTER NODES";
-                                            common::OrderNodePtr cmdnode(new common::OrderNode(clusterCmd, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::clusterInitCallBack, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3), vectRedisCliMgr[asyFd].get()));
+                                            std::string clusterNodes = "CLUSTER NODES";
+                                            common::OrderNodePtr cmdnode(new common::OrderNode(clusterNodes, std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::clusterInitCallBack, this, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3), vectRedisCliMgr[asyFd].get()));
                                             if(cmdnode == nullptr)
                                             {
                                                 callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
@@ -1094,23 +1065,35 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 //function state 连接状态
                                 case CONNECT_REDISVR_RESET:
                                     {
-                                        //TODO 重连时间要拉长
-                                        common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_));
-                                        if(node == nullptr)
-                                        {
-                                            char exceMsgBuf[1024] = {0};
-                                            sprintf(exceMsgBuf, "%s::%d", ipaddr.c_str(), port);
-                                            callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, exceMsgBuf));
-                                            //TODO
-                                            return;
-                                        }
-                                        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->libeventIoOrder(node, nowSecond_);
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONNECT_RESET, exceMsgBuf));
+                                        
+                                        delayReconnect(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
                                 case REDISVR_CONNECT_DISCONN:
                                     {
-                                        PERROR("asyFd %ld svrType_ %d inSvrInfoStr_ %s state %d svr info %s::%d", asyFd, vectRedisCliMgr[asyFd]->svrType_, vectRedisCliMgr[asyFd]->inSvrInfoStr_.c_str(), state, ipaddr.c_str(), port);
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONECT_DISCONNECT, exceMsgBuf));
+                                        
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                vectRedisCliMgr[asyFd]->masterConn_--;
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_--;
+                                        }
+                                        reconnectAtOnece(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -1130,16 +1113,59 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 //function state 连接状态
                                 case CONNECT_REDISVR_SUCCESS:
                                     {
+                                        PERROR("asyFd %ld svrType_ %d inSvrInfoStr_ %s state %d svr info %s::%d", asyFd, vectRedisCliMgr[asyFd]->svrType_, vectRedisCliMgr[asyFd]->inSvrInfoStr_.c_str(), state, ipaddr.c_str(), port);
+
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                vectRedisCliMgr[asyFd]->masterConn_++;
+                                                //TODO
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_++;
+                                        }
                                         return;
                                     }
                                 //function state 连接状态
                                 case CONNECT_REDISVR_RESET:
                                     {
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONNECT_RESET, exceMsgBuf));
+
+                                        delayReconnect(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
                                 case REDISVR_CONNECT_DISCONN:
                                     {
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONECT_DISCONNECT, exceMsgBuf));
+
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                //TODO
+                                                vectRedisCliMgr[asyFd]->masterConn_--;
+                                                callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_EXCEPTION_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_--;
+                                        }
+                                        reconnectAtOnece(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -1159,16 +1185,63 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 //function state 连接状态
                                 case CONNECT_REDISVR_SUCCESS:
                                     {
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                vectRedisCliMgr[asyFd]->masterConn_++;
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_++;
+                                        }
+                                        
+                                        if(vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size() == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->initState_ = REDIS_SVR_RUNING_STATE;
+                                            callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_SVR_RUNING_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
+                                        }
+                                        
                                         return;
                                     }
                                 //function state 连接状态
                                 case CONNECT_REDISVR_RESET:
                                     {
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONNECT_RESET, exceMsgBuf));
+
+                                        delayReconnect(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
                                 case REDISVR_CONNECT_DISCONN:
                                     {
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONECT_DISCONNECT, exceMsgBuf));
+
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                //TODO
+                                                vectRedisCliMgr[asyFd]->masterConn_--;
+                                                callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_EXCEPTION_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_--;
+                                        }
+                                        reconnectAtOnece(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -1188,16 +1261,56 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
                                 //function state 连接状态
                                 case CONNECT_REDISVR_SUCCESS:
                                     {
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                vectRedisCliMgr[asyFd]->masterConn_++;
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_++;
+                                        }
                                         return;
                                     }
                                 //function state 连接状态
                                 case CONNECT_REDISVR_RESET:
                                     {
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONNECT_RESET, exceMsgBuf));
+
+                                        delayReconnect(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
                                 case REDISVR_CONNECT_DISCONN:
                                     {
+                                        char exceMsgBuf[1024] = {0};
+                                        sprintf(exceMsgBuf, "%s::%d %s", ipaddr.c_str(), port, errMsg.c_str());
+                                        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, SVR_CONECT_DISCONNECT, exceMsgBuf));
+
+                                        size_t tmpConns = vectRedisCliMgr[asyFd]->masterConn_;
+                                        for(size_t i = 0; i < vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.size(); i++)
+                                        {
+                                            if((vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->port_ == port)
+                                                    && (vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->svrInfo_->ipAddr_.compare(ipaddr) == 0))
+                                            {
+                                                //TODO
+                                                vectRedisCliMgr[asyFd]->masterConn_--;
+                                                callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_EXCEPTION_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
+                                                break;
+                                            }
+                                        }
+                                        if(tmpConns == vectRedisCliMgr[asyFd]->masterConn_)
+                                        {
+                                            vectRedisCliMgr[asyFd]->slaveConn_--;
+                                        }
+                                        reconnectAtOnece(asyFd, ipaddr, port);
                                         return;
                                     }
                                 //function state 连接状态
@@ -1226,6 +1339,223 @@ void RedisAsync::redisSvrOnConnect(size_t asyFd, int state, const std::string& i
             }
     }
     return;
+}
+
+void RedisAsync::reconnectAtOnece(size_t asyFd, const std::string& ipaddr, int port)
+{
+    REDIS_ASYNC_CLIENT::RedisClientPtr client(nullptr);
+
+    REDIS_ASYNC_CLIENT::RedisSvrInfo svrInfo(ipaddr, port);
+    do{
+        if(vectRedisCliMgr[asyFd]->nodeCli_ && vectRedisCliMgr[asyFd]->nodeCli_->redisClient_ && (*(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliSvrInfo()) == svrInfo))
+        {
+            client = vectRedisCliMgr[asyFd]->nodeCli_->redisClient_;
+            break;
+        }
+
+        if(vectRedisCliMgr[asyFd]->mSlaveCli_)
+        {
+            if(vectRedisCliMgr[asyFd]->mSlaveCli_->master_ && vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_ && (*(vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->redisCliSvrInfo()) == svrInfo))
+            {
+                client = vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_;
+                break;
+            }
+
+            for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator iter = vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.begin(); iter != vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.end(); iter++)
+            {
+                if((*iter)->redisClient_ && (*((*iter)->redisClient_->redisCliSvrInfo()) == svrInfo))
+                {
+                    client = (*iter)->redisClient_;
+                    break;
+                }
+            }
+
+            if(client)
+            {
+                break;
+            }
+        }
+        
+        if(vectRedisCliMgr[asyFd]->cluterCli_)
+        {
+            for(REDIS_ASYNC_CLIENT::VectRedisClusterNodePtr::iterator iter = vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.begin(); iter != vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.end(); iter++)
+            {
+                if((*iter)->clusterNode_)
+                {
+                    if((*iter)->clusterNode_->master_ && (*iter)->clusterNode_->master_->redisClient_ && (*((*iter)->clusterNode_->master_->redisClient_->redisCliSvrInfo()) == svrInfo))
+                    {
+                        client = (*iter)->clusterNode_->master_->redisClient_;
+                        break;
+                    }
+
+                    for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator it = (*iter)->clusterNode_->slave_.begin(); it != (*iter)->clusterNode_->slave_.end(); it++)
+                    {
+                        if((*it)->redisClient_ && (*((*it)->redisClient_->redisCliSvrInfo()) == svrInfo))
+                        {
+                            client = (*it)->redisClient_;
+                            break;
+                        }
+                    }
+                }
+
+                if(client)
+                {
+                    break;
+                }
+            }
+        }
+    }while(false);
+
+    if(client == nullptr)
+    {
+        PERROR("asyFd %ld %s::%d", asyFd, ipaddr.c_str(), port);
+        return;
+    }
+    common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(client));
+    if(node == nullptr)
+    {
+        char exceMsgBuf[1024] = {0};
+        sprintf(exceMsgBuf, "%s::%d", client->redisSvrIpaddr().c_str(), client->redisSvrPort());
+        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, exceMsgBuf));
+        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::redisSvrMgrInvalid, this, asyFd));
+        return;
+    }
+    common::TimerOrderDeque::instance().insertTimerOrder(node);
+    return;
+}
+
+void RedisAsync::delayReconnect(size_t asyFd, const std::string& ipaddr, int port)
+{
+    REDIS_ASYNC_CLIENT::RedisClientPtr client(nullptr);
+
+    REDIS_ASYNC_CLIENT::RedisSvrInfo svrInfo(ipaddr, port);
+    do{
+        if(vectRedisCliMgr[asyFd]->nodeCli_ && vectRedisCliMgr[asyFd]->nodeCli_->redisClient_ && (*(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliSvrInfo()) == svrInfo))
+        {
+            client = vectRedisCliMgr[asyFd]->nodeCli_->redisClient_;
+            break;
+        }
+
+        if(vectRedisCliMgr[asyFd]->mSlaveCli_)
+        {
+            if(vectRedisCliMgr[asyFd]->mSlaveCli_->master_ && vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_ && (*(vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->redisCliSvrInfo()) == svrInfo))
+            {
+                client = vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_;
+                break;
+            }
+
+            for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator iter = vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.begin(); iter != vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.end(); iter++)
+            {
+                if((*iter)->redisClient_ && (*((*iter)->redisClient_->redisCliSvrInfo()) == svrInfo))
+                {
+                    client = (*iter)->redisClient_;
+                    break;
+                }
+            }
+
+            if(client)
+            {
+                break;
+            }
+        }
+        
+        if(vectRedisCliMgr[asyFd]->cluterCli_)
+        {
+            for(REDIS_ASYNC_CLIENT::VectRedisClusterNodePtr::iterator iter = vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.begin(); iter != vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.end(); iter++)
+            {
+                if((*iter)->clusterNode_)
+                {
+                    if((*iter)->clusterNode_->master_ && (*iter)->clusterNode_->master_->redisClient_ && (*((*iter)->clusterNode_->master_->redisClient_->redisCliSvrInfo()) == svrInfo))
+                    {
+                        client = (*iter)->clusterNode_->master_->redisClient_;
+                        break;
+                    }
+
+                    for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator it = (*iter)->clusterNode_->slave_.begin(); it != (*iter)->clusterNode_->slave_.end(); it++)
+                    {
+                        if((*it)->redisClient_ && (*((*it)->redisClient_->redisCliSvrInfo()) == svrInfo))
+                        {
+                            client = (*it)->redisClient_;
+                            break;
+                        }
+                    }
+                }
+
+                if(client)
+                {
+                    break;
+                }
+            }
+        }
+    }while(false);
+
+    if(client == nullptr)
+    {
+        PERROR("asyFd %ld %s::%d", asyFd, ipaddr.c_str(), port);
+        return;
+    }
+    common::RedisCliOrderNodePtr node(new common::RedisCliOrderNode(client, (nowSecond_ + DEFAULT_DELAY_CMD_SECOND)));
+    if(node == nullptr)
+    {
+        char exceMsgBuf[1024] = {0};
+        sprintf(exceMsgBuf, "%s::%d", client->redisSvrIpaddr().c_str(), client->redisSvrPort());
+        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncExceCallBack, this, asyFd, EXCE_MALLOC_NULL, exceMsgBuf));
+        callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::redisSvrMgrInvalid, this, asyFd));
+        return;
+    }
+    common::TimerOrderDeque::instance().insertTimerOrder(node);
+    return;
+}
+
+void RedisAsync::redisSvrMgrInvalid(size_t asyFd)
+{
+    if(vectRedisCliMgr[asyFd]->nodeCli_ && vectRedisCliMgr[asyFd]->nodeCli_->redisClient_)
+    {
+        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_);
+    }
+    
+    if(vectRedisCliMgr[asyFd]->mSlaveCli_)
+    {
+        if(vectRedisCliMgr[asyFd]->mSlaveCli_->master_ && vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_)
+        {
+            libeventIoPtrVect[vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_);
+        }
+
+        for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator iter = vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.begin(); iter != vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.end(); iter++)
+        {
+            if((*iter)->redisClient_)
+            {
+                libeventIoPtrVect[(*iter)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->redisClient_);
+            }
+        }
+    }
+    
+    if(vectRedisCliMgr[asyFd]->cluterCli_)
+    {
+        for(REDIS_ASYNC_CLIENT::VectRedisClusterNodePtr::iterator iter = vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.begin(); iter != vectRedisCliMgr[asyFd]->cluterCli_->clusterVectInfo_.end(); iter++)
+        {
+            if((*iter)->clusterNode_)
+            {
+                if((*iter)->clusterNode_->master_ && (*iter)->clusterNode_->master_->redisClient_)
+                {
+                    libeventIoPtrVect[(*iter)->clusterNode_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->clusterNode_->master_->redisClient_);
+                }
+
+                for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator it = (*iter)->clusterNode_->slave_.begin(); it != (*iter)->clusterNode_->slave_.end(); it++)
+                {
+                    if((*it)->redisClient_)
+                    {
+                        libeventIoPtrVect[(*it)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*it)->redisClient_);
+                    }
+                }
+            }
+        }
+    }
+    
+    callBackPoolPtr->run(std::bind(&CLUSTER_REDIS_ASYNC::RedisAsync::asyncStateCallBack, this, asyFd, REDIS_SVR_INVALID_STATE, vectRedisCliMgr[asyFd]->inSvrInfoStr_));
+    PTRACE("vectRedisCliMgr[asyFd].reset() %ld begin", vectRedisCliMgr[asyFd]->nodeCli_->redisClient_.use_count());
+    vectRedisCliMgr[asyFd].reset();
+    PTRACE("vectRedisCliMgr[asyFd].reset() end");
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

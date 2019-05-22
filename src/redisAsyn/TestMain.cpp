@@ -36,16 +36,14 @@ int main(int argc, char* argv[])
         std::bind(stateChangeCallback, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3),
         std::bind(exceptionRedisMsg, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3));
     PDEBUG("RedisAsync init");
-#if 0
+
     singleFd = CLUSTER_REDIS_ASYNC::RedisAsync::instance().addSigleRedisInfo("127.0.0.1:6800");
     PDEBUG("RedisAsync addSigleRedisInfo singleFd %d", singleFd);
     if(singleFd < 0)
     {
         return -1;
     }
-#else
-    singleFd = 1;
-#endif
+
     clusterFd = CLUSTER_REDIS_ASYNC::RedisAsync::instance().addClusterInfo("192.169.6.234:6790,192.169.6.234:6791");
     PDEBUG("RedisAsync addSigleRedisInfo clusterFd %d", clusterFd);
     if(clusterFd < 0)

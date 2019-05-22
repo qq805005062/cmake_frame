@@ -4,6 +4,8 @@
 #include <vector>
 #include <map>
 
+#include "MutexLock.h"
+
 //#include "RedisClientMgr.h"
 #include "Incommon.h"
 #include "RedisClient.h"
@@ -257,6 +259,7 @@ public:
         ,nodeCli_(nullptr)
         ,mSlaveCli_(nullptr)
         ,cluterCli_(nullptr)
+        ,mutex_()
     {
         PTRACE("RedisClientMgr init");
     }
@@ -295,6 +298,7 @@ public:
         ,nodeCli_(nullptr)
         ,mSlaveCli_(nullptr)
         ,cluterCli_(nullptr)
+        ,mutex_()
     {
         *this = that;
     }
@@ -330,6 +334,8 @@ public:
     RedisSvrCliPtr nodeCli_;
     RedisMasterSlavePtr mSlaveCli_;
     RedisClusterInfoPtr cluterCli_;
+
+    common::MutexLock mutex_;
 };
 
 typedef std::shared_ptr<RedisClientMgr> RedisClientMgrPtr;

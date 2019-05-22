@@ -7,6 +7,8 @@
 #include <event2/event.h>
 #include <event2/event_struct.h>
 
+#include "MutexLock.h"
+
 #include "Singleton.h"
 #include "noncopyable.h"
 
@@ -110,7 +112,12 @@ public:
         SafeMutexLock lock(mutex_);
         if(list_.empty())
         {
-            list_.push_back(node);
+            list_.push_front(node);
+            return;
+        }
+        if(node->outSecond_ == 0)
+        {
+            list_.push_front(node);
             return;
         }
         for(ListRedisCliOrderNodePtr::iterator iter = list_.begin(); iter != list_.end(); iter++)
@@ -131,7 +138,7 @@ public:
 
         for(ListRedisCliOrderNodePtr::iterator iter = list_.begin(); iter != list_.end(); iter++)
         {
-            if(nowSecond >= (*iter)->outSecond_)
+            if(((*iter)->outSecond_ == 0) || (nowSecond >= (*iter)->outSecond_))
             {
                 RedisCliOrderNodePtr node = (*iter);
                 list_.pop_front();

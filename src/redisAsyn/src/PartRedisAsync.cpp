@@ -85,6 +85,20 @@ void RedisAsync::asyncExceCallBack(int asyFd, int exceCode, const std::string& e
                     exceCb_(asyFd, exceCode, exceMsgBuf);
                     break;
                 }
+            case SVR_CONNECT_RESET:
+                {
+                    char exceMsgBuf[1024] = {0};
+                    sprintf(exceMsgBuf, "connect failed %s", exceMsg.c_str());
+                    exceCb_(asyFd, exceCode, exceMsgBuf);
+                    break;
+                }
+            case SVR_CONECT_DISCONNECT:
+                {
+                    char exceMsgBuf[1024] = {0};
+                    sprintf(exceMsgBuf, "connect had been disconnect %s", exceMsg.c_str());
+                    exceCb_(asyFd, exceCode, exceMsgBuf);
+                    break;
+                }
             default:
                 {
                     char exceMsgBuf[1024] = {0};

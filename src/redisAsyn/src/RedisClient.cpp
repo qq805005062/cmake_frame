@@ -20,7 +20,7 @@ static void connectTimeout(evutil_socket_t fd, short event, void *arg)
     RedisClient* pClient = static_cast<RedisClient*>(arg);
     if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
     {
-        pClient->disConnect();
+        pClient->disConnect(true);
         std::string ipaddr = pClient->redisSvrIpaddr();
         int port = pClient->redisSvrPort();
         CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port);
@@ -40,10 +40,10 @@ static void connectCallback(const redisAsyncContext *c, int status)
         if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
         {
             pClient->disConnect();
-            CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port);
+            CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port, c->errstr);
         }else{
             pClient->disConnect();
-            CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port);
+            CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port, c->errstr);
         }
         return;
     }
@@ -59,7 +59,6 @@ static void disconnectCallback(const redisAsyncContext *c, int status)
     if (status != REDIS_OK)
     {
         PERROR("Error %s", c->errstr);
-        //return;//TODO
     }
     RedisClient* pClient = static_cast<RedisClient*>(c->data);
     pClient->disConnect();
@@ -67,9 +66,9 @@ static void disconnectCallback(const redisAsyncContext *c, int status)
     int port = pClient->redisSvrPort();
     if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
     {
-        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port);
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port, c->errstr);
     }else{
-        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port);
+        CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), REDISVR_CONNECT_DISCONN, ipaddr, port, c->errstr);
     }
     PDEBUG("%s::%d Disconnected....", ipaddr.c_str(), port);
     return;
@@ -110,11 +109,7 @@ RedisClient::~RedisClient()
 {
     PERROR("~RedisClient exit");
     freeState_ = RESOURCES_FREE_ALREADY;
-    if(timev_)
-    {
-        event_free(timev_);
-        timev_ = nullptr;
-    }
+    freeTimeEvent();
     if(client_)
     {
         redisAsyncDisconnect(client_);//这里会触发断连回调
@@ -137,7 +132,7 @@ int RedisClient::connectServer(struct event_base* eBase)
         PERROR("eBase nullptr or svrInfo_ nullptr or ipaddr port empty");
          return -1;
     }
-    disConnect();
+    disConnect(true);
     base_ = eBase;
     client_ = redisAsyncConnect(svrInfo_->ipAddr_.c_str(), svrInfo_->port_);
     if(client_ == nullptr)
@@ -168,7 +163,7 @@ int RedisClient::connectServer(struct event_base* eBase)
     return 0;
 }
 
-void RedisClient::disConnect()
+void RedisClient::disConnect(bool isFree)
 {
     PTRACE("disConnect entry");
     if(freeState_ == RESOURCES_FREE_ALREADY)
@@ -176,18 +171,15 @@ void RedisClient::disConnect()
         return;
     }
     freeState_ = RESOURCES_FREE_ALREADY;
-    PTRACE("disConnect free");
-    if(timev_)
-    {
-        event_free(timev_);
-        timev_ = nullptr;
-    }
-    if(client_)
+    PTRACE("timer event free");
+    freeTimeEvent();
+    PTRACE("redis client free");
+    if(client_ && isFree)
     {
         redisAsyncDisconnect(client_);//这里会触发断连回调
         client_ = NULL;
     }
-
+    PTRACE("disConnect free");
     state_ = REDIS_CLIENT_STATE_INIT;
 }
 

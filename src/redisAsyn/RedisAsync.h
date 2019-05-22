@@ -14,7 +14,8 @@
 //exception code define
 //异常回调函数中状态编码宏定义
 #define EXCE_MALLOC_NULL                        (-1)//这是一个非常严重的异常，内存空间不足，导致malloc或者new失败。通常这种情况会导致服务不可以使用，进入REDIS_SVR_INVALID_STATE状态
-
+#define SVR_CONNECT_RESET                       (-2)
+#define SVR_CONECT_DISCONNECT                   (-3)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //return code define
 //初始化接口调用返回值状态编号宏定义
@@ -36,6 +37,7 @@
 
 #define CMD_SVR_DISCONNECT_CODE                 (-9)
 #define CMD_SLOTS_CALCUL_ERROR_CODE             (-10)//槽计算错误，正常情况下不应该有这个错误
+#define CMD_SVR_NODES_DOWN                      (-11)//当redis某一个点主从都挂掉了，就会返回这个错误。这个时候redis服务要设置槽覆盖不全也可以使用
 
 //callback
 #define CMD_OUTTIME_CODE                        (-4)
@@ -259,7 +261,7 @@ public:
     void asyncRequestCmdAdd();
 
     //内部连接成功或者失败调用此回调
-    void redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port);
+    void redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port, const std::string errMsg = "");
 
     //异步结果回调
     void asyncCmdResultCallBack();
@@ -284,6 +286,10 @@ private:
     //集群初始化命令回调函数
     void clusterInitCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
 
+    void clusterInfoCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
+
+    void clusterNodesCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
+    
     //主从redis服务命令回调函数
     void masterSalveInitCb(int ret, void* priv, const StdVectorStringPtr& resultMsg);
 
@@ -292,6 +298,10 @@ private:
 
     //redis服务异常状态回调函数
     void asyncExceCallBack(int asyFd, int exceCode, const std::string& exceMsg);
+
+    void reconnectAtOnece(size_t asyFd, const std::string& ipaddr, int port);
+
+    void delayReconnect(size_t asyFd, const std::string& ipaddr, int port);
     
     int callBackNum_;
     int ioThreadNum_;

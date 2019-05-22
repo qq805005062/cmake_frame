@@ -187,7 +187,7 @@ void LibeventIo::handleRead()
                                 CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(node->cli_->redisMgrfd(), CONNECT_REDISVR_RESET, node->cli_->redisSvrIpaddr(), node->cli_->redisSvrPort());
                             }
                         }else{
-                            node->cli_->disConnect();
+                            node->cli_->disConnect(true);//所有的rediscli析构都要在这里析构，否则会有野指针，空指针
                         }
                     }else{
                         if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
