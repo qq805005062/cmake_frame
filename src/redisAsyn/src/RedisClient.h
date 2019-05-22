@@ -9,7 +9,6 @@
 #include <event.h>
 
 #include <async.h>
-#include <hiredis.h>
 
 #include "Atomic.h"
 #include "OrderInfo.h"

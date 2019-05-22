@@ -117,7 +117,7 @@ RedisClient::~RedisClient()
     }
     if(client_)
     {
-        redisAsyncDisconnect(client_);//ÕâÀï»á´¥·¢¶ÏÁ¬»Øµ÷
+        redisAsyncDisconnect(client_);//è¿™é‡Œä¼šè§¦å‘æ–­è¿å›è°ƒ
         client_ = NULL;
     }
     if(svrInfo_)
@@ -184,7 +184,7 @@ void RedisClient::disConnect()
     }
     if(client_)
     {
-        redisAsyncDisconnect(client_);//ÕâÀï»á´¥·¢¶ÏÁ¬»Øµ÷
+        redisAsyncDisconnect(client_);//è¿™é‡Œä¼šè§¦å‘æ–­è¿å›è°ƒ
         client_ = NULL;
     }
 

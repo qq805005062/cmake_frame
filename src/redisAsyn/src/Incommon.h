@@ -28,6 +28,19 @@
 
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//inside connect define 内部使用
+//客户端连接服务端状态标志，在连接回调中会通知本次通知的事件
+#define CONNECT_REDISVR_SUCCESS                 (0)//连接成功
+#define CONNECT_REDISVR_RESET                   (1)//连接失败
+#define REDISVR_CONNECT_DISCONN                 (2)//连接断掉
+
+//svr type define 内部使用
+//内部管理各个redis服务区别服务端类型的宏定义。redis节点连接服务端类型宏定义
+#define REDIS_ASYNC_INIT_STATE                  (0)
+#define REDIS_ASYNC_SINGLE_RUNING_STATE         (1)
+#define REDIS_ASYNC_MASTER_SLAVE_STATE          (2)
+#define REDIS_ASYNC_CLUSTER_RUNING_STATE        (3)
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void split(const std::string& str, const std::string& delim, std::vector<std::string>& result);

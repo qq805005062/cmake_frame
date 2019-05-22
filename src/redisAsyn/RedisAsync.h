@@ -13,16 +13,11 @@
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //exception code define
 //异常回调函数中状态编码宏定义
-#define EXCE_RECONNECT_NEWORDER_NULL            (-1)
-
-#define EXCE_INIT_CONN_FAILED                   (-1)
-#define EXCE_RUNING_CONN_FAILED                 (-2)
-#define EXCE_RUNING_DISCONN                     (-3)
-#define EXCE_SYSTEM_ERROR                       (-4)
+#define EXCE_MALLOC_NULL                        (-1)//这是一个非常严重的异常，内存空间不足，导致malloc或者new失败。通常这种情况会导致服务不可以使用，进入REDIS_SVR_INVALID_STATE状态
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //return code define
-//接口调用返回值状态编号宏定义
+//初始化接口调用返回值状态编号宏定义
 #define INIT_SUCCESS_CODE                       (0)
 #define INIT_PARAMETER_ERROR                    (-1)
 #define INIT_SYSTEM_ERROR                       (-2)
@@ -32,34 +27,24 @@
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //cmd code define
-//执行命令回调状态编号宏定义
+//执行命令返回值、以及回调函数中状态编号宏定义
 #define CMD_SUCCESS_CODE                        (0)
 #define CMD_PARAMETER_ERROR_CODE                (-1)
 #define CMD_SVR_NO_INIT_CODE                    (-2)
 #define CMD_SYSTEM_MALLOC_CODE                  (-3)
+#define CMD_SVR_INVALID_CODE                    (-4)
+
+#define CMD_SVR_DISCONNECT_CODE                 (-9)
+#define CMD_SLOTS_CALCUL_ERROR_CODE             (-10)//槽计算错误，正常情况下不应该有这个错误
 
 //callback
-
 #define CMD_OUTTIME_CODE                        (-4)
 #define CMD_REPLY_EMPTY_CODE                    (-5)
 #define CMD_EMPTY_RESULT_CODE                   (-6)
 #define CMD_REDIS_ERROR_CODE                    (-7)
 #define CMD_REDIS_UNKNOWN_CODE                  (-8)
 
-#define CMD_SVR_DISCONNECT_CODE                 (-9)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//inside connect define 
-//客户端连接服务端状态标志
-#define CONNECT_REDISVR_SUCCESS                 (0)
-#define CONNECT_REDISVR_RESET                   (1)
-#define REDISVR_CONNECT_DISCONN                 (2)
-
-//svr type define
-//内部redis节点连接服务端类型宏定义
-#define REDIS_ASYNC_INIT_STATE                  (0)
-#define REDIS_ASYNC_SINGLE_RUNING_STATE         (1)
-#define REDIS_ASYNC_MASTER_SLAVE_STATE          (2)
-#define REDIS_ASYNC_CLUSTER_RUNING_STATE        (3)
 
 //state callback code define
 //状态回调函数中状态编号宏定义
@@ -67,7 +52,7 @@
 #define REDIS_SVR_RUNING_STATE                  (1)//正常运行状态
 #define REDIS_EXCEPTION_STATE                   (2)//部分异常状态
 #define REDIS_SVR_ERROR_STATE                   (3)//错误异常，此状态下彻底无法执行命令
-#define REDIS_SVR_UNVALID_STATE                 (4)//redis服务彻底失效状态，一般在重连、恢复时内部内存不足。无法自我修复时才会传回这个值，此状态非常危险
+#define REDIS_SVR_INVALID_STATE                 (4)//redis服务彻底失效状态，一般在重连、恢复时内部内存不足。无法自我修复时才会传回这个值，此状态非常危险
                                                    //此状态值下会释放对应句柄所有一切内存资源。但是占用的句柄不会重复使用。
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -146,6 +131,7 @@ typedef std::function<void(int ret, void* priv, const StdVectorStringPtr& result
             但是当内存不足的情况下new不出来空间就会比较麻烦了。所以此模块运行的环境最好保证内存充足。
             如果内存不足情况下。并且连接又发生异常就很糟糕
             此类实现最基本的功能。由于可定制化需求太多。可以在此基本功能上在增加
+            大多数方法实现都是异步的。减少IO线程操作，因为这个redis异步操作中，io回调回去......
  * @param
  * @param
  *
@@ -272,8 +258,7 @@ public:
     //所以通常没有回调的时候我们并不关心有没有执行完
     void asyncRequestCmdAdd();
 
-    //void initConnectException(int exceCode, std::string& exceMsg);
-
+    //内部连接成功或者失败调用此回调
     void redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port);
 
     //异步结果回调
