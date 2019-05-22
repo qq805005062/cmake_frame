@@ -656,8 +656,7 @@ int RedisAsync::redisInitConnect()
         if(pComma)
         {
             len = pComma - pColon;
-        }else{
-            len = strlen(pColon);
+        }else{            len = strlen(pColon);
         }
         if(len > MAX_PORT_NUM_LEN)
         {
@@ -1511,21 +1510,21 @@ void RedisAsync::redisSvrMgrInvalid(size_t asyFd)
 {
     if(vectRedisCliMgr[asyFd]->nodeCli_ && vectRedisCliMgr[asyFd]->nodeCli_->redisClient_)
     {
-        libeventIoPtrVect[vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->nodeCli_->redisClient_);
+        vectRedisCliMgr[asyFd]->nodeCli_->redisClient_->setReleaseState();
     }
     
     if(vectRedisCliMgr[asyFd]->mSlaveCli_)
     {
         if(vectRedisCliMgr[asyFd]->mSlaveCli_->master_ && vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_)
         {
-            libeventIoPtrVect[vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient(vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_);
+            vectRedisCliMgr[asyFd]->mSlaveCli_->master_->redisClient_->setReleaseState();
         }
 
         for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator iter = vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.begin(); iter != vectRedisCliMgr[asyFd]->mSlaveCli_->slave_.end(); iter++)
         {
             if((*iter)->redisClient_)
             {
-                libeventIoPtrVect[(*iter)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->redisClient_);
+                (*iter)->redisClient_->setReleaseState();
             }
         }
     }
@@ -1538,14 +1537,14 @@ void RedisAsync::redisSvrMgrInvalid(size_t asyFd)
             {
                 if((*iter)->clusterNode_->master_ && (*iter)->clusterNode_->master_->redisClient_)
                 {
-                    libeventIoPtrVect[(*iter)->clusterNode_->master_->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*iter)->clusterNode_->master_->redisClient_);
+                    (*iter)->clusterNode_->master_->redisClient_->setReleaseState();
                 }
 
                 for(REDIS_ASYNC_CLIENT::VectRedisSvrCliPtr::iterator it = (*iter)->clusterNode_->slave_.begin(); it != (*iter)->clusterNode_->slave_.end(); it++)
                 {
                     if((*it)->redisClient_)
                     {
-                        libeventIoPtrVect[(*it)->redisClient_->redisCliIoIndex()]->ioDisRedisClient((*it)->redisClient_);
+                        (*it)->redisClient_->setReleaseState();
                     }
                 }
             }

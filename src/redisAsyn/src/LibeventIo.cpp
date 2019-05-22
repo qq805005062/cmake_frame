@@ -187,13 +187,13 @@ void LibeventIo::handleRead()
                                 CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(node->cli_->redisMgrfd(), CONNECT_REDISVR_RESET, node->cli_->redisSvrIpaddr(), node->cli_->redisSvrPort());
                             }
                         }else{
-                            node->cli_->disConnect(true);//所有的rediscli析构都要在这里析构，否则会有野指针，空指针
+                            node->cli_->disConnect(true);//TODO
                         }
                     }else{
                         if(node->cli_->tcpCliState() == REDIS_CLIENT_STATE_INIT)
                         {
                             OrderNodePtr cmdNode = node->cmdOrd_;
-                            cmdNode->cmdRet_ = CMD_SVR_DISCONNECT_CODE;
+                            cmdNode->cmdRet_ = CMD_SVR_CLOSER_CODE;
                             common::CmdResultQueue::instance().insertCmdResult(cmdNode);
                         }else{
                             node->cli_->requestCmd(node->cmdOrd_);
@@ -224,7 +224,13 @@ void LibeventIo::handleRead()
             {
                 if(ioRedisClients_[i])
                 {
-                    ioRedisClients_[i]->checkOutSecondCmd(nowSecond_);
+                    if(ioRedisClients_[i]->releaseState())
+                    {
+                        ioRedisClients_[i]->disConnect(true);//所有的rediscli析构都要在这里析构，否则会有野指针，空指针
+                        ioDisRedisClient(ioRedisClients_[i]);
+                    }else{
+                        ioRedisClients_[i]->checkOutSecondCmd(nowSecond_);
+                    }
                 }
             }
             lastSecond_ = nowSecond_;

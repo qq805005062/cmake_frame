@@ -92,6 +92,7 @@ RedisClient::RedisClient(size_t ioIndex, size_t fd, const RedisSvrInfoPtr& svrIn
     :state_(REDIS_CLIENT_STATE_INIT)
     ,connOutSecond_(connOutSecond)
     ,keepAliveSecond_(keepAliveSecond)
+    ,releaseState_(0)
     ,freeState_(RESOURCES_FREE_ALREADY)
     ,ioIndex_(ioIndex)
     ,mgrFd_(fd)
@@ -106,9 +107,14 @@ RedisClient::RedisClient(size_t ioIndex, size_t fd, const RedisSvrInfoPtr& svrIn
     PDEBUG("RedisClient init");
 }
 
+//这个类除了new之外所有的操作都应该在一个线程中完成，千万不要跨线程
 RedisClient::~RedisClient()
 {
     PERROR("~RedisClient exit");
+    if(freeState_ == RESOURCES_NEED_FREE)
+    {
+        clearCmdReqBuf();
+    }
     freeState_ = RESOURCES_FREE_ALREADY;
     freeTimeEvent();
     if(client_)
@@ -120,7 +126,9 @@ RedisClient::~RedisClient()
     {
         svrInfo_.reset();
     }
-
+    
+    
+    
     common::SeqOrderNodeMap ().swap(cmdSeqOrderMap_);
     base_ = NULL;
     state_ = REDIS_CLIENT_STATE_INIT;
@@ -181,6 +189,7 @@ void RedisClient::disConnect(bool isFree)
         client_ = NULL;
     }
     PTRACE("disConnect free");
+    clearCmdReqBuf();
     state_ = REDIS_CLIENT_STATE_INIT;
 }
 
@@ -208,6 +217,20 @@ void RedisClient::requestCmd(const common::OrderNodePtr& order)
     cmdSeqOrderMap_.insert(common::SeqOrderNodeMap::value_type(seq, order));
 }
 
+void RedisClient::clearCmdReqBuf()
+{
+    for(common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.begin(); iter != cmdSeqOrderMap_.end();iter++)
+    {
+        if(iter->second->resultCb_)
+        {
+            iter->second->cmdRet_ = CMD_SVR_CLOSER_CODE;
+            common::CmdResultQueue::instance().insertCmdResult(iter->second);
+        }else{
+            PERROR("no callback %u", iter->first);
+        }
+    }
+}
+
 void RedisClient::checkOutSecondCmd(uint64_t nowSecond)
 {
     if(cmdSeqOrderMap_.empty())
@@ -220,7 +243,7 @@ void RedisClient::checkOutSecondCmd(uint64_t nowSecond)
         nowSecond = secondSinceEpoch();
     }
 
-    for(common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.begin(); iter != cmdSeqOrderMap_.end(); iter++)
+    for(common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.begin(); iter != cmdSeqOrderMap_.end();)
     {
         if(iter->second->outSecond_ && (nowSecond > iter->second->cmdOutSecond_))
         {

@@ -227,16 +227,16 @@ public:
 
     int libeventIoWakeup(uint64_t nowsecond);
 
+////////////////////////////////////////////////////////////////////////////////////
+    void handleRead();
+
+private:
+
     void ioDisRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli);
 
     void ioAddRedisClient(const REDIS_ASYNC_CLIENT::RedisClientPtr& cli);
 
-////////////////////////////////////////////////////////////////////////////////////
-    void handleRead();
-private:
-
     int wakeupFd;
-
     struct event_base *evbase;
 
     volatile uint64_t nowSecond_;
