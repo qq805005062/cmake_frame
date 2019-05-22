@@ -61,10 +61,11 @@ static void disconnectCallback(const redisAsyncContext *c, int status)
         PERROR("Error %s", c->errstr);
     }
     RedisClient* pClient = static_cast<RedisClient*>(c->data);
+    int state = pClient->tcpCliState();
     pClient->disConnect();
     std::string ipaddr = pClient->redisSvrIpaddr();
     int port = pClient->redisSvrPort();
-    if(pClient->tcpCliState() == REDIS_CLIENT_STATE_INIT)
+    if(state == REDIS_CLIENT_STATE_INIT)
     {
         CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisSvrOnConnect(pClient->redisMgrfd(), CONNECT_REDISVR_RESET, ipaddr, port, c->errstr);
     }else{
