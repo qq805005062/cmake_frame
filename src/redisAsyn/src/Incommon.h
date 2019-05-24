@@ -40,6 +40,13 @@
 #define REDIS_ASYNC_SINGLE_RUNING_STATE         (1)
 #define REDIS_ASYNC_MASTER_SLAVE_STATE          (2)
 #define REDIS_ASYNC_CLUSTER_RUNING_STATE        (3)
+
+//redis svr type
+#define REDIS_UNKNOWN_SERVER            (0)
+#define REDIS_SINGLE_SERVER             (1)
+#define REDIS_MASTER_SLAVE_SERVER       (2)
+#define REDIS_CLUSTER_SERVER            (3)
+
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

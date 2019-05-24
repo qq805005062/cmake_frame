@@ -10,13 +10,9 @@
 #include "Incommon.h"
 #include "RedisClient.h"
 
-#define REDIS_UNKNOWN_SERVER            (0)
-#define REDIS_SINGLE_SERVER             (1)
-#define REDIS_MASTER_SLAVE_SERVER       (2)
-#define REDIS_CLUSTER_SERVER            (3)
-
 namespace REDIS_ASYNC_CLIENT
 {
+
 class SlotsInfo
 {
 public:

@@ -101,6 +101,12 @@ inline int IgnoreSig()
 	size_t size = sizeof(sigArray)/sizeof(int);
 	for(size_t i = 0;i < size;i++)
 	{
+		if(sigArray[i] == SIGCHLD)
+        {
+            signal(SIGCHLD, SIG_IGN);
+            continue;
+        }
+
 		ret = sigignore(sigArray[i]);
 		if(ret < 0)
 		{

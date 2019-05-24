@@ -93,7 +93,7 @@ public:
 
     void disConnect(bool isFree = false);
 
-    void requestCmd(const common::OrderNodePtr& order);
+    void requestCmd(const common::OrderNodePtr& order, uint64_t nowSecond);
 
     void requestCallBack(void* priv, redisReply* reply);
 
@@ -141,7 +141,22 @@ public:
     {
         return mgrFd_;
     }
+
+    void setReleaseState()
+    {
+        releaseState_ = 1;
+    }
+    
+    int releaseState()
+    {
+        return releaseState_;
+    }
 private:
+
+    //清楚掉内部未回应的请求缓存，在连接被动或者主动断掉的时候，需要把请求缓存全部清掉
+    void clearCmdReqBuf();
+
+    //释放定时器，当连接成功之后，定时器未到时释放
     void freeTimeEvent()
     {
         if(timev_)
@@ -152,21 +167,22 @@ private:
     }
     
     int state_;//0是未连接，1是已经连接
-    int connOutSecond_;
-    int keepAliveSecond_;
+    int connOutSecond_;//连接超时时间，单位秒钟，会用定时器定时
+    int keepAliveSecond_;//保持活跃时间，超过时间会发一个ping，无回调函数
+    int releaseState_;//外部设置集群失效时，会将集群中所有的标志位设置为1
     volatile int freeState_;//内部资源释放标志位。因为断开连接会触发回调函数，disconnect不可以重入，0 是已经释放了，1是需要释放
     
-    size_t ioIndex_;
-    size_t mgrFd_;
+    size_t ioIndex_;//io线程线程。当前这个连接绑定在那个io线程上，下标从0开始
+    size_t mgrFd_;//redis管理组下标。当前这个连接是那个
     uint64_t lastSecond_;//最后一次与redis活跃时间
 
-    struct event *timev_;
-    struct event_base *base_;
-    redisAsyncContext *client_;
+    struct event *timev_;//定时器指针。
+    struct event_base *base_;//io线程传递进来的。
+    redisAsyncContext *client_;//hredis的指针，一定要小心使用，不知道hredis内部怎么使用，避免core
 
-    RedisSvrInfoPtr svrInfo_;
-    common::AtomicUInt32 cmdSeq_;
-    common::SeqOrderNodeMap cmdSeqOrderMap_;
+    RedisSvrInfoPtr svrInfo_;//redis svr地址信息
+    common::AtomicUInt32 cmdSeq_;//命令的seq 原子顺序
+    common::SeqOrderNodeMap cmdSeqOrderMap_;//缓存的命令池
 };
 
 typedef std::shared_ptr<RedisClient> RedisClientPtr;

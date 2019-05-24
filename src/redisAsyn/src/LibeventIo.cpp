@@ -196,7 +196,7 @@ void LibeventIo::handleRead()
                             cmdNode->cmdRet_ = CMD_SVR_CLOSER_CODE;
                             common::CmdResultQueue::instance().insertCmdResult(cmdNode);
                         }else{
-                            node->cli_->requestCmd(node->cmdOrd_);
+                            node->cli_->requestCmd(node->cmdOrd_, nowSecond_);
                         }
                     }
                 }else{

@@ -35,17 +35,18 @@
 #define CMD_SYSTEM_MALLOC_CODE                  (-3)
 #define CMD_SVR_INVALID_CODE                    (-4)
 
-#define CMD_SVR_DISCONNECT_CODE                 (-9)
-#define CMD_SLOTS_CALCUL_ERROR_CODE             (-10)//槽计算错误，正常情况下不应该有这个错误
-#define CMD_SVR_NODES_DOWN                      (-11)//当redis某一个点主从都挂掉了，就会返回这个错误。这个时候redis服务要设置槽覆盖不全也可以使用
+#define CMD_SVR_DISCONNECT_CODE                 (-5)
+#define CMD_SLOTS_CALCUL_ERROR_CODE             (-6)//槽计算错误，正常情况下不应该有这个错误
+#define CMD_SVR_NODES_DOWN                      (-7)//当redis某一个点主从都挂掉了，就会返回这个错误。这个时候redis服务要设置槽覆盖不全也可以使用
 
 //callback
-#define CMD_OUTTIME_CODE                        (-4)
-#define CMD_REPLY_EMPTY_CODE                    (-5)
-#define CMD_EMPTY_RESULT_CODE                   (-6)
-#define CMD_REDIS_ERROR_CODE                    (-7)
-#define CMD_REDIS_UNKNOWN_CODE                  (-8)
+#define CMD_OUTTIME_CODE                        (-8)
+#define CMD_REPLY_EMPTY_CODE                    (-9)
+#define CMD_EMPTY_RESULT_CODE                   (-10)
+#define CMD_REDIS_ERROR_CODE                    (-11)
+#define CMD_REDIS_UNKNOWN_CODE                  (-12)
 
+#define CMD_SVR_CLOSER_CODE                     (-13)//服务断连接
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 //state callback code define
@@ -123,7 +124,7 @@ typedef std::function<void(int asyFd, int exceCode, const std::string& exceMsg)>
  *
  * @return 无
  */
-typedef std::function<void(int ret, void* priv, const StdVectorStringPtr& resultMsg)> CmdResultCallback;
+typedef std::function<void(int ret, void* priv, const CLUSTER_REDIS_ASYNC::StdVectorStringPtr& resultMsg)> CmdResultCallback;
 
 /*
  * [RedisAsync]异步redis集群或者单点管理类

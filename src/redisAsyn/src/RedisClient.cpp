@@ -126,9 +126,7 @@ RedisClient::~RedisClient()
     {
         svrInfo_.reset();
     }
-    
-    
-    
+
     common::SeqOrderNodeMap ().swap(cmdSeqOrderMap_);
     base_ = NULL;
     state_ = REDIS_CLIENT_STATE_INIT;
@@ -141,7 +139,7 @@ int RedisClient::connectServer(struct event_base* eBase)
         PERROR("eBase nullptr or svrInfo_ nullptr or ipaddr port empty");
          return -1;
     }
-    disConnect(true);
+    //disConnect(true);
     base_ = eBase;
     client_ = redisAsyncConnect(svrInfo_->ipAddr_.c_str(), svrInfo_->port_);
     if(client_ == nullptr)
@@ -169,6 +167,7 @@ int RedisClient::connectServer(struct event_base* eBase)
     freeState_ = RESOURCES_NEED_FREE;
     struct timeval connSecondOut = {connOutSecond_, 0};
     evtimer_add(timev_, &connSecondOut);// call back outtime check
+    PTRACE("%s::%d eBase %p ", svrInfo_->ipAddr_.c_str(), svrInfo_->port_, base_);
     return 0;
 }
 
@@ -193,7 +192,7 @@ void RedisClient::disConnect(bool isFree)
     state_ = REDIS_CLIENT_STATE_INIT;
 }
 
-void RedisClient::requestCmd(const common::OrderNodePtr& order)
+void RedisClient::requestCmd(const common::OrderNodePtr& order, uint64_t nowSecond)
 {
     uint32_t seq = cmdSeq_.getAndIncrement();
     void *priv = (void *)(seq);
@@ -212,8 +211,8 @@ void RedisClient::requestCmd(const common::OrderNodePtr& order)
         common::CmdResultQueue::instance().insertCmdResult(order);
         return;
     }
-
-    order->cmdQuerySecond_ = secondSinceEpoch();
+    lastSecond_ = nowSecond;
+    order->cmdQuerySecond_ = nowSecond;
     cmdSeqOrderMap_.insert(common::SeqOrderNodeMap::value_type(seq, order));
 }
 
@@ -221,7 +220,7 @@ void RedisClient::clearCmdReqBuf()
 {
     for(common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.begin(); iter != cmdSeqOrderMap_.end();iter++)
     {
-        if(iter->second->resultCb_)
+        if(iter->second && iter->second->resultCb_)
         {
             iter->second->cmdRet_ = CMD_SVR_CLOSER_CODE;
             common::CmdResultQueue::instance().insertCmdResult(iter->second);
@@ -233,21 +232,27 @@ void RedisClient::clearCmdReqBuf()
 
 void RedisClient::checkOutSecondCmd(uint64_t nowSecond)
 {
-    if(cmdSeqOrderMap_.empty())
-    {
-        return;
-    }
-
     if(nowSecond == 0)
     {
         nowSecond = secondSinceEpoch();
+    }
+    
+    if((state_ == REDIS_CLIENT_STATE_CONN) && (static_cast<int>(nowSecond - lastSecond_) > keepAliveSecond_))
+    {
+        redisAsyncCommand(client_, nullptr, nullptr, "PING");//不需要回调，靠回调来检查连接正常与否也是很难界定的
+        lastSecond_ = nowSecond;
+    }
+    
+    if(cmdSeqOrderMap_.empty())
+    {
+        return;
     }
 
     for(common::SeqOrderNodeMap::iterator iter = cmdSeqOrderMap_.begin(); iter != cmdSeqOrderMap_.end();)
     {
         if(iter->second->outSecond_ && (nowSecond > iter->second->cmdOutSecond_))
         {
-            if(iter->second->resultCb_)
+            if(iter->second && iter->second->resultCb_)
             {
                 iter->second->cmdRet_ = CMD_OUTTIME_CODE;
                 common::CmdResultQueue::instance().insertCmdResult(iter->second);
@@ -287,6 +292,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                 {
                     case REDIS_REPLY_STRING:
                         {
+                            PDEBUG("REDIS_REPLY_STRING %d", REDIS_REPLY_STRING);
                             if(iter->second->resultCb_)
                             {
                                 CLUSTER_REDIS_ASYNC::StdStringSharedPtr elementStr(new std::string(reply->str, reply->len));
@@ -305,6 +311,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                         }
                     case REDIS_REPLY_ARRAY:
                         {
+                            PDEBUG("REDIS_REPLY_ARRAY %d", REDIS_REPLY_ARRAY);
                             if(iter->second->resultCb_)
                             {
                                 iter->second->cmdRet_ = CMD_SUCCESS_CODE;
@@ -327,6 +334,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                         }
                     case REDIS_REPLY_INTEGER:
                         {
+                            PDEBUG("REDIS_REPLY_INTEGER %d", REDIS_REPLY_INTEGER);
                             if(iter->second->resultCb_)
                             {
                                 iter->second->cmdRet_ = CMD_SUCCESS_CODE;
@@ -346,6 +354,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                         }
                     case REDIS_REPLY_NIL:
                         {
+                            PDEBUG("REDIS_REPLY_NIL %d", REDIS_REPLY_NIL);
                             if(iter->second->resultCb_)
                             {
                                 iter->second->cmdRet_ = CMD_EMPTY_RESULT_CODE;
@@ -357,6 +366,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                         }
                     case REDIS_REPLY_STATUS:
                         {
+                            PDEBUG("REDIS_REPLY_STATUS %d", REDIS_REPLY_STATUS);
                             if(iter->second->resultCb_)
                             {
                                 iter->second->cmdRet_ = CMD_SUCCESS_CODE;
@@ -376,6 +386,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                         }
                     case REDIS_REPLY_ERROR:
                         {
+                            PDEBUG("REDIS_REPLY_ERROR %d", REDIS_REPLY_ERROR);
                             if(iter->second->resultCb_)
                             {
                                 iter->second->cmdRet_ = CMD_REDIS_ERROR_CODE;
@@ -394,6 +405,7 @@ void RedisClient::requestCallBack(void* priv, redisReply* reply)
                         }
                     default:
                         {
+                            PDEBUG("default %d", reply->type);
                             if(iter->second->resultCb_)
                             {
                                 iter->second->cmdRet_ = CMD_REDIS_UNKNOWN_CODE;
