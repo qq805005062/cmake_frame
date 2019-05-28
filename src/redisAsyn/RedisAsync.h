@@ -16,6 +16,7 @@
 #define EXCE_MALLOC_NULL                        (-1)//这是一个非常严重的异常，内存空间不足，导致malloc或者new失败。通常这种情况会导致服务不可以使用，进入REDIS_SVR_INVALID_STATE状态
 #define SVR_CONNECT_RESET                       (-2)
 #define SVR_CONECT_DISCONNECT                   (-3)
+#define CLUSTER_NODES_CHANGE                    (-4)//集群中节点信息变化
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //return code define
 //初始化接口调用返回值状态编号宏定义

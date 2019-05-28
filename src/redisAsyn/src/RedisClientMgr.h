@@ -48,67 +48,7 @@ public:
 };
 
 typedef std::shared_ptr<SlotsInfo> SlotsInfoPtr;
-
 typedef std::vector<SlotsInfoPtr> VectSlotsInfoPtr;
-
-class RedisSvrCli
-{
-public:
-    RedisSvrCli()
-        :svrInfo_(nullptr)
-        ,redisClient_(nullptr)
-    {
-    }
-
-    RedisSvrCli(const RedisSvrInfoPtr& infoPtr)
-        :svrInfo_(infoPtr)
-        ,redisClient_(nullptr)
-    {
-    }
-
-    RedisSvrCli(const RedisSvrInfoPtr& infoPtr, const RedisClientPtr& client)
-        :svrInfo_(infoPtr)
-        ,redisClient_(client)
-    {
-    }
-
-    ~RedisSvrCli()
-    {
-        PTRACE("~RedisSvrCli exit");
-        if(svrInfo_)
-        {
-            svrInfo_.reset();
-        }
-        if(redisClient_)
-        {
-            PTRACE("redisClient_.reset();");
-            redisClient_.reset();
-        }
-    }
-
-    RedisSvrCli(const RedisSvrInfo& that)
-        :svrInfo_(nullptr)
-        ,redisClient_(nullptr)
-    {
-        *this = that;
-    }
-
-    RedisSvrCli& operator=(const RedisSvrCli& that)
-    {
-        if(this == &that) return *this;
-
-        svrInfo_ = that.svrInfo_;
-        redisClient_ = that.redisClient_;
-        
-        return *this;
-    }
-
-    RedisSvrInfoPtr svrInfo_;
-    RedisClientPtr redisClient_;
-};
-
-typedef std::shared_ptr<RedisSvrCli> RedisSvrCliPtr;
-typedef std::vector<RedisSvrCliPtr> VectRedisSvrCliPtr;
 
 class RedisMasterSlave
 {
@@ -126,7 +66,7 @@ public:
             master_.reset();
         }
 
-        VectRedisSvrCliPtr ().swap(slave_);
+        VectRedisClientPtr ().swap(slave_);
     }
 
     RedisMasterSlave(const RedisMasterSlave& that)
@@ -145,8 +85,8 @@ public:
 
         return *this;
     }
-    RedisSvrCliPtr master_;
-    VectRedisSvrCliPtr slave_;
+    RedisClientPtr master_;
+    VectRedisClientPtr slave_;
 };
 
 typedef std::shared_ptr<RedisMasterSlave> RedisMasterSlavePtr;
@@ -319,7 +259,7 @@ public:
     }
 
     int svrType_;//0:未知服务类型 1:单点redis服务 2:主从redis服务 3:redis集群服务
-    int initState_;//0:初始化状态 1:正常运行状态 2:部分异常状态 3:完全失效状态，要注意区分部分异常状态，和完全失效状态，完全失效是服务不可以用，部分异常。有部分功能正常
+    int initState_;//0:初始化状态 1:正常运行状态 2:部分异常状态 3:完全失效状态，要注意区分部分异常状态，和完全失效状态，完全失效是服务不可以用，部分异常。有部分功能正常 4:资源释放，资源已经被释放
     size_t initSvrIndex_;//入口传递多个地址信息进来的时候，从第几个下标开始初始化，万一初始化失败，要依次往后连接
     size_t mgrFd_;//VECT 管理vect的下标
     size_t masterConn_;//主节点连接成功点,除了单点redis服务不使用，其他都是要使用的
@@ -327,7 +267,7 @@ public:
     std::string inSvrInfoStr_;//传参进入的redis服务地址信息
 
     VectRedisSvrInfoPtr initSvrInfo_;//传参进来的redis地址信息解析出来的vect
-    RedisSvrCliPtr nodeCli_;
+    RedisClientPtr nodeCli_;
     RedisMasterSlavePtr mSlaveCli_;
     RedisClusterInfoPtr cluterCli_;
 
@@ -338,4 +278,29 @@ typedef std::shared_ptr<RedisClientMgr> RedisClientMgrPtr;
 typedef std::vector<RedisClientMgrPtr> VectRedisClientMgrPtr;
 
 }
+
+#define ANALYSIS_STRING_FORMATE_ERROR           (-1)
+#define ANALYSIS_MALLOC_NULLPTR_ERROR           (-2)
+int analysisClusterNodes
+            (const std::string& clusterNodes, REDIS_ASYNC_CLIENT::RedisClientMgr& clusterMgr, common::AtomicUInt32& ioIndex,
+            REDIS_ASYNC_CLIENT::VectRedisClientPtr& addRedisCli, int ioThreadNum, int keepSecond, int connOutSecond);
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& svrInfo, const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& tmpInfo);
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& svrInfo, const std::string& ipaddr, int port);
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisClientPtr& redisCli, const std::string& ipaddr, int port);
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisClientPtr& redisCli, const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& tmpInfo);
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::VectRedisClientPtr& slaveInfo, const std::string& ipaddr, int port);
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisMasterSlavePtr& mSlaveInfo, const std::string& ipaddr, int port);
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClusterNodePtr& clusterInfo, const std::string& ipaddr, int port);
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClusterInfoPtr& srcCluInfo, const std::string& ipaddr, int port);
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, uint16_t slot);
+
 #endif

@@ -1,13 +1,435 @@
 #include <stdarg.h>
+#include <string.h>
 
 #pragma GCC diagnostic ignored "-Wold-style-cast"
 #pragma GCC diagnostic ignored "-Wconversion"
 #include <async.h>
 
+#include "Atomic.h"
+#include "MutexLock.h"
+
 #include "Incommon.h"
 #include "OrderInfo.h"
 #include "LibeventIo.h"
+#include "RedisClientMgr.h"
 #include "../RedisAsync.h"
+
+REDIS_ASYNC_CLIENT::RedisSvrInfoPtr analysisSvrInfo(const std::string& svrInfoStr)
+{
+    if(svrInfoStr.empty())
+    {
+        return REDIS_ASYNC_CLIENT::RedisSvrInfoPtr();
+    }
+
+    std::string::size_type pos = svrInfoStr.find(':');
+    if (pos == std::string::npos)
+    {
+        return REDIS_ASYNC_CLIENT::RedisSvrInfoPtr();
+    }
+
+    std::string portStr = svrInfoStr.substr(pos + 1);
+    int tmpPort  = atoi(portStr.c_str());
+    std::string tmpIpStr = svrInfoStr.substr(0, pos);
+    PDEBUG("redis svr info %s::%d", tmpIpStr.c_str(), tmpPort);
+
+    REDIS_ASYNC_CLIENT::RedisSvrInfoPtr tmpSvr(new REDIS_ASYNC_CLIENT::RedisSvrInfo(tmpPort, tmpIpStr));
+    return tmpSvr;
+}
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& svrInfo, const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& tmpInfo)
+{
+    if(svrInfo && tmpInfo && ((*svrInfo) == (*tmpInfo)))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& svrInfo, const std::string& ipaddr, int port)
+{
+    if(svrInfo && (svrInfo->ipAddr_.compare(ipaddr) == 0) && (svrInfo->port_ == port))
+    {
+        return true;
+    }
+    
+    return false;
+}
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisClientPtr& redisCli, const std::string& ipaddr, int port)
+{
+    if(redisCli && isSelfSvrInfo(redisCli->redisCliSvrInfo(), ipaddr, port))
+    {
+        return true;
+    }
+    
+    return false;
+}
+
+bool isSelfSvrInfo(const REDIS_ASYNC_CLIENT::RedisClientPtr& redisCli, const REDIS_ASYNC_CLIENT::RedisSvrInfoPtr& tmpInfo)
+{
+    if(redisCli)
+    {
+        return isSelfSvrInfo(redisCli->redisCliSvrInfo(), tmpInfo);
+    }
+    return false;
+}
+
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::VectRedisClientPtr& slaveInfo, const std::string& ipaddr, int port)
+{
+    for(size_t i = 0; i < slaveInfo.size(); i++)
+    {
+        if(isSelfSvrInfo(slaveInfo[i], ipaddr, port))
+        {
+            return slaveInfo[i];
+        }
+    }
+
+    return REDIS_ASYNC_CLIENT::RedisClientPtr();
+}
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisMasterSlavePtr& mSlaveInfo, const std::string& ipaddr, int port)
+{
+    if(mSlaveInfo == nullptr)
+    {
+        return REDIS_ASYNC_CLIENT::RedisClientPtr();
+    }
+
+    if(isSelfSvrInfo(mSlaveInfo->master_, ipaddr, port))
+    {
+        REDIS_ASYNC_CLIENT::RedisClientPtr tmp = mSlaveInfo->master_;
+        return tmp;
+    }
+
+    return getRedisClient(mSlaveInfo->slave_, ipaddr, port);
+}
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClusterNodePtr& clusterNodeInfo, const std::string& ipaddr, int port)
+{
+    if(clusterNodeInfo)
+    {
+        return getRedisClient(clusterNodeInfo->clusterNode_, ipaddr, port);
+    
+}
+
+    return REDIS_ASYNC_CLIENT::RedisClientPtr();
+}
+
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClusterInfoPtr& clusterInfo, const std::string& ipaddr, int port)
+{
+    if(clusterInfo == nullptr)
+    {
+        return REDIS_ASYNC_CLIENT::RedisClientPtr();
+    }
+
+    for(size_t i = 0; i < clusterInfo->clusterVectInfo_.size(); i++)
+    {
+        REDIS_ASYNC_CLIENT::RedisClientPtr tmp = getRedisClient(clusterInfo->clusterVectInfo_[i], ipaddr, port);
+        if(tmp)
+        {
+            return tmp;
+        }
+    }
+    
+    return REDIS_ASYNC_CLIENT::RedisClientPtr();
+}
+
+//一般调用这个接口都是在找对应的从节点了。一般都是在主节点挂了之后才会调用这个接口来暂时解决业务
+//这个接口是获取对应主节点的从节点
+REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, uint16_t slot)
+{
+    if(clusterMgr == nullptr || clusterMgr->cluterCli_ == nullptr)
+    {
+        return REDIS_ASYNC_CLIENT::RedisClientPtr();
+    }
+
+    bool slaveFound = false;
+    for(size_t i = 0; i < clusterMgr->cluterCli_->clusterVectInfo_.size(); i++)
+    {
+        if(clusterMgr->cluterCli_->clusterVectInfo_[i])
+        {
+            for(size_t j = 0; j < clusterMgr->cluterCli_->clusterVectInfo_[i]->vectSlotInfo_.size(); j++)
+            {
+                if(clusterMgr->cluterCli_->clusterVectInfo_[i]->vectSlotInfo_[j] &&
+                    (slot >= clusterMgr->cluterCli_->clusterVectInfo_[i]->vectSlotInfo_[j]->slotStart_) &&
+                    (slot <= clusterMgr->cluterCli_->clusterVectInfo_[i]->vectSlotInfo_[j]->slotEnd_))
+                {
+                    slaveFound = true;
+                    break;
+                }
+            }
+
+            if(slaveFound && clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_)
+            {
+                for(size_t k = 0; k < clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_.size(); k++)
+                {
+                    if(clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_[k] &&
+                        (clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_[k]->tcpCliState() == REDIS_CLIENT_STATE_CONN))
+                    {
+                        return clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_[k];
+                    
+}
+                
+}
+
+                return REDIS_ASYNC_CLIENT::RedisClientPtr();
+            }
+        }
+    
+}
+    return REDIS_ASYNC_CLIENT::RedisClientPtr();
+}
+
+
+/*
+9be7650002bdbfd6b099c07969c6969d120b2b6c 192.169.6.211:6790@16790 master - 0 1557940444069 5 connected 10923-16383
+af805d65d9ee40af96695a213b300afd2f5e24d6 192.169.6.234:6791@16791 slave a4892e9a69d9e2858a9d0f45a915c40734b8a4aa 0 1557940443067 3 connected
+1adf947915d6f3f4bc9943831734d34b7e1fc610 192.169.6.234:6790@16790 myself,slave 19b1e55b4b30bb9c48b504121f36bd253fe7d30f 0 1557940442000 1 connected
+37e495750f36270d3a55a41a126f940316c54c8c 192.169.6.211:6791@16791 slave 9be7650002bdbfd6b099c07969c6969d120b2b6c 0 1557940446071 6 connected
+a4892e9a69d9e2858a9d0f45a915c40734b8a4aa 192.169.6.233:6790@16790 master - 0 1557940441000 3 connected 5461-10922
+19b1e55b4b30bb9c48b504121f36bd253fe7d30f 192.169.6.233:6791@16791 master - 0 1557940445070 7 connected 0-5460
+*/
+/*
+ * [analysisClusterNodes] 此方法之负责解析解群对应cluster nodes字符串。进这个方法之前要上锁，出这个方法，如果正常的话，要判断redis集群状态。
+                            方法内部如果返回正常值会把redis集群指针直接替换掉
+                            此方法应该可以应对redis增加、删除节点信息情况
+                            没有主节点的从信息会被丢弃
+ * @author xiaoxiao 2019-05-24
+ * @param clusterNodes 服务端返回的string信息
+ * @param clusterMgr redis集群信息管理对象，不可以为空
+ * @param ioIndex io的原子变量引用
+ * @param addRedisCli 外部需要增加连接的
+ * @param ioThreadNum io线程数
+ * @param keepSecond 保持活跃的时间
+ * @param connOutSecond 连接超时时间
+ *
+ * @return 0 success, -1 string formate error, -2 malloc error
+ */
+int analysisClusterNodes
+            (const std::string& clusterNodes, REDIS_ASYNC_CLIENT::RedisClientMgr& clusterMgr, common::AtomicUInt32& ioIndex,
+            REDIS_ASYNC_CLIENT::VectRedisClientPtr& addRedisCli, int ioThreadNum, int keepSecond, int connOutSecond)
+{
+    REDIS_ASYNC_CLIENT::RedisClusterInfoPtr tmpClusterInfo(nullptr);
+    size_t masterConn = 0, slaveConn = 0;
+    if(clusterNodes.empty())
+    {
+        return ANALYSIS_STRING_FORMATE_ERROR;
+    }
+    
+    std::vector<std::string> vLines;
+    split(clusterNodes, "\n", vLines);
+    for (size_t i = 0; i < vLines.size(); ++i)
+    {
+        std::vector<std::string> nodeInfo;
+        split(vLines[i], " ", nodeInfo);
+        if (nodeInfo.size() < 8)
+        {
+            return ANALYSIS_STRING_FORMATE_ERROR;
+        }
+
+        if(strstr(nodeInfo[2].c_str(), "master"))
+        {
+            if (nodeInfo.size() < 9)
+            {
+                return ANALYSIS_STRING_FORMATE_ERROR;
+            }
+            
+            REDIS_ASYNC_CLIENT::RedisSvrInfoPtr masterInfo = analysisSvrInfo(nodeInfo[1]);
+            if (masterInfo == nullptr)
+            {
+                return ANALYSIS_STRING_FORMATE_ERROR;
+            }
+            
+            REDIS_ASYNC_CLIENT::RedisClientPtr tmpCli(nullptr);
+            if(clusterMgr.cluterCli_)
+            {
+                for(size_t j = 0; j < clusterMgr.cluterCli_->clusterVectInfo_.size(); j++)
+                {
+                    if(clusterMgr.cluterCli_->clusterVectInfo_[j] && clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_)
+                    {
+                        if(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->master_ && isSelfSvrInfo(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->master_, masterInfo))
+                        {
+                            tmpCli = clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->master_;
+                            break;
+                        }
+
+                        for(size_t k = 0; k < clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_.size(); k++)
+                        {
+                            if(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_[k] && isSelfSvrInfo(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_[k], masterInfo))
+                            {
+                                tmpCli = clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_[k];
+                                break;
+                            }
+                        }
+                    }
+
+                    if(tmpCli)
+                    {
+                        break;
+                    }
+                }
+            }else if(clusterMgr.nodeCli_)
+            {
+                if(isSelfSvrInfo(clusterMgr.nodeCli_, masterInfo))
+                {
+                    tmpCli = clusterMgr.nodeCli_;
+                }
+            }
+
+            if(tmpCli == nullptr)
+            {
+                size_t tmpIoIndex = ioIndex.incrementAndGet();
+                tmpIoIndex = tmpIoIndex % ioThreadNum;
+                tmpCli.reset(new REDIS_ASYNC_CLIENT::RedisClient(tmpIoIndex, clusterMgr.mgrFd_, masterInfo, keepSecond, connOutSecond));
+                if(tmpCli == nullptr)
+                {
+                    return ANALYSIS_MALLOC_NULLPTR_ERROR;
+                }
+
+                addRedisCli.push_back(tmpCli);
+            }
+            if(tmpCli->tcpCliState() == REDIS_CLIENT_STATE_CONN)
+            {
+                masterConn++;
+            }
+
+            REDIS_ASYNC_CLIENT::RedisMasterSlavePtr tmpMS(new REDIS_ASYNC_CLIENT::RedisMasterSlave());
+            if(tmpMS == nullptr)
+            {
+                return ANALYSIS_MALLOC_NULLPTR_ERROR;
+            }
+            tmpMS->master_ = tmpCli;
+
+            REDIS_ASYNC_CLIENT::RedisClusterNodePtr tmpClusNode(new REDIS_ASYNC_CLIENT::RedisClusterNode());
+            if(tmpClusNode == nullptr)
+            {
+                return ANALYSIS_MALLOC_NULLPTR_ERROR;
+            }
+            tmpClusNode->clusterNode_ = tmpMS;
+            tmpClusNode->nodeIds_.assign(nodeInfo[0]);
+
+            for(size_t kk = 8; kk < nodeInfo.size(); kk++)
+            {
+                REDIS_ASYNC_CLIENT::SlotsInfoPtr tmpSlots(new REDIS_ASYNC_CLIENT::SlotsInfo());
+                if(tmpSlots == nullptr)
+                {
+                    return ANALYSIS_MALLOC_NULLPTR_ERROR;
+                }
+                std::string::size_type pos = nodeInfo[kk].find('-');
+                if (pos == std::string::npos)
+                {
+                    tmpSlots->slotStart_ = static_cast<uint16_t>(atoi(nodeInfo[kk].c_str()));
+                    tmpSlots->slotEnd_ = tmpSlots->slotStart_;
+                }
+                else
+                {
+                    const std::string slotEndStr = nodeInfo[kk].substr(pos + 1);
+                    tmpSlots->slotEnd_ = static_cast<uint16_t>(atoi(slotEndStr.c_str()));
+                    tmpSlots->slotStart_ = static_cast<uint16_t>(atoi(nodeInfo[kk].substr(0, pos).c_str()));
+                }
+                tmpClusNode->vectSlotInfo_.push_back(tmpSlots);
+            }
+
+            if(tmpClusterInfo == nullptr)
+            {
+                tmpClusterInfo.reset(new REDIS_ASYNC_CLIENT::RedisClusterInfo());
+                if(tmpClusterInfo == nullptr)
+                {
+                    return ANALYSIS_MALLOC_NULLPTR_ERROR;
+                }
+            }
+            tmpClusterInfo->clusterVectInfo_.push_back(tmpClusNode);
+
+            for(size_t jjj = 0; jjj < tmpClusNode->vectSlotInfo_.size(); ++jjj)
+            {
+                for(uint16_t jj = tmpClusNode->vectSlotInfo_[jjj]->slotStart_; jj <= tmpClusNode->vectSlotInfo_[jjj]->slotEnd_; jj++)
+                {
+                    tmpClusterInfo->clusterSlotMap_.insert(REDIS_ASYNC_CLIENT::SlotCliInfoMap::value_type(jj, tmpCli));
+                }
+            }
+
+            for (size_t jj = 0; jj < vLines.size(); ++jj)
+            {
+                std::vector<std::string> tmpSalveInfo;
+                split(vLines[jj], " ", tmpSalveInfo);
+                if (tmpSalveInfo.size() < 8)
+                {
+                    return ANALYSIS_STRING_FORMATE_ERROR;
+                }
+
+                if(nodeInfo[0].compare(tmpSalveInfo[3]) == 0)
+                {
+                    REDIS_ASYNC_CLIENT::RedisSvrInfoPtr  slaveInfo = analysisSvrInfo(tmpSalveInfo[1]);
+                    if (slaveInfo == nullptr)
+                    {
+                        return ANALYSIS_STRING_FORMATE_ERROR;
+                    }
+
+                    tmpCli.reset();
+                    if(clusterMgr.cluterCli_)
+                    {
+                        for(size_t j = 0; j < clusterMgr.cluterCli_->clusterVectInfo_.size(); j++)
+                        {
+                            if(clusterMgr.cluterCli_->clusterVectInfo_[j] && clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_)
+                            {
+                                if(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->master_ && isSelfSvrInfo(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->master_, slaveInfo))
+                                {
+                                    tmpCli = clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->master_;
+                                    break;
+                                }
+
+                                for(size_t k = 0; k < clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_.size(); k++)
+                                {
+                                    if(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_[k] && isSelfSvrInfo(clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_[k], slaveInfo))
+                                    {
+                                        tmpCli = clusterMgr.cluterCli_->clusterVectInfo_[j]->clusterNode_->slave_[k];
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if(tmpCli)
+                            {
+                                break;
+                            }
+                        }
+                    }else if(clusterMgr.nodeCli_)
+                    {
+                        if(isSelfSvrInfo(clusterMgr.nodeCli_, slaveInfo))
+                        {
+                            tmpCli = clusterMgr.nodeCli_;
+                        }
+                    }
+
+                    if(tmpCli == nullptr)
+                    {
+                        size_t tmpIoIndex = ioIndex.incrementAndGet();
+                        tmpIoIndex = tmpIoIndex % ioThreadNum;
+                        tmpCli.reset(new REDIS_ASYNC_CLIENT::RedisClient(tmpIoIndex, clusterMgr.mgrFd_, slaveInfo, keepSecond, connOutSecond));
+                        if(tmpCli == nullptr)
+                        {
+                            return ANALYSIS_MALLOC_NULLPTR_ERROR;
+                        }
+
+                        addRedisCli.push_back(tmpCli);
+                    }
+                    if(tmpCli->tcpCliState() == REDIS_CLIENT_STATE_CONN)
+                    {
+                        slaveConn++;
+                    }
+                    
+                    tmpMS->slave_.push_back(tmpCli);
+                }
+            }
+        }
+    }
+
+    clusterMgr.cluterCli_ = tmpClusterInfo;
+    clusterMgr.masterConn_ = masterConn;
+    clusterMgr.slaveConn_ = slaveConn;
+    return 0;
+}
 
 /*
  * [PartRedisAsync.cpp] 这个文件存在的意义就是RedisAsync.cpp文件里面内容太多了。分担部分代码过来。保证代码可读性
@@ -96,6 +518,13 @@ void RedisAsync::asyncExceCallBack(int asyFd, int exceCode, const std::string& e
                 {
                     char exceMsgBuf[1024] = {0};
                     sprintf(exceMsgBuf, "connect had been disconnect %s", exceMsg.c_str());
+                    exceCb_(asyFd, exceCode, exceMsgBuf);
+                    break;
+                }
+            case CLUSTER_NODES_CHANGE:
+                {
+                    char exceMsgBuf[1024] = {0};
+                    sprintf(exceMsgBuf, "cluster nodes change %s", exceMsg.c_str());
                     exceCb_(asyFd, exceCode, exceMsgBuf);
                     break;
                 }

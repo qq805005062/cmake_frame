@@ -28,6 +28,18 @@ namespace common
 class OrderNode
 {
 public:
+    OrderNode()
+        :cmdRet_(0)
+        ,outSecond_(0)
+        ,cmdOutSecond_(0)
+        ,cmdQuerySecond_(0)
+        ,cmdPri_(nullptr)
+        ,cmdMsg_()
+        ,resultCb_(nullptr)
+        ,cmdResult_()
+    {
+    }
+        
     OrderNode(const std::string& msg)
         :cmdRet_(0)
         ,outSecond_(0)
@@ -111,7 +123,6 @@ typedef std::map<uint32_t, OrderNodePtr> SeqOrderNodeMap;
  *
  * @return
  */
-#if 1
 class CmdResultQueue : public common::noncopyable
 {
 public:
@@ -154,62 +165,7 @@ private:
     MutexLock mutex_;
     OrderNodePtrDeque queue_;
 };
-#else
-class CmdResultQueue : public common::noncopyable
-{
-public:
-    CmdResultQueue()
-        :isExit_(0)
-        ,mutex_()
-        ,notEmpty_(mutex_)
-        ,queue_()
-    {
-    }
 
-    ~CmdResultQueue()
-    {
-    }
-    
-    static CmdResultQueue& instance() { return common::Singleton<CmdResultQueue>::instance(); }
-
-    void cmdResuleExit()
-    {
-        isExit_ = 1;
-        notEmpty_.notifyAll();
-    }
-
-    void insertCmdResult(const OrderNodePtr& node)
-    {
-        SafeMutexLock lock(mutex_);
-        queue_.push_back(node);
-        notEmpty_.notify();
-        CLUSTER_REDIS_ASYNC::RedisAsync::instance().asyncCmdResultCallBack();
-    }
-
-    OrderNodePtr takeCmdResult()
-    {
-        SafeMutexLock lock(mutex_);
-        while(queue_.empty())
-        {
-            if(isExit_)
-            {
-                return OrderNodePtr();
-            }
-            notEmpty_.wait();
-        }
-
-        OrderNodePtr node = queue_.front();
-        queue_.pop_front();
-        return node;
-    }
-
-private:
-    int isExit_;
-    MutexLock mutex_;
-    Condition notEmpty_;
-    OrderNodePtrDeque queue_;
-};
-#endif
 }//end namespace common
 
 #endif//end __COMMON_ORDERINFO_H__
