@@ -14,31 +14,32 @@
 //exception code define
 //异常回调函数中状态编码宏定义
 #define EXCE_MALLOC_NULL                        (-1)//这是一个非常严重的异常，内存空间不足，导致malloc或者new失败。通常这种情况会导致服务不可以使用，进入REDIS_SVR_INVALID_STATE状态
-#define SVR_CONNECT_RESET                       (-2)
-#define SVR_CONECT_DISCONNECT                   (-3)
+#define SVR_CONNECT_RESET                       (-2)//redis svr连接失败，内部会延迟之后再次重连
+#define SVR_CONECT_DISCONNECT                   (-3)//redis svr断连。内部会延迟重连
 #define CLUSTER_NODES_CHANGE                    (-4)//集群中节点信息变化
+#define UNKOWN_REDIS_SVR_TYPE                   (-5)//位置服务端类型
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //return code define
 //初始化接口调用返回值状态编号宏定义
+//接口是异步的，但是同步也会做一些必要检查，校验。这些错误调用异步初始化接口可能的返回值
 #define INIT_SUCCESS_CODE                       (0)
-#define INIT_PARAMETER_ERROR                    (-1)
-#define INIT_SYSTEM_ERROR                       (-2)
-#define INIT_CONNECT_FAILED                     (-3)
-#define INIT_SVRINFO_ERROR                      (-4)
-#define INIT_NO_INIT_ERROR                      (-5)
+#define INIT_PARAMETER_ERROR                    (-1)//接口传入参数有误
+#define INIT_SYSTEM_ERROR                       (-2)//通常是malloc 空指针
+#define INIT_NO_INIT_ERROR                      (-3)//应该先调用redisAsyncInit方法
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //cmd code define
 //执行命令返回值、以及回调函数中状态编号宏定义
+//调用命令接口是异步的，但是同步会做一些检查，校验，这部分错误值分同步返回和异步返回的
 #define CMD_SUCCESS_CODE                        (0)
 #define CMD_PARAMETER_ERROR_CODE                (-1)
-#define CMD_SVR_NO_INIT_CODE                    (-2)
-#define CMD_SYSTEM_MALLOC_CODE                  (-3)
-#define CMD_SVR_INVALID_CODE                    (-4)
-
-#define CMD_SVR_DISCONNECT_CODE                 (-5)
+#define CMD_SVR_STATE_ERROR_CODE                (-2)//redis服务端初始化未完成或者出现异常，不可以执行任何命令操作
+#define CMD_SYSTEM_MALLOC_CODE                  (-3)//mallc nullptr
+#define CMD_SVR_INVALID_CODE                    (-4)//服务端已经失效，内部已经释放相关资源，一般由于内存不足会产生这个
 #define CMD_SLOTS_CALCUL_ERROR_CODE             (-6)//槽计算错误，正常情况下不应该有这个错误
-#define CMD_SVR_NODES_DOWN                      (-7)//当redis某一个点主从都挂掉了，就会返回这个错误。这个时候redis服务要设置槽覆盖不全也可以使用
+//当redis某一个点主从连接都挂掉了，并且正好落在这个点上就会返回这个错误。这个时候redis服务要设置槽覆盖不全也可以使用
+//或者是单点的连接断掉了
+#define CMD_SVR_NODES_DOWN                      (-7)
 
 //callback
 #define CMD_OUTTIME_CODE                        (-8)
@@ -46,7 +47,6 @@
 #define CMD_EMPTY_RESULT_CODE                   (-10)
 #define CMD_REDIS_ERROR_CODE                    (-11)
 #define CMD_REDIS_UNKNOWN_CODE                  (-12)
-
 #define CMD_SVR_CLOSER_CODE                     (-13)//服务断连接
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -136,6 +136,7 @@ typedef std::function<void(int ret, void* priv, const CLUSTER_REDIS_ASYNC::StdVe
             如果内存不足情况下。并且连接又发生异常就很糟糕
             此类实现最基本的功能。由于可定制化需求太多。可以在此基本功能上在增加
             大多数方法实现都是异步的。减少IO线程操作，因为这个redis异步操作中，io回调回去......
+            内部超时时间，并不是非常的精确，最大可能会有一秒的误差
  * @param
  * @param
  *
@@ -157,7 +158,7 @@ public:
     /*
      * [redisAsyncInit] 初始化方法,单线程初始化，只需要初始化一次, 设置内部线程数及回调线程数。设置回调函数，主要设置初始化回调函数，设置异常回调函数
      * @author xiaoxiao 2019-04-15
-     * @param threadNum 内部线程数，内部会开多少个线程来处理与redis的io。建议参考集群数量，但是也不是要特别多，最少也要是一个
+     * @param threadNum 内部线程数，内部会开多少个线程来处理与redis的io。建议参考集群数量，但是也不是要特别多，最少也要是一个,内部会多开一个定时器线程
      * @param callbackNum 回调线程池数。内部会开启多少个线程回调回调函数，因为不能用IO线程处理回调。不能拥堵IO
      * @param connOutSecond 连接超时时间，一般3秒
      * @param keepSecond 内部redis保持激活的间隔秒钟，保证这段时间，与redis至少心跳一次。以保持连接活跃
@@ -169,9 +170,9 @@ public:
     int redisAsyncInit(int threadNum, int callbackNum, int connOutSecond, int keepSecond, const StateChangeCb& statecb, const ExceptionCallBack& excecb);
 
     /*
-     * [addSigleRedisInfo] 初始化单节点redis服务
+     * [addSigleRedisInfo] 初始化单节点redis服务，一个服务只需要初始化一次，多次初始化，会有多个连接。因为是异步的。所以一个连接基本就可以了
      * @author xiaoxiao 2019-05-06
-     * @param ipPortInfo 单节点服务的服务信息，ip:port
+     * @param ipPortInfo 单节点服务的服务信息，ip:port，不可以是多个
      * @param
      * @param
      *
@@ -181,7 +182,7 @@ public:
 
     
     /*
-     * [addMasterSlaveInfo] 初始化redis主从服务信息
+     * [addMasterSlaveInfo] 初始化redis主从服务信息，一个服务只需要初始化一次，多次初始化，会有多个连接。因为是异步的。所以一个连接基本就可以了
      * @author xiaoxiao 2019-05-06
      * @param ipPortInfo 主从服务地址信息信息，ip:port，多个以逗号分隔
      * @param
@@ -193,7 +194,7 @@ public:
 
     
     /*
-     * [addClusterInfo] 初始化redis集群服务信息
+     * [addClusterInfo] 初始化redis集群服务信息，一个服务只需要初始化一次，多次初始化，会有多个连接。因为是异步的。所以一个连接基本就可以了
      * @author xiaoxiao 2019-05-06
      * @param ipPortInfo 集群服务地址信息信息，ip:port，多个以逗号分隔
      * @param
@@ -217,39 +218,44 @@ public:
 
     
     /*
-     * [function]
-     * @author
-     * @param
-     * @param
-     * @param
+     * [set] set方法，在此位置也可以封装、增加一些其他命令的方法。
+     * @author xiaoxiao 2019-05-30
+     * @param asyFd 初始化服务信息返回的句柄
+     * @param key 键
+     * @param value 值
+     * @param outSecond 命令执行超时时间
+     * @param cb 回调函数
+     * @param priv 私有数据指针，回调函数会调用回来
      *
-     * @return
+     * @return 大于等于0都是成功，其他都是错误
      */
     int set(int asyFd, const std::string& key, const std::string& value, int outSecond, const CmdResultCallback& cb, void *priv);
 
     /*
      * [redisAppendCommand]异步执行命令
      * @author xiaoxiao 2019-04-19
+     * @param asyFd 初始化服务信息返回的句柄
      * @param cb 命令结果回调函数
      * @param outSecond 命令超时时间如果超过这个时间未有结果则回调错误
      * @param priv 私有指针，保存命令的上下文
      * @param key 命令中的key
      * @param format 格式化的命令格式
      *
-     * @return
+     * @return 大于等于0都是成功，其他都是错误
      */
     int redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const char *format, ...);
 
     /*
      * [redisAppendCommand]异步执行命令
      * @author xiaoxiao 2019-04-19
+     * @param asyFd 初始化服务信息返回的句柄
      * @param cb 命令结果回调函数
      * @param outSecond 命令超时时间如果超过这个时间未有结果则回调错误
      * @param priv 私有指针，保存命令的上下文
      * @param key 命令中的key
      * @param cmdStr 命令的string
      *
-     * @return
+     * @return 大于等于0都是成功，其他都是错误
      */
     int redisAsyncCommand(int asyFd, const CmdResultCallback& cb, int outSecond, void *priv, const std::string& key, const std::string& cmdStr);
 
@@ -262,21 +268,21 @@ public:
     //所以通常没有回调的时候我们并不关心有没有执行完
     void asyncRequestCmdAdd();
 
-    //内部连接成功或者失败调用此回调
+    //内部连接成功或者失败调用此回调，连接事件的回调函数
     void redisSvrOnConnect(size_t asyFd, int state, const std::string& ipaddr, int port, const std::string errMsg = "");
 
-    //异步结果回调
+    //异步结果回调，当有命令执行结束会通知回调线程池处理回调
     void asyncCmdResultCallBack();
 
 private:
 
-    //定时器线程运行
+    //定时器线程运行方法
     void timerThreadRun();
 
-    //每一个io线程运行
+    //每一个io线程运行方法
     void libeventIoThread(int index);
 
-    //初始化redis初始化参数连接
+    //初始化redis初始化参数连接，同步方法
     int redisInitConnect();
 
     //当redis服务失效时异步回调这个方法，不可以同步调用，会core，慎用
@@ -287,9 +293,9 @@ private:
 
     //集群初始化命令回调函数
     void clusterInitCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
-
+    //集群异常之后执行cluster info之后的回调函数
     void clusterInfoCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
-
+    //集群异常之后执行cluster nodes之后的回调函数
     void clusterNodesCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
     
     //主从redis服务命令回调函数
@@ -301,21 +307,22 @@ private:
     //redis服务异常状态回调函数
     void asyncExceCallBack(int asyFd, int exceCode, const std::string& exceMsg);
 
+    //立刻重连函数
     void reconnectAtOnece(size_t asyFd, const std::string& ipaddr, int port);
-
+    //延迟重连函数
     void delayReconnect(size_t asyFd, const std::string& ipaddr, int port);
     
-    int callBackNum_;
-    int ioThreadNum_;
-    int keepSecond_;
-    int connOutSecond_;
-    int isExit_;
-    int timerExit_;
+    int callBackNum_;//回调线程池线程数
+    int ioThreadNum_;//io线程池，线程数
+    int keepSecond_;//保持活跃心跳间隔秒钟
+    int connOutSecond_;//连接超时秒钟数
+    int isExit_;//是否退出标志
+    int timerExit_;//是否退出标志
 
-    volatile uint64_t nowSecond_;
-    std::mutex initMutex_;
-    StateChangeCb stateCb_;
-    ExceptionCallBack exceCb_;
+    volatile uint64_t nowSecond_;//当前绝对时间。这个时间很重要，每隔一秒会更新一次。后面所有的时间都是以他为基准
+    std::mutex initMutex_;//内部初始化锁，
+    StateChangeCb stateCb_;//状态变化回调函数
+    ExceptionCallBack exceCb_;//异常状态回调函数
 };
 
 }

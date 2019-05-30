@@ -23,7 +23,7 @@
 #define PDEBUG(fmt, args...)        fprintf(stderr, "%s :: %s() %d: DEBUG " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 #define PERROR(fmt, args...)        fprintf(stderr, "%s :: %s() %d: ERROR " fmt " \n", __FILE__, __FUNCTION__, __LINE__, ## args)
 
-static int singleFd = 0, clusterFd = 0, isExit = 0;
+static int singleFd = 0, clusterFd = 0;
 
 static int sigArray[] = {
     SIGALRM,SIGQUIT,SIGILL,SIGTRAP,SIGABRT,SIGBUS,SIGFPE,
@@ -36,41 +36,58 @@ int daemonize_(int nochdir, int noclose)
 {
     int fd;
 
-    switch (fork()) {
-    case -1:
-        return (-1);
-    case 0:
-        break;
-    default:
-        _exit(EXIT_SUCCESS);
+    switch (fork())
+    {
+        case -1:
+            {
+                return (-1);
+            }
+        case 0:
+            {
+                break;
+            }
+        default:
+            {
+                _exit(EXIT_SUCCESS);
+            }
     }
 
     if (setsid() == -1)
+    {
         return (-1);
+    }
 
-    if (nochdir == 0) {
-        if(chdir("/") != 0) {
+    if (nochdir == 0)
+    {
+        if(chdir("/") != 0)
+        {
             perror("chdir");
             return (-1);
         }
     }
 
-    if (noclose == 0 && (fd = open("/dev/null", O_RDWR, 0)) != -1) {
-        if(dup2(fd, STDIN_FILENO) < 0) {
+    if (noclose == 0 && (fd = open("/dev/null", O_RDWR, 0)) != -1)
+    {
+        if(dup2(fd, STDIN_FILENO) < 0)
+        {
             perror("dup2 stdin");
             return (-1);
         }
-        if(dup2(fd, STDOUT_FILENO) < 0) {
+        if(dup2(fd, STDOUT_FILENO) < 0)
+        {
             perror("dup2 stdout");
             return (-1);
         }
-        if(dup2(fd, STDERR_FILENO) < 0) {
+        if(dup2(fd, STDERR_FILENO) < 0)
+        {
             perror("dup2 stderr");
             return (-1);
         }
 
-        if (fd > STDERR_FILENO) {
-            if(close(fd) < 0) {
+        if (fd > STDERR_FILENO)
+        {
+            if(close(fd) < 0)
+            {
                 perror("close");
                 return (-1);
             }
@@ -121,12 +138,6 @@ void sigMyself()
     return;
 }
 
-void processExit()
-{
-    isExit = 1;
-    CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisAsyncExit();
-}
-
 //捕获信号
 void sig_catch(int sig)
 {
@@ -155,7 +166,7 @@ void sig_catch(int sig)
             PERROR("%d",sig);
             break;
     }
-    processExit();
+    CLUSTER_REDIS_ASYNC::RedisAsync::instance().redisAsyncExit();
     exit(0);
     return;
 }
@@ -261,6 +272,8 @@ int main(int argc, char* argv[])
                     std::bind(cmdResultCallBack, std::placeholders::_1,std::placeholders::_2, std::placeholders::_3),
                     3, nullptr, redisKey, redisCmd);
                 PDEBUG("redisAsyncCommand %d", ret);
+            }else{
+                PDEBUG("You had just drop you cmd just now,please operation again");
             }
         }
     }

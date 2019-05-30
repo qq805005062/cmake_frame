@@ -279,6 +279,13 @@ typedef std::vector<RedisClientMgrPtr> VectRedisClientMgrPtr;
 
 }
 
+/*
+ *注意下面这些方法都是私有方法，部分方法需要外面加锁才能使用
+ *
+ *
+ *
+ *
+ */
 #define ANALYSIS_STRING_FORMATE_ERROR           (-1)
 #define ANALYSIS_MALLOC_NULLPTR_ERROR           (-2)
 int analysisClusterNodes
@@ -302,5 +309,10 @@ REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClust
 REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClusterInfoPtr& srcCluInfo, const std::string& ipaddr, int port);
 
 REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, uint16_t slot);
+
+#define NO_IN_CLUSTER_ADDRINFO          (0)
+#define MASTER_CLUSTER_ADDRINFO         (1)
+#define SALVE_CLUSTER_ADDRINFO          (2)
+int clusterRedisConnsUpdate(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, const std::string& ipaddr, int port, bool onConned);
 
 #endif

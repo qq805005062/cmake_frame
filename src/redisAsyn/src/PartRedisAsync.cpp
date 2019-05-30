@@ -431,6 +431,50 @@ int analysisClusterNodes
     return 0;
 }
 
+int clusterRedisConnsUpdate(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, const std::string& ipaddr, int port, bool onConned)
+{
+    if(clusterMgr == nullptr || clusterMgr->cluterCli_ == nullptr)
+    {
+        return NO_IN_CLUSTER_ADDRINFO;
+    }
+    for(size_t i = 0; i < clusterMgr->cluterCli_->clusterVectInfo_.size(); i++)
+    {
+        if(clusterMgr->cluterCli_->clusterVectInfo_[i] &&
+            clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_)
+        {
+            if(clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_ &&
+                (clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->redisSvrPort() == port) &&
+                (clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->master_->redisSvrIpaddr().compare(ipaddr) == 0))
+            {
+                if(onConned)
+                {
+                    clusterMgr->masterConn_++;
+                }else{
+                    clusterMgr->masterConn_--;
+                }
+                return MASTER_CLUSTER_ADDRINFO;
+            }
+            
+            for(size_t jj = 0; jj < clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_.size(); jj++)
+            {
+                if(clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_[jj] &&
+                    (clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_[jj]->redisSvrPort() == port) &&
+                    (clusterMgr->cluterCli_->clusterVectInfo_[i]->clusterNode_->slave_[jj]->redisSvrIpaddr().compare(ipaddr) == 0))
+                    {
+                        if(onConned)
+                        {
+                            clusterMgr->slaveConn_++;
+                        }else{
+                            clusterMgr->slaveConn_--;
+                        }
+                        return SALVE_CLUSTER_ADDRINFO;
+                    }
+            }
+        }
+    }
+    return NO_IN_CLUSTER_ADDRINFO;
+}
+
 /*
  * [PartRedisAsync.cpp] 这个文件存在的意义就是RedisAsync.cpp文件里面内容太多了。分担部分代码过来。保证代码可读性
  * @author xiaoxiao 2019-05-22
