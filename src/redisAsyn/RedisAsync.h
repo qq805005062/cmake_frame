@@ -17,7 +17,10 @@
 #define SVR_CONNECT_RESET                       (-2)//redis svr连接失败，内部会延迟之后再次重连
 #define SVR_CONECT_DISCONNECT                   (-3)//redis svr断连。内部会延迟重连
 #define CLUSTER_NODES_CHANGE                    (-4)//集群中节点信息变化
-#define UNKOWN_REDIS_SVR_TYPE                   (-5)//位置服务端类型
+#define UNKOWN_REDIS_SVR_TYPE                   (-5)//未知服务端类型
+#define MASTER_SLAVE_NODES_CHANGE               (-6)
+#define CLUSTER_INITSTR_FORMATE                 (-7)
+#define CLUSTER_INITSTR_UNKNOWN                 (-8)
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //return code define
 //初始化接口调用返回值状态编号宏定义
@@ -137,6 +140,7 @@ typedef std::function<void(int ret, void* priv, const CLUSTER_REDIS_ASYNC::StdVe
             此类实现最基本的功能。由于可定制化需求太多。可以在此基本功能上在增加
             大多数方法实现都是异步的。减少IO线程操作，因为这个redis异步操作中，io回调回去......
             内部超时时间，并不是非常的精确，最大可能会有一秒的误差
+            要注意主从模式，如果主从模式集群中搭建的了哨兵模式，会自动切换主从，但是如果没有，内部也可以进行切换，但是内部基本功能是默认搭建哨兵模式
  * @param
  * @param
  *
@@ -178,7 +182,7 @@ public:
      *
      * @return 大于等于0都是成功，其他是错误。返回值为此redis服务的句柄。后续在此服务操作命令使用。内部此redis服务的唯一标识
      */
-    int addSigleRedisInfo(const std::string& ipPortInfo);
+    int addSigleRedisInfo(const std::string& ipPortInfo, const std::string& auth = "");
 
     
     /*
@@ -190,7 +194,7 @@ public:
      *
      * @return 大于等于0都是成功，其他是错误。返回值为此redis服务的句柄。后续在此服务操作命令使用。内部此redis服务的唯一标识
      */
-    int addMasterSlaveInfo(const std::string& ipPortInfo);
+    int addMasterSlaveInfo(const std::string& ipPortInfo, const std::string& auth = "");
 
     
     /*
@@ -202,7 +206,18 @@ public:
      *
      * @return 大于等于0都是成功，其他是错误。返回值为此redis服务的句柄。后续在此服务操作命令使用。内部此redis服务的唯一标识
      */
-    int addClusterInfo(const std::string& ipPortInfo);
+    int addClusterInfo(const std::string& ipPortInfo, const std::string& auth = "");
+
+    /*
+     * [updateNodesInfo] 当主从或者集群信息发生变化的时候，需要更新redis节点信息。比如redis主从发生人为控制变化，或者集群增加删除节点
+     * @author xiaoxiao 2019-05-31
+     * @param asyFd redis服务的句柄
+     * @param
+     * @param
+     *
+     * @return 无
+     */
+    void updateNodesInfo(int asyFd);
     
     /*
      * [redisAsyncExit] 模块退出方法。会释放所有连接及内部资源。此模块暂时未考虑支持运行中exit之后再init
@@ -299,7 +314,7 @@ private:
     void clusterNodesCallBack(int ret, void* priv, const StdVectorStringPtr& resultMsg);
     
     //主从redis服务命令回调函数
-    void masterSalveInitCb(int ret, void* priv, const StdVectorStringPtr& resultMsg);
+    void infoReplicationCb(int ret, void* priv, const StdVectorStringPtr& resultMsg);
 
     //redis服务状态变化回调函数
     void asyncStateCallBack(int asyFd, int stateCode, const std::string& stateMsg);
@@ -311,6 +326,19 @@ private:
     void reconnectAtOnece(size_t asyFd, const std::string& ipaddr, int port);
     //延迟重连函数
     void delayReconnect(size_t asyFd, const std::string& ipaddr, int port);
+
+    /*
+     * [clusterNodesUpdate] 集群执行cluster nodes方法，可以指定是否延迟，可以指定是否是初始方法
+     * @author xiaoxiao 2019-05-31
+     * @param asyFd redis服务的句柄
+     * @param isDelay 是否延迟执行，true是延迟，false是立刻执行
+     * @param isInit 是否回调初始化方法，true是回调初始化方法，false是回调异常处理方法
+     *
+     * @return 无
+     */
+    void clusterNodesUpdate(size_t asyFd, bool isDelay = false, bool isInit = false);
+
+    void infoReplicNodesUpdate(size_t asyFd, bool isDelay = false);
     
     int callBackNum_;//回调线程池线程数
     int ioThreadNum_;//io线程池，线程数

@@ -191,6 +191,7 @@ public:
         ,masterConn_(0)
         ,slaveConn_(0)
         ,inSvrInfoStr_()
+        ,auth_()
         ,initSvrInfo_()
         ,nodeCli_(nullptr)
         ,mSlaveCli_(nullptr)
@@ -230,6 +231,7 @@ public:
         ,masterConn_(0)
         ,slaveConn_(0)
         ,inSvrInfoStr_()
+        ,auth_()
         ,initSvrInfo_()
         ,nodeCli_(nullptr)
         ,mSlaveCli_(nullptr)
@@ -250,6 +252,7 @@ public:
         masterConn_ = that.masterConn_;
         slaveConn_ = that.slaveConn_;
         inSvrInfoStr_ = that.inSvrInfoStr_;
+        auth_ = that.auth_;
         initSvrInfo_ = that.initSvrInfo_;
         nodeCli_ = that.nodeCli_;
         mSlaveCli_ = that.mSlaveCli_;
@@ -265,6 +268,7 @@ public:
     size_t masterConn_;//主节点连接成功点,除了单点redis服务不使用，其他都是要使用的
     size_t slaveConn_;//从节点连接成功点，除了单点redis服务不使用，其他都是要使用的
     std::string inSvrInfoStr_;//传参进入的redis服务地址信息
+    std::string auth_;//密码
 
     VectRedisSvrInfoPtr initSvrInfo_;//传参进来的redis地址信息解析出来的vect
     RedisClientPtr nodeCli_;
@@ -288,7 +292,12 @@ typedef std::vector<RedisClientMgrPtr> VectRedisClientMgrPtr;
  */
 #define ANALYSIS_STRING_FORMATE_ERROR           (-1)
 #define ANALYSIS_MALLOC_NULLPTR_ERROR           (-2)
+//集群节点信息更新
 int analysisClusterNodes
+            (const std::string& clusterNodes, REDIS_ASYNC_CLIENT::RedisClientMgr& clusterMgr, common::AtomicUInt32& ioIndex,
+            REDIS_ASYNC_CLIENT::VectRedisClientPtr& addRedisCli, int ioThreadNum, int keepSecond, int connOutSecond);
+//主从节点信息更新
+int analysisSlaveNodes
             (const std::string& clusterNodes, REDIS_ASYNC_CLIENT::RedisClientMgr& clusterMgr, common::AtomicUInt32& ioIndex,
             REDIS_ASYNC_CLIENT::VectRedisClientPtr& addRedisCli, int ioThreadNum, int keepSecond, int connOutSecond);
 
@@ -310,9 +319,22 @@ REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClust
 
 REDIS_ASYNC_CLIENT::RedisClientPtr getRedisClient(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, uint16_t slot);
 
+/*
+ * [clusterRedisConnsUpdate] 集群中redis主从连接计数已经查询是否是集群中节点信息函数
+ * @author xiaoxiao 2019-05-31
+ * @param clusterMgr 集群信息管理指针
+ * @param ipaddr ip地址信息
+ * @param port 端口
+ * @param onConned true是连接，false是断连接
+ * @param onCount 是否修改计数，true是修改计数，false是仅仅查看是否是集群内节点信息
+ *
+ * @return 0不是集群内节点信息， 1是集群内主节点信息， 2是集群中从节点信息
+ */
 #define NO_IN_CLUSTER_ADDRINFO          (0)
 #define MASTER_CLUSTER_ADDRINFO         (1)
 #define SALVE_CLUSTER_ADDRINFO          (2)
-int clusterRedisConnsUpdate(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, const std::string& ipaddr, int port, bool onConned);
+int clusterRedisConnsUpdate(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, const std::string& ipaddr, int port, bool onConned, bool onCount = true);
+
+int infoReplicConnsUpdate(REDIS_ASYNC_CLIENT::RedisClientMgrPtr& clusterMgr, const std::string& ipaddr, int port, bool onConned, bool onCount = true);
 
 #endif

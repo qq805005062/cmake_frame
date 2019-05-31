@@ -43,6 +43,8 @@ LibeventIo::LibeventIo()
 LibeventIo::~LibeventIo()
 {
     PERROR("~LibeventIo exit");
+
+    REDIS_ASYNC_CLIENT::VectRedisClientPtr ().swap(ioRedisClients_);
 }
 
 int LibeventIo::libeventIoReady()

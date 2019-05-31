@@ -173,10 +173,12 @@ public:
         :mutex_()
         ,queue_()
     {
+        PDEBUG("OrderNodeDeque init");
     }
 
     ~OrderNodeDeque()
     {
+        PERROR("~OrderNodeDeque exit");
     }
 
     void orderNodeInsert(const RedisCliOrderNodePtr& node)
