@@ -8,12 +8,12 @@ namespace common
 namespace sigignore
 {
 
-//SIGINT,SIGKILL,SIGTERM,SIGSTOP,SIGUSR1,SIGUSR2
+//SIGHUP SIGINT SIGQUIT SIGKILL SIGUSR1 SIGUSR2 SIGTERM SIGSTOP SIGWINCH SIGPWR
 static int sigArray[] = {
-    SIGALRM,SIGQUIT,SIGILL,SIGTRAP,SIGABRT,SIGBUS,SIGFPE,
-    SIGSEGV,SIGPIPE,SIGALRM,SIGCHLD,SIGCONT,SIGTSTP,
-    SIGTTIN,SIGTTOU,SIGURG,SIGXCPU,SIGXFSZ,SIGVTALRM,SIGPROF,SIGWINCH,
-    SIGIO,SIGPWR,SIGSYS
+    SIGILL,SIGTRAP,SIGABRT,SIGBUS,SIGFPE,
+    SIGSEGV,SIGPIPE,SIGALRM,SIGSTKFLT,SIGCHLD,SIGCONT,SIGTSTP,
+    SIGTTIN,SIGTTOU,SIGURG,SIGXCPU,SIGXFSZ,SIGVTALRM,SIGPROF,
+    SIGIO,SIGSYS,SIGRTMIN
 };
 
 /*
@@ -48,12 +48,6 @@ inline int IgnoreSig()
     size_t size = sizeof(sigArray)/sizeof(int);
     for(size_t i = 0;i < size;i++)
     {
-        if(sigArray[i] == SIGCHLD)
-        {
-            signal(SIGCHLD, SIG_IGN);
-            continue;
-        }
-
         ret = sigignore(sigArray[i]);
         if(ret < 0)
         {
