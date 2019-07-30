@@ -33,7 +33,7 @@ set(LIBEVENT_REDIS_LIB_FILE
   rt
 )
 
-add_library(redisAsyn ${LIBEVENT_REDIS_FILE})
+add_library(redisAsyn1 ${LIBEVENT_REDIS_FILE})
 
 add_executable(redisAsynTest ${LIBEVENT_REDIS_TEST_FILE})
 target_link_libraries(redisAsynTest ${LIBEVENT_REDIS_LIB_FILE})
