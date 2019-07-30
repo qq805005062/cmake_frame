@@ -33,8 +33,8 @@ set(LIBEVENT_REDIS_LIB_FILE
   rt
 )
 
-add_library(redisAsyn1 ${LIBEVENT_REDIS_FILE})
+add_library(redisAsyn2 ${LIBEVENT_REDIS_FILE})
 
-add_executable(redisAsynTest1 ${LIBEVENT_REDIS_TEST_FILE})
-target_link_libraries(redisAsynTest1 ${LIBEVENT_REDIS_LIB_FILE})
-install(TARGETS redisAsynTest1 DESTINATION bin)
+add_executable(redisAsynTest2 ${LIBEVENT_REDIS_TEST_FILE})
+target_link_libraries(redisAsynTest2 ${LIBEVENT_REDIS_LIB_FILE})
+install(TARGETS redisAsynTest2 DESTINATION bin)
