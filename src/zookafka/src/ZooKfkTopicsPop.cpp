@@ -853,6 +853,35 @@ int ZooKfkConsumers::zooKfkConsumerInit(int consumerNum, const std::string& zook
 	return ret;
 }
 
+int ZooKfkConsumers::kfkBorsConsumerInit(int consumerNum, const std::string& borsStr, const std::string& topicStr,  const std::string& groupName)
+{
+	int ret = 0;
+	if(kfkConsumerNum)
+	{
+		return KAFKA_INIT_ALREADY;
+	}
+	kfkConsumerNum = consumerNum;
+	for(int i = 0; i < kfkConsumerNum; i++)
+	{
+		ZooKfkConsumerPtr consumer(new ZOOKEEPERKAFKA::ZooKfkTopicsPop());
+		if(!consumer)
+		{
+			PERROR("New ZooKfkConsumerPtr point error");
+			ret = KAFKA_MODULE_NEW_ERROR;
+			return ret;
+		}
+		ret = consumer->kfkInit(borsStr, topicStr, groupName);
+		if(ret < 0)
+		{
+			PERROR("consumer->zookInit error ret : %d", ret);
+			return ret;
+		}
+		ZooKfkConsumerPtrVec.push_back(consumer);
+	}
+	
+	return ret;
+}
+
 void ZooKfkConsumers::zooKfkConsumerDestroy()
 {
 	for(int i = 0; i < kfkConsumerNum; i++)

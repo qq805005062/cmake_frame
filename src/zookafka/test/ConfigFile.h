@@ -21,6 +21,8 @@ public:
 	static ConfigFile& instance() { return ZOOKEEPERKAFKA::Singleton<ConfigFile>::instance();}
 
 	std::string zookeepBrokers();
+
+	std::string kakfaBrokers();
 	
 	int testMsgNum();
 	

@@ -30,7 +30,20 @@ std::string ConfigFile::zookeepBrokers()
 		return "";
 	}
 	boost::property_tree::ptree tag_setting = m_pt.get_child("common");
-	std::string bro = tag_setting.get<std::string>("zookeeper", "192.169.0.61:2181,192.169.0.62:2181,192.169.0.63:2181");
+	std::string bro = tag_setting.get<std::string>("zookeeper", "61.145.229.28:9150,61.145.229.28:9151,61.145.229.28:9152");
+	PDEBUG("zookeepBrokers = %s", bro.c_str());
+	return bro;
+}
+
+std::string ConfigFile::kakfaBrokers()
+{
+	if(isErr)
+	{
+		PERROR("There is something wrong about config file");
+		return "";
+	}
+	boost::property_tree::ptree tag_setting = m_pt.get_child("common");
+	std::string bro = tag_setting.get<std::string>("brokers", "61.145.229.28:9110,61.145.229.28:9111,61.145.229.28:9112");
 	PDEBUG("zookeepBrokers = %s", bro.c_str());
 	return bro;
 }

@@ -68,7 +68,7 @@ static void consumerKfkMsg(int index)
 		{
 			PERROR("ZooKfkConsumers error %d %s", ret, errMsg.c_str());
 		}else{
-			;//PDEBUG("pop from topic %s dataLen %ld ret %d index %d", topicName.c_str(), msgData.length(), ret, index);
+			PDEBUG("pop from topic %s dataLen %ld ret %d index %d", topicName.c_str(), msgData.length(), ret, index);
 			//PDEBUG("pop from topic %s dataLen %ld data %s ret %d index %d", topicName.c_str(), msgData.length(), msgData.c_str(), ret, index);
 		}
 		pthread_mutex_lock(&countLock);
@@ -90,10 +90,24 @@ static void consumerKfkMsg(int index)
 
 int consumerTest(int msgNum, int threadNum)
 {
-	std::string broAdds = ConfigFile::instance().zookeepBrokers();
+    int ret = 0;
+    bool kafkaBros = false;
+    std::string broAdds;
+    broAdds = ConfigFile::instance().zookeepBrokers();
+    if(broAdds.empty())
+    {
+        broAdds = ConfigFile::instance().kakfaBrokers();
+        kafkaBros = true;
+    }
+
 	std::string topicName = ConfigFile::instance().testTopicName();
 	std::string consumerGroup = "testConsumer";
-	int ret = ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit(threadNum, broAdds, topicName, consumerGroup);
+    if(kafkaBros)
+    {
+        ret = ZOOKEEPERKAFKA::ZooKfkConsumers::instance().kfkBorsConsumerInit(threadNum, broAdds, topicName, consumerGroup);
+    }else{
+        ret = ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit(threadNum, broAdds, topicName, consumerGroup);
+    }
 	PDEBUG("ZOOKEEPERKAFKA::ZooKfkConsumers::instance().zooKfkConsumerInit %d", ret);
 	if(ret < 0)
 		return ret;
@@ -159,7 +173,7 @@ int main(int argc, char* argv[])
 {
 	testThreadPool.reset(new ZOOKEEPERKAFKA::ThreadPool("testPool"));
 	int msgNum = ConfigFile::instance().testMsgNum();
-
+    PDEBUG("Hello world");
 	pthread_mutex_init(&syncLock, NULL);
 	pthread_mutex_init(&countLock, NULL);
 	pthread_mutex_init(&pushLock, NULL);

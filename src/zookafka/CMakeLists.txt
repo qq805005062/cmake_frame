@@ -1,5 +1,5 @@
 
-set(CMAKE_RELEASE_BUILD "ON")
+#set(CMAKE_RELEASE_BUILD "ON")
 
 if(CMAKE_RELEASE_BUILD)
 	message(STATUS "Cmake zookeeper kafka lib release type")

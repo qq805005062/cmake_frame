@@ -159,6 +159,8 @@ public:
 	//初始化接口，消费者个数，zookeeper地址，订阅topic名称，组名称
 	int zooKfkConsumerInit(int consumerNum, const std::string& zookStr, const std::string& topicStr,  const std::string& groupName);
 
+	int kfkBorsConsumerInit(int consumerNum, const std::string& borsStr, const std::string& topicStr,  const std::string& groupName);
+
 	//消费者退出接口，保证消息不丢失，进程退出调用接口
 	void zooKfkConsumerDestroy();
 
