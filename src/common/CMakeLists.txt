@@ -1,4 +1,7 @@
 
+set_source_files_properties(AES.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
+set_source_files_properties(gzip.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
+
 set_source_files_properties(MysqlEncryPass.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion")
 set_source_files_properties(process_stat_linux_ex.cpp PROPERTIES COMPILE_FLAGS "-Wno-old-style-cast -Wno-conversion -Wno-fpermissive")
 
@@ -17,6 +20,9 @@ set(common_SRCS
   Base64.cpp
   MysqlEncryPass.cpp
   AES.cpp
+  MD5.cpp
+  gzip.cpp
+  zip.cpp
   process_stat_linux_ex.cpp
 )
 
