@@ -15,23 +15,24 @@ void md5Encrpty(const std::string& input, unsigned char output[16])
 
 void stringToHexStr(const std::string& input, std::string& output)
 {
-    size_t inputLen = input.size();
+    size_t inputLen = input.size(), outputLen = inputLen * 2;
     if(inputLen == 0)
     {
         output.assign("");
         return;
     }
-    char *outbuf = new char[inputLen];
+    char *outbuf = new char[outputLen];
     if(outbuf)
     {
-        const char* pInput = input.c_str();
+        unsigned char pInput = 0;
         char* oOut = outbuf;
         for (size_t i = 0; i < inputLen; ++i)
         {
-            sprintf(oOut, "%02X", *pInput);
-            pInput++;oOut++;oOut++;
+            pInput = input.at(i);
+            sprintf(oOut, "%02x", pInput);
+            oOut++;oOut++;
         }
-        output.assign(outbuf, inputLen);
+        output.assign(outbuf, outputLen);
         delete[] outbuf;
         return;
     }
@@ -42,23 +43,24 @@ void stringToHexStr(const std::string& input, std::string& output)
 
 void stringTohexStr(const std::string& input, std::string& output)
 {
-    size_t inputLen = input.size();
+    size_t inputLen = input.size(), outputLen = inputLen * 2;
     if(inputLen == 0)
     {
         output.assign("");
         return;
     }
-    char *outbuf = new char[inputLen];
+    char *outbuf = new char[outputLen];
     if(outbuf)
     {
-        const char* pInput = input.c_str();
+        unsigned char pInput = 0;
         char* oOut = outbuf;
         for (size_t i = 0; i < inputLen; ++i)
         {
-            sprintf(oOut, "%02x", *pInput);
-            pInput++;oOut++;oOut++;
+            pInput = input.at(i);
+            sprintf(oOut, "%02x", pInput);
+            oOut++;oOut++;
         }
-        output.assign(outbuf, inputLen);
+        output.assign(outbuf, outputLen);
         delete[] outbuf;
         return;
     }
@@ -69,11 +71,20 @@ void stringTohexStr(const std::string& input, std::string& output)
 
 void stringMd5ToHexStr(const std::string& input, std::string& output)
 {
+    unsigned char mdbuf[16] = {0};
+    md5Encrpty(input, mdbuf);
+    std::string mdStr((char *)mdbuf, 16);
+    stringToHexStr(mdStr, output);
 }
 
 void stringMd5TohexStr(const std::string& input, std::string& output)
 {
+    unsigned char mdbuf[16] = {0};
+    md5Encrpty(input, mdbuf);
+    std::string mdStr((char *)mdbuf, 16);
+    stringTohexStr(mdStr, output);
 }
 
 }
+
 

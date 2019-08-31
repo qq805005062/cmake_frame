@@ -23,7 +23,7 @@ inline void aes_cbcEncrypt(char input[], int len, const unsigned char key[16], u
 inline void aes_cbcDecrypt(char input[], int len, const unsigned char key[16], unsigned char iv[16], char output[ ], int keyBits)
 {
     AES_KEY aes_key;
-    AES_set_encrypt_key(key, keyBits, &aes_key);//第二个参数可以是128或者256，加解密要保持一致，不然是没有办法解密的
+    AES_set_decrypt_key(key, keyBits, &aes_key);//第二个参数可以是128或者256，加解密要保持一致，不然是没有办法解密的
     AES_cbc_encrypt((const unsigned char *)input, (unsigned char* )output, (unsigned long)len, &aes_key, iv, AES_DECRYPT);
 }
 
@@ -36,7 +36,7 @@ inline void aes_ecbEncrypt(const std::string& input, const unsigned char key[16]
     for (size_t i = 0; i < inputBlockSize; i++)
     {
         unsigned char outbuf[AES_BLOCK_SIZE] = { 0 };
-        AES_encrypt(reinterpret_cast<const unsigned char* >(input.c_str() + i * AES_BLOCK_SIZE), outbuf, &aes_key);
+        AES_ecb_encrypt(reinterpret_cast<const unsigned char* >(input.c_str() + i * AES_BLOCK_SIZE), outbuf, &aes_key, AES_ENCRYPT);
         ouput.append(reinterpret_cast<char* >(outbuf), AES_BLOCK_SIZE);
     }
 }
@@ -44,13 +44,13 @@ inline void aes_ecbEncrypt(const std::string& input, const unsigned char key[16]
 inline void aes_ecbDecrypt(const std::string& input, const unsigned char key[16], std::string& ouput, int keyBits)
 {
     AES_KEY aes_key;
-    AES_set_encrypt_key(key, keyBits, &aes_key);//第二个参数可以是128或者256，加解密要保持一致，不然是没有办法解密的
+    AES_set_decrypt_key(key, keyBits, &aes_key);//第二个参数可以是128或者256，加解密要保持一致，不然是没有办法解密的
 
     size_t inputBlockSize = input.length() / AES_BLOCK_SIZE;
     for (size_t i = 0; i < inputBlockSize; i++)
     {
         unsigned char outbuf[AES_BLOCK_SIZE] = { 0 };
-        AES_decrypt(reinterpret_cast<const unsigned char* >(input.c_str() + i * AES_BLOCK_SIZE), outbuf, &aes_key);
+        AES_ecb_encrypt(reinterpret_cast<const unsigned char* >(input.c_str() + i * AES_BLOCK_SIZE), outbuf, &aes_key, AES_DECRYPT);
         ouput.append(reinterpret_cast<char* >(outbuf), AES_BLOCK_SIZE);
     }
 }
@@ -81,7 +81,9 @@ int aesCbcEncrypt(const std::string& input, const std::string& key, const std::s
         if(alignType == 1)
         {
             int padding = outLen - inLen;
-            memset((unsigned char*)(p_expre + inLen), padding, padding);
+            char* paddBuf = p_expre + inLen;
+            memset(paddBuf, padding, padding);
+            PDEBUG("padding %u", *paddBuf);
         }
         
         aes_cbcEncrypt( p_expre, outLen, aes_key, aes_iv, q_encry, keyBits);
@@ -93,6 +95,7 @@ int aesCbcEncrypt(const std::string& input, const std::string& key, const std::s
         {
             delete[] p_expre;
         }
+
         if(q_encry)
         {
             delete[] q_encry;
@@ -131,17 +134,19 @@ int aesCbcDecrypt(const std::string& input, const std::string& key, const std::s
         memcpy(q_encry,input.c_str(),len);
         aes_cbcDecrypt(q_encry, len, aes_key, aes_iv, p_expre, keyBits);
         
-        out_len = strlen(p_expre);
         if(alignType == 1)
         {
+            out_len = len;
             int padding = p_expre[len - 1];
-            if((out_len != len) ||(padding < 0) || (padding > AES_BLOCK_SIZE))
+            if((padding < 0) || (padding > AES_BLOCK_SIZE))
             {
                 delete[] p_expre;
                 delete[] q_encry;
                 return -3;
             }
             out_len = out_len - padding;
+        }else{
+            out_len = strlen(p_expre);
         }
         
         output.append(p_expre,out_len);
@@ -185,7 +190,11 @@ int aesEcbEncrypt(const std::string& input, const std::string& key, std::string&
         if(alignType == 1)
         {
             int padding = outLen - inLen;
-            memset((unsigned char*)(p_expre + inLen), padding, padding);
+            char* paddBuf = p_expre + inLen;
+            memset(paddBuf, padding, padding);
+			PDEBUG("padding %u", *paddBuf);
+        }else{
+            PDEBUG("%d::%d", inLen, outLen);
         }
 
         std::string tmpExpreStr(p_expre, outLen);
@@ -216,23 +225,25 @@ int aesEcbDecrypt(const std::string& input, const std::string& key, std::string&
     }
 
     memcpy(aes_key, key.c_str(), AES_BLOCK_SIZE);
-
     std::string tmpOutPut = "";
     aes_ecbDecrypt(input, aes_key, tmpOutPut, keyBits);
 
-    int outLen = strlen(tmpOutPut.c_str());
     if(alignType == 1)
     {
-        int padding = tmpOutPut.at(tmpOutPut.length() - 1);
+        out_len = tmpOutPut.size();
+        size_t index = out_len - 1;
+        int padding = tmpOutPut.at(index);
+        PDEBUG("%d::%d::%d::%ld", out_len, len, padding, index);
         if((out_len != len) ||(padding < 0) || (padding > AES_BLOCK_SIZE))
         {
             return -3;
         }
-        outLen = outLen - padding;
+        out_len = out_len - padding;
+    }else{
+        out_len = strlen(tmpOutPut.c_str());
     }
 
-    output.assign(tmpOutPut.c_str(), outLen);
-
+    output.assign(tmpOutPut.c_str(), out_len);
     return 0;
 }
 

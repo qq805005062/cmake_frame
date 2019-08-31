@@ -1,7 +1,7 @@
-#include <common/Exception.h>
-
 #include <execinfo.h>
 #include <stdlib.h>
+
+#include "Exception.h"
 
 namespace common
 {
