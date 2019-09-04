@@ -29,7 +29,7 @@ set(common_SRCS
 add_library(common ${common_SRCS})
 
 add_executable(modTest moduleTest.cpp)
-target_link_libraries(modTest common ssl crypto z dl rt)
+target_link_libraries(modTest common crypto z dl rt)
 install(TARGETS modTest DESTINATION bin)
 
 #install(TARGETS common DESTINATION lib)
