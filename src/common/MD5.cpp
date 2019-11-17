@@ -29,7 +29,7 @@ void stringToHexStr(const std::string& input, std::string& output)
         for (size_t i = 0; i < inputLen; ++i)
         {
             pInput = input.at(i);
-            sprintf(oOut, "%02x", pInput);
+            sprintf(oOut, "%02X", pInput);
             oOut++;oOut++;
         }
         output.assign(outbuf, outputLen);
