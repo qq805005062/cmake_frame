@@ -35,11 +35,11 @@ private:
 
     void renameErrorFile();
 
-	int gateNo_;
+    int gateNo_;
 
-	std::string fileName_;
-	std::string bakFileName_;
-	std::string errFileName;
+    std::string fileName_;
+    std::string bakFileName_;
+    std::string errFileName;
 };
 
 typedef std::shared_ptr<ReadFileMgr> ReadFileMgrPtr;

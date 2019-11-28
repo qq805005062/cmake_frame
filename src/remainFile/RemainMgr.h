@@ -47,31 +47,31 @@ public:
 
     /*
      *写滞留文件，根据bitFlag区分写入文件的类型
-     *userId为用户帐户名称，
+     *fragFolder为用户帐户名称，分文件夹的文件夹名称
      *
      *
      *返回值，==0的时候表示正常，小于0表示错误
      */
-    int writeRemainFile(int bitFlag, const std::string& userId, const char *data, size_t dataSize);
+    int writeRemainFile(int bitFlag, const std::string& fragFolder, const char *data, size_t dataSize);
 
     /*
      *写滞留文件，根据bitFlag区分写入文件的类型,此接口写入滞留就再也不会读出来了，除非有人工干预，下行接口慎重
-     *userId为用户帐户名称，
+     *fragFolder为用户帐户名称，分文件夹的文件夹名称
      *
      *
      *
      *返回值，==0的时候表示正常，小于0表示错误
      */
-    int writeRemainFileBak(int bitFlag, const std::string& userId, const char *data, size_t dataSize);
+    int writeRemainFileBak(int bitFlag, const std::string& fragFolder, const char *data, size_t dataSize);
 
     /*
      *读文件滞留，根据bitFlag区分需要读出文件类型，每次读一个完整的文件
-     *userId为用户帐户名称，
+     *fragFolder为用户帐户名称，分文件夹的文件夹名称
      *
      *data为上层分配的空间的地址，dataSize为空间大小，data必须为new出来的数据，内部有可能会delete。
      *返回值，当返回0的时候，正常，其他都是一场错误，上层要注意判断string为空的情况
      */
-    int readRemainFile(int bitFlag, const std::string& userId, std::string& remainData);
+    int readRemainFile(int bitFlag, const std::string& fragFolder, std::string& remainData);
 
     /*
      *统计滞留数量，分别统计本地滞留数量，以及共享目录统计数量
@@ -79,7 +79,7 @@ public:
      *
      *返回值，==0的时候表示正常，小于0表示错误
      */
-    int statisticsRemainCount(int bitFlag, const std::string& userId, int& localCount, int& shareCount);
+    int statisticsRemainCount(int bitFlag, const std::string& fragFolder, int& localCount, int& shareCount);
 
     /*
      *检索文件是否超时，超时则关闭文件

@@ -19,7 +19,7 @@ class ShareWriteFileMgr
 public:
 
     //构造方法，内部不做复杂操作，只做赋值
-    ShareWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& userId);
+    ShareWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& fragFolder);
 
     ~ShareWriteFileMgr();
 
@@ -38,31 +38,31 @@ public:
 
 private:
 
-	//切换新的文件句柄
-	int switchToNewFile();
+    //切换新的文件句柄
+    int switchToNewFile();
 
-	//关闭当前的文件句柄
-	int CloseCurFile();
-	
-	int isExit_;
-	int gateNo_;
-	int seqId_;
-	int millSecond_;
+    //关闭当前的文件句柄
+    int CloseCurFile();
 
-	int outSecond_;
-	
-	int maxCount_;
-	volatile int curCount_;
+    int isExit_;
+    int gateNo_;
+    int seqId_;
+    int millSecond_;
 
-	volatile uint64_t creatSecond_;
+    int outSecond_;
 
-	FILE* pFile_;
+    int maxCount_;
+    volatile int curCount_;
 
-	std::string userName_;
-	std::string rootPath_;
-	std::string sharePath_;
-	
-	std::mutex mutex_;
+    volatile uint64_t creatSecond_;
+
+    FILE* pFile_;
+
+    std::string rootPath_;
+    std::string sharePath_;
+    std::string fragFolder_;//根目录下分文件夹的文件夹名称
+
+    std::mutex mutex_;
 };
 
 typedef std::shared_ptr<ShareWriteFileMgr> ShareWriteFileMgrPtr;
@@ -72,15 +72,15 @@ class localWriteFileMgr
 {
 public:
 
-	localWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& userId);
+    localWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& fragFolder);
 
-	~localWriteFileMgr();
+    ~localWriteFileMgr();
 
-	int writeToFile(const char* content, size_t size);
-	
-	void exitClose();
+    int writeToFile(const char* content, size_t size);
 
-	void everySecondCheck(uint64_t second);
+    void exitClose();
+
+    void everySecondCheck(uint64_t second);
 
     void updateGenFreq(int second);
 
@@ -88,29 +88,29 @@ public:
 
 private:
 
-	int switchToNewFile();
+    int switchToNewFile();
 
-	int CloseCurFile();
+    int CloseCurFile();
 
-	int isExit_;
-	int gateNo_;
-	int seqId_;
-	int millSecond_;
+    int isExit_;
+    int gateNo_;
+    int seqId_;
+    int millSecond_;
 
-	int outSecond_;
-	
-	int maxCount_;
-	volatile int curCount_;
+    int outSecond_;
 
-	volatile uint64_t creatSecond_;
+    int maxCount_;
+    volatile int curCount_;
 
-	FILE* pFile_;
+    volatile uint64_t creatSecond_;
 
-	std::string userName_;
-	std::string rootPath_;
-	std::string localPath_;
-	
-	std::mutex mutex_;
+    FILE* pFile_;
+
+    std::string rootPath_;
+    std::string localPath_;
+    std::string fragFolder_;//根目录下分文件夹的文件夹名称
+
+    std::mutex mutex_;
 };
 
 typedef std::shared_ptr<localWriteFileMgr> localWriteFileMgrPtr;
@@ -126,48 +126,49 @@ typedef std::shared_ptr<localWriteFileMgr> localWriteFileMgrPtr;
 class WriteFileMgr
 {
 public:
-	WriteFileMgr(int gateNo, int maxCout, int outSecond, const std::string& sharePath, const std::string localPath, const std::string& userId);
+    WriteFileMgr(int gateNo, int maxCout, int outSecond, const std::string& sharePath, const std::string localPath, const std::string& fragFolder);
 
-	~WriteFileMgr();
+    ~WriteFileMgr();
 
-	int writeToFile(int flag, const char* content, size_t size);
-	
-	void exitClose();
+    int writeToFile(int flag, const char* content, size_t size);
 
-	void everySecondCheck(uint64_t second);
+    void exitClose();
+
+    void everySecondCheck(uint64_t second);
 
     void updateGenFreq(int second);
 
     void updateMaxFileSize(int size);
 
-	std::string fileMgrUserName()
-	{
-		return userName_;
-	}
+    std::string folderFragName()
+    {
+        return fragFolder_;
+    }
+
 private:
 
-	int isExit_;
-	int gateNo_;
-	int maxCount_;
-	int outSecond_;
+    int isExit_;
+    int gateNo_;
+    int maxCount_;
+    int outSecond_;
 
-	std::string userName_;
-	std::string localPath_;
-	std::string sharePath_;
+    std::string localPath_;
+    std::string sharePath_;
+    std::string fragFolder_;//根目录下分文件夹的文件夹名称
 
-	ShareWriteFileMgrPtr shareReFile;
-	ShareWriteFileMgrPtr shareReBakFile;
-	ShareWriteFileMgrPtr shareMoFile;
-	ShareWriteFileMgrPtr shareMoBakFile;
-	ShareWriteFileMgrPtr shareMtFile;
-	ShareWriteFileMgrPtr shareMtBakFile;
+    ShareWriteFileMgrPtr shareReFile;
+    ShareWriteFileMgrPtr shareReBakFile;
+    ShareWriteFileMgrPtr shareMoFile;
+    ShareWriteFileMgrPtr shareMoBakFile;
+    ShareWriteFileMgrPtr shareMtFile;
+    ShareWriteFileMgrPtr shareMtBakFile;
 
-	localWriteFileMgrPtr localReFile;
-	localWriteFileMgrPtr localReBakFile;
-	localWriteFileMgrPtr localMoFile;
-	localWriteFileMgrPtr localMoBakFile;
-	localWriteFileMgrPtr localMtFile;
-	localWriteFileMgrPtr localMtBakFile;
+    localWriteFileMgrPtr localReFile;
+    localWriteFileMgrPtr localReBakFile;
+    localWriteFileMgrPtr localMoFile;
+    localWriteFileMgrPtr localMoBakFile;
+    localWriteFileMgrPtr localMtFile;
+    localWriteFileMgrPtr localMtBakFile;
 };
 
 

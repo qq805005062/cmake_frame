@@ -15,7 +15,7 @@ public:
     //第三个参数是读取那个用户名下面的滞留
     //第四个参数是共享文件夹路径
     //第五个参数是本地文件夹路径
-    ReadDirMgr(int flag, int gateNo, const std::string& userId, const std::string& sharePath, const std::string& localPath);
+    ReadDirMgr(int flag, int gateNo, const std::string& fragFolder, const std::string& sharePath, const std::string& localPath);
 
     //析构类
     ~ReadDirMgr();
@@ -25,15 +25,15 @@ public:
 
 private:
 
-	int readFileFromDir(const std::string& path, std::string& data);
+    int readFileFromDir(const std::string& path, std::string& data);
 
-	int bitFlag_;
-	int gateNo_;
-	
-	std::string userName_;
-	std::string shareRootPath_;
-	std::string sharePath_;
-	std::string localPath_;
+    int bitFlag_;
+    int gateNo_;
+
+    std::string shareRootPath_;
+    std::string sharePath_;
+    std::string localPath_;
+    std::string fragFolder_;
 };
 
 typedef std::shared_ptr<ReadDirMgr> ReadDirMgrPtr;

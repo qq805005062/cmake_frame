@@ -5,70 +5,71 @@
 namespace REMAIN_MGR
 {
 
-ShareWriteFileMgr::ShareWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& userId)
-	:isExit_(0)
-	,gateNo_(gateNo)
-	,seqId_(0)
-	,millSecond_(0)
-	,outSecond_(outSecond)
-	,maxCount_(maxCout)
-	,curCount_(0)
-	,creatSecond_(0)
-	,pFile_(nullptr)
-	,userName_(userId)
-	,rootPath_(rootPath)
-	,sharePath_()
-	,mutex_()
+//fragFolder根目录下分文件夹的文件夹名称，传统是使用用户名分隔
+ShareWriteFileMgr::ShareWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& fragFolder)
+    :isExit_(0)
+    ,gateNo_(gateNo)
+    ,seqId_(0)
+    ,millSecond_(0)
+    ,outSecond_(outSecond)
+    ,maxCount_(maxCout)
+    ,curCount_(0)
+    ,creatSecond_(0)
+    ,pFile_(nullptr)
+    ,rootPath_(rootPath)
+    ,sharePath_()
+    ,fragFolder_(fragFolder)
+    ,mutex_()
 {
-	if(!rootPath.empty())
-	{
-		char filePath[1024] = {0};
-		switch(flag)
-		{
-			case RE_REMAIN_FLAG:
-				{
-					snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportDir.c_str(), userId.c_str());
-					sharePath_.assign(filePath);
-					break;
-				}
-			case RE_REMAIN_BAK_FLAG:
-				{
-					snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportBakDir.c_str(), userId.c_str());
-					sharePath_.assign(filePath);
-					break;
-				}
-			case MO_REMAIN_FLAG:
-				{
-					snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moDir.c_str(), userId.c_str());
-					sharePath_.assign(filePath);
-					break;
-				}
-			case MO_REMAIN_BAK_FLAG:
-				{
-					snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moBakDir.c_str(), userId.c_str());
-					sharePath_.assign(filePath);
-					break;
-				}
-			case MT_REMAIN_FLAG:
-				{
-					snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtDir.c_str(), userId.c_str());
-					sharePath_.assign(filePath);
-					break;
-				}
-			case MT_REMAIN_BAK_FLAG:
-				{
-					snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtBak.c_str(), userId.c_str());
-					sharePath_.assign(filePath);
-					break;
-				}
-			default:
-				{
-					ERROR("ShareWriteFileMgr init flag %d", flag);
-					break;
-				}
-		}
-	}
-	DEBUG("ShareWriteFileMgr init rootPath_ %s sharePath_ %s", rootPath_.c_str(), sharePath_.c_str());
+    if(!rootPath.empty())
+    {
+        char filePath[1024] = {0};
+        switch(flag)
+        {
+            case RE_REMAIN_FLAG:
+                {
+                    snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportDir.c_str(), fragFolder.c_str());
+                    sharePath_.assign(filePath);
+                    break;
+                }
+            case RE_REMAIN_BAK_FLAG:
+                {
+                    snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportBakDir.c_str(), fragFolder.c_str());
+                    sharePath_.assign(filePath);
+                    break;
+                }
+            case MO_REMAIN_FLAG:
+                {
+                    snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moDir.c_str(), fragFolder.c_str());
+                    sharePath_.assign(filePath);
+                    break;
+                }
+            case MO_REMAIN_BAK_FLAG:
+                {
+                    snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moBakDir.c_str(), fragFolder.c_str());
+                    sharePath_.assign(filePath);
+                    break;
+                }
+            case MT_REMAIN_FLAG:
+                {
+                    snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtDir.c_str(), fragFolder.c_str());
+                    sharePath_.assign(filePath);
+                    break;
+                }
+            case MT_REMAIN_BAK_FLAG:
+                {
+                    snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtBak.c_str(), fragFolder.c_str());
+                    sharePath_.assign(filePath);
+                    break;
+                }
+            default:
+                {
+                    ERROR("ShareWriteFileMgr init flag %d", flag);
+                    break;
+                }
+        }
+    }
+                DEBUG("ShareWriteFileMgr init rootPath_ %s sharePath_ %s", rootPath_.c_str(), sharePath_.c_str());
 }
 
 ShareWriteFileMgr::~ShareWriteFileMgr()
@@ -252,7 +253,7 @@ int ShareWriteFileMgr::switchToNewFile()
 	millSecond_ = static_cast<int>(tv.tv_usec / 1000);
 
 	memset(filePath, 0 ,1024);
-	//WGNO_+����_MMDDHHMMSSmmm+����ID
+	//WGNO_+条数_MMDDHHMMSSmmm+自增ID
 	len = snprintf(filePath, sizeof(filePath), "%s/%d_%d_%02d%02d%02d%02d%02d%03d%05d.tmp", sharePath_.c_str(), gateNo_, 0, (tm_time.tm_mon + 1),
 		tm_time.tm_mday, tm_time.tm_hour, tm_time.tm_min, tm_time.tm_sec, millSecond_, seqId_);
 	DEBUG("ShareWriteFileMgr switchToNewFile %s %ld", filePath, creatSecond_);
@@ -331,87 +332,88 @@ int ShareWriteFileMgr::CloseCurFile()
 
 	return ret;
 }
-/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-localWriteFileMgr::localWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& userId)
-	:isExit_(0)
-	,gateNo_(gateNo)
-	,seqId_(0)
-	,millSecond_(0)
-	,outSecond_(outSecond)
-	,maxCount_(maxCout)
-	,curCount_(0)
-	,creatSecond_(0)
-	,pFile_(nullptr)
-	,userName_(userId)
-	,rootPath_(rootPath)
-	,localPath_()
-	,mutex_()
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//fragFolder根目录下分文件夹的文件夹名称，传统是使用用户名分隔
+localWriteFileMgr::localWriteFileMgr(int gateNo, int maxCout, int outSecond, int flag, const std::string& rootPath, const std::string& fragFolder)
+    :isExit_(0)
+    ,gateNo_(gateNo)
+    ,seqId_(0)
+    ,millSecond_(0)
+    ,outSecond_(outSecond)
+    ,maxCount_(maxCout)
+    ,curCount_(0)
+    ,creatSecond_(0)
+    ,pFile_(nullptr)
+    ,rootPath_(rootPath)
+    ,localPath_()
+    ,fragFolder_(fragFolder)
+    ,mutex_()
 {
-	char filePath[1024] = {0};
-	switch(flag)
-	{
-		case RE_REMAIN_FLAG:
-			{
-				snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportDir.c_str(), userId.c_str());
-				localPath_.assign(filePath);
-				break;
-			}
-		case RE_REMAIN_BAK_FLAG:
-			{
-				snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportBakDir.c_str(), userId.c_str());
-				localPath_.assign(filePath);
-				break;
-			}
-		case MO_REMAIN_FLAG:
-			{
-				snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moDir.c_str(), userId.c_str());
-				localPath_.assign(filePath);
-				break;
-			}
-		case MO_REMAIN_BAK_FLAG:
-			{
-				snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moBakDir.c_str(), userId.c_str());
-				localPath_.assign(filePath);
-				break;
-			}
-		case MT_REMAIN_FLAG:
-			{
-				snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtDir.c_str(), userId.c_str());
-				localPath_.assign(filePath);
-				break;
-			}
-		case MT_REMAIN_BAK_FLAG:
-			{
-				snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtBak.c_str(), userId.c_str());
-				localPath_.assign(filePath);
-				break;
-			}
-		default:
-			{
-				ERROR("localWriteFileMgr init flag %d", flag);
-				break;
-			}
-	}
-	DEBUG("localWriteFileMgr init rootPath_ %s localPath_ %s", rootPath_.c_str(), localPath_.c_str());
+    char filePath[1024] = {0};
+    switch(flag)
+    {
+        case RE_REMAIN_FLAG:
+            {
+                snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportDir.c_str(), fragFolder.c_str());
+                localPath_.assign(filePath);
+                break;
+            }
+        case RE_REMAIN_BAK_FLAG:
+            {
+                snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), reportBakDir.c_str(), fragFolder.c_str());
+                localPath_.assign(filePath);
+                break;
+            }
+        case MO_REMAIN_FLAG:
+            {
+                snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moDir.c_str(), fragFolder.c_str());
+                localPath_.assign(filePath);
+                break;
+            }
+        case MO_REMAIN_BAK_FLAG:
+            {
+                snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), moBakDir.c_str(), fragFolder.c_str());
+                localPath_.assign(filePath);
+                break;
+            }
+        case MT_REMAIN_FLAG:
+            {
+                snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtDir.c_str(), fragFolder.c_str());
+                localPath_.assign(filePath);
+                break;
+            }
+        case MT_REMAIN_BAK_FLAG:
+            {
+                snprintf(filePath, sizeof(filePath), "%s/%s/%s", rootPath_.c_str(), mtBak.c_str(), fragFolder.c_str());
+                localPath_.assign(filePath);
+                break;
+            }
+        default:
+            {
+                ERROR("localWriteFileMgr init flag %d", flag);
+                break;
+            }
+    }
+    DEBUG("localWriteFileMgr init rootPath_ %s localPath_ %s", rootPath_.c_str(), localPath_.c_str());
 }
 
 localWriteFileMgr::~localWriteFileMgr()
 {
-	ERROR("~localWriteFileMgr exit");
-	exitClose();
+    ERROR("~localWriteFileMgr exit");
+    exitClose();
 }
 
 void localWriteFileMgr::exitClose()
 {
-	isExit_ = 1;
-	DEBUG("localWriteFileMgr exitClose");
-	std::lock_guard<std::mutex> lock(mutex_);
-	if(pFile_)
-	{
-		CloseCurFile();
-		pFile_ = nullptr;
-	}
+    isExit_ = 1;
+    DEBUG("localWriteFileMgr exitClose");
+    std::lock_guard<std::mutex> lock(mutex_);
+    if(pFile_)
+    {
+        CloseCurFile();
+        pFile_ = nullptr;
+    }
 }
 
 int localWriteFileMgr::writeToFile(const char* content, size_t size)
@@ -488,17 +490,17 @@ void localWriteFileMgr::everySecondCheck(uint64_t second)
     {
         return;
     }
-	std::lock_guard<std::mutex> lock(mutex_);
-	
-	uint64_t diffSecond = second - creatSecond_;
-	int tmpSecond = static_cast<int>(diffSecond);
-	//DEBUG("localWriteFileMgr everySecondCheck second %ld creatSecond_ %ld tmpSecond %d outSecond_ %d", second, creatSecond_, tmpSecond, outSecond_);
-	if(pFile_ && (creatSecond_ > 0) && (tmpSecond > outSecond_))
-	{
-		CloseCurFile();
-	}
+    std::lock_guard<std::mutex> lock(mutex_);
 
-	return;
+    uint64_t diffSecond = second - creatSecond_;
+    int tmpSecond = static_cast<int>(diffSecond);
+    //DEBUG("localWriteFileMgr everySecondCheck second %ld creatSecond_ %ld tmpSecond %d outSecond_ %d", second, creatSecond_, tmpSecond, outSecond_);
+    if(pFile_ && (creatSecond_ > 0) && (tmpSecond > outSecond_))
+    {
+        CloseCurFile();
+    }
+
+    return;
 }
 
 void localWriteFileMgr::updateGenFreq(int second)
@@ -562,7 +564,7 @@ int localWriteFileMgr::switchToNewFile()
 	millSecond_ = static_cast<int>(tv.tv_usec / 1000);
 	
 	memset(filePath, 0 ,1024);
-	//WGNO_+����_MMDDHHMMSSmmm+����ID
+	//WGNO_+条数_MMDDHHMMSSmmm+自增ID
 	len = snprintf(filePath, sizeof(filePath), "%s/%d_%d_%02d%02d%02d%02d%02d%03d%05d.tmp", localPath_.c_str(), gateNo_, 0, (tm_time.tm_mon + 1),
 		tm_time.tm_mday, tm_time.tm_hour, tm_time.tm_min, tm_time.tm_sec, millSecond_, seqId_);
 	DEBUG("localWriteFileMgr switchToNewFile %s %ld", filePath, creatSecond_);
@@ -636,33 +638,34 @@ int localWriteFileMgr::CloseCurFile()
 	return ret;
 }
 
+//fragFolder根目录下分文件夹的文件夹名称，传统是使用用户名分隔
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-WriteFileMgr::WriteFileMgr(int gateNo, int maxCout, int outSecond, const std::string& sharePath, const std::string localPath, const std::string& userId)
-	:isExit_(0)
-	,gateNo_(gateNo)
-	,maxCount_(maxCout)
-	,outSecond_(outSecond)
-	,userName_(userId)
-	,localPath_(localPath)
-	,sharePath_(sharePath)
-	,shareReFile(nullptr)
-	,shareReBakFile(nullptr)
-	,shareMoFile(nullptr)
-	,shareMoBakFile(nullptr)
-	,shareMtFile(nullptr)
-	,shareMtBakFile(nullptr)
-	,localReFile(nullptr)
-	,localReBakFile(nullptr)
-	,localMoFile(nullptr)
-	,localMoBakFile(nullptr)
-	,localMtFile(nullptr)
-	,localMtBakFile(nullptr)
+WriteFileMgr::WriteFileMgr(int gateNo, int maxCout, int outSecond, const std::string& sharePath, const std::string localPath, const std::string& fragFolder)
+    :isExit_(0)
+    ,gateNo_(gateNo)
+    ,maxCount_(maxCout)
+    ,outSecond_(outSecond)
+    ,localPath_(localPath)
+    ,sharePath_(sharePath)
+    ,fragFolder_(fragFolder)
+    ,shareReFile(nullptr)
+    ,shareReBakFile(nullptr)
+    ,shareMoFile(nullptr)
+    ,shareMoBakFile(nullptr)
+    ,shareMtFile(nullptr)
+    ,shareMtBakFile(nullptr)
+    ,localReFile(nullptr)
+    ,localReBakFile(nullptr)
+    ,localMoFile(nullptr)
+    ,localMoBakFile(nullptr)
+    ,localMtFile(nullptr)
+    ,localMtBakFile(nullptr)
 {
 }
 
 WriteFileMgr::~WriteFileMgr()
 {
-	exitClose();
+    exitClose();
 }
 
 int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
@@ -674,7 +677,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 			{
 				if(shareReFile == nullptr)
 				{
-					shareReFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_FLAG, sharePath_, userName_));
+					shareReFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_FLAG, sharePath_, fragFolder_));
 				}
 				
 				if(shareReFile == nullptr)
@@ -688,7 +691,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 					{
 						if(localReFile == nullptr)
 						{
-							localReFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_FLAG, localPath_, userName_));
+							localReFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_FLAG, localPath_, fragFolder_));
 						}
 
 						if(localReFile == nullptr)
@@ -707,7 +710,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 			{
 				if(shareReBakFile == nullptr)
 				{
-					shareReBakFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_BAK_FLAG, sharePath_, userName_));
+					shareReBakFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_BAK_FLAG, sharePath_, fragFolder_));
 				}
 				
 				if(shareReBakFile == nullptr)
@@ -721,7 +724,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 					{
 						if(localReBakFile == nullptr)
 						{
-							localReBakFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_BAK_FLAG, localPath_, userName_));
+							localReBakFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, RE_REMAIN_BAK_FLAG, localPath_, fragFolder_));
 						}
 
 						if(localReBakFile == nullptr)
@@ -740,7 +743,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 			{
 				if(shareMoFile == nullptr)
 				{
-					shareMoFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_FLAG, sharePath_, userName_));
+					shareMoFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_FLAG, sharePath_, fragFolder_));
 				}
 				
 				if(shareMoFile == nullptr)
@@ -754,7 +757,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 					{
 						if(localMoFile == nullptr)
 						{
-							localMoFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_FLAG, localPath_, userName_));
+							localMoFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_FLAG, localPath_, fragFolder_));
 						}
 
 						if(localMoFile == nullptr)
@@ -773,7 +776,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 			{
 				if(shareMoBakFile == nullptr)
 				{
-					shareMoBakFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_BAK_FLAG, sharePath_, userName_));
+					shareMoBakFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_BAK_FLAG, sharePath_, fragFolder_));
 				}
 				
 				if(shareMoBakFile == nullptr)
@@ -787,7 +790,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 					{
 						if(localMoBakFile == nullptr)
 						{
-							localMoBakFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_BAK_FLAG, localPath_, userName_));
+							localMoBakFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MO_REMAIN_BAK_FLAG, localPath_, fragFolder_));
 						}
 
 						if(localMoBakFile == nullptr)
@@ -806,7 +809,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 			{
 				if(shareMtFile == nullptr)
 				{
-					shareMtFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_FLAG, sharePath_, userName_));
+					shareMtFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_FLAG, sharePath_, fragFolder_));
 				}
 				
 				if(shareMtFile == nullptr)
@@ -820,7 +823,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 					{
 						if(localMtFile == nullptr)
 						{
-							localMtFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_FLAG, localPath_, userName_));
+							localMtFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_FLAG, localPath_, fragFolder_));
 						}
 
 						if(localMtFile == nullptr)
@@ -839,7 +842,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 			{
 				if(shareMtBakFile == nullptr)
 				{
-					shareMtBakFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_BAK_FLAG, sharePath_, userName_));
+					shareMtBakFile.reset(new ShareWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_BAK_FLAG, sharePath_, fragFolder_));
 				}
 				
 				if(shareMtBakFile == nullptr)
@@ -853,7 +856,7 @@ int WriteFileMgr::writeToFile(int flag, const char* content, size_t size)
 					{
 						if(localMtBakFile == nullptr)
 						{
-							localMtBakFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_BAK_FLAG, localPath_, userName_));
+							localMtBakFile.reset(new localWriteFileMgr(gateNo_, maxCount_, outSecond_, MT_REMAIN_BAK_FLAG, localPath_, fragFolder_));
 						}
 
 						if(localMtBakFile == nullptr)
